@@ -134,6 +134,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/polls.ex` | Polling/voting system |
 | `lib/pure_gopher_ai/phlog_comments.ex` | Phlog comment system |
 | `lib/pure_gopher_ai/user_profiles.ex` | User profile/homepage system |
+| `lib/pure_gopher_ai/calendar.ex` | Community event calendar |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -220,6 +221,11 @@ end
 | `/users/list` | Browse all users |
 | `/users/search` | Search users |
 | `/users/~<username>` | View user homepage |
+| `/calendar` | Calendar menu |
+| `/calendar/create` | Create event |
+| `/calendar/upcoming` | Upcoming events |
+| `/calendar/month/YYYY/MM` | View month |
+| `/calendar/event/<id>` | View event |
 
 ### Response Format
 ```

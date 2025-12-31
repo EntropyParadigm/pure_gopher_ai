@@ -1053,6 +1053,7 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Polls / Voting System | Complete | (pending) |
 | 2025-12-31 | Phlog Comments | Complete | (pending) |
 | 2025-12-31 | User Profiles / Homepages | Complete | (pending) |
+| 2025-12-31 | Calendar / Events | Complete | (pending) |
 
 ---
 
@@ -1187,6 +1188,39 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 **Files created/modified:**
 - `lib/pure_gopher_ai/user_profiles.ex` (new)
 - `lib/pure_gopher_ai/gopher_handler.ex` (user routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 9.5 Calendar / Events
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Community event calendar for meetups, deadlines, and announcements.
+
+**Implementation:**
+- [x] Create `Calendar` GenServer with DETS persistent storage
+- [x] `/calendar` - Calendar menu with stats
+- [x] `/calendar/create` - Create event (Type 7 input)
+- [x] `/calendar/upcoming` - List upcoming events
+- [x] `/calendar/month/YYYY/MM` - View events by month with navigation
+- [x] `/calendar/date/YYYY-MM-DD` - View events on specific date
+- [x] `/calendar/event/<id>` - View event details
+- [x] Event fields: title, date, time (optional), description, location
+- [x] Rate limiting (5 min cooldown per IP)
+- [x] Date validation (YYYY-MM-DD format)
+- [x] Admin delete functionality
+
+**Selectors:**
+- `/calendar` - Calendar menu
+- `/calendar/create` - Create event
+- `/calendar/upcoming` - Upcoming events
+- `/calendar/month/YYYY/MM` - Month view
+- `/calendar/date/YYYY-MM-DD` - Date view
+- `/calendar/event/<id>` - Event details
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/calendar.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (calendar routes)
 - `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---

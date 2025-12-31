@@ -38,6 +38,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Polls
   alias PureGopherAi.PhlogComments
   alias PureGopherAi.UserProfiles
+  alias PureGopherAi.Calendar
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -316,6 +317,44 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/users/~" <> username, host, port, _network, _ip, _socket),
     do: users_view(username, host, port)
+
+  # Calendar / Events
+  defp route_selector("/calendar", host, port, _network, _ip, _socket),
+    do: calendar_menu(host, port)
+
+  defp route_selector("/calendar/upcoming", host, port, _network, _ip, _socket),
+    do: calendar_upcoming(host, port)
+
+  defp route_selector("/calendar/create", host, port, _network, _ip, _socket),
+    do: calendar_create_prompt(host, port)
+
+  defp route_selector("/calendar/create\t" <> input, host, port, _network, ip, _socket),
+    do: handle_calendar_create(input, ip, host, port)
+
+  defp route_selector("/calendar/create " <> input, host, port, _network, ip, _socket),
+    do: handle_calendar_create(input, ip, host, port)
+
+  defp route_selector("/calendar/month/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/") do
+      [year_str, month_str] ->
+        with {year, ""} <- Integer.parse(year_str),
+             {month, ""} <- Integer.parse(month_str),
+             true <- month >= 1 and month <= 12 do
+          calendar_month(year, month, host, port)
+        else
+          _ -> error_response("Invalid month format")
+        end
+
+      _ ->
+        error_response("Invalid month format. Use: /calendar/month/YYYY/MM")
+    end
+  end
+
+  defp route_selector("/calendar/date/" <> date, host, port, _network, _ip, _socket),
+    do: calendar_date(date, host, port)
+
+  defp route_selector("/calendar/event/" <> id, host, port, _network, _ip, _socket),
+    do: calendar_event(id, host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -5010,6 +5049,205 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :not_found} ->
         error_response("User not found: #{username}")
+    end
+  end
+
+  # === Calendar Functions ===
+
+  defp calendar_menu(host, port) do
+    %{total_events: total, upcoming_events: upcoming} = Calendar.stats()
+    today = Date.utc_today()
+    {year, month, _day} = {today.year, today.month, today.day}
+
+    """
+    i=== Community Calendar ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iShare and discover events!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Upcoming Events\t/calendar/upcoming\t#{host}\t#{port}
+    1This Month (#{month_name(month)} #{year})\t/calendar/month/#{year}/#{month}\t#{host}\t#{port}
+    7Create Event\t/calendar/create\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Stats ---\t\t#{host}\t#{port}
+    iTotal events: #{total}\t\t#{host}\t#{port}
+    iUpcoming: #{upcoming}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp calendar_upcoming(host, port) do
+    case Calendar.list_upcoming(20) do
+      {:ok, []} ->
+        format_text_response("""
+        === Upcoming Events ===
+
+        No upcoming events scheduled.
+        Be the first to create one!
+        """, host, port)
+
+      {:ok, events} ->
+        event_lines = events
+          |> Enum.map(fn e ->
+            time_str = if e.time, do: " @ #{e.time}", else: ""
+            "1#{e.date}#{time_str}: #{truncate(e.title, 50)}\t/calendar/event/#{e.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Upcoming Events ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{event_lines}
+        i\t\t#{host}\t#{port}
+        7Create Event\t/calendar/create\t#{host}\t#{port}
+        1Back to Calendar\t/calendar\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp calendar_create_prompt(host, port) do
+    """
+    i=== Create Event ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: YYYY-MM-DD | Title | Description (optional)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  2025-01-15 | Monthly Gopher Meetup | Virtual hangout\t\t#{host}\t#{port}
+    i  2025-02-01 | New Year's Resolution Check-in\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_calendar_create(input, ip, host, port) do
+    parts = String.split(input, "|") |> Enum.map(&String.trim/1)
+
+    case parts do
+      [date | rest] when length(rest) >= 1 ->
+        [title | desc_parts] = rest
+        description = Enum.join(desc_parts, " | ")
+
+        case Calendar.create(ip, title: title, date: date, description: description) do
+          {:ok, id} ->
+            """
+            i=== Event Created! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iTitle: #{title}\t\t#{host}\t#{port}
+            iDate: #{date}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1View Event\t/calendar/event/#{id}\t#{host}\t#{port}
+            1Back to Calendar\t/calendar\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :rate_limited} ->
+            error_response("Please wait before creating another event.")
+
+          {:error, :empty_title} ->
+            error_response("Please provide an event title.")
+
+          {:error, :invalid_date} ->
+            error_response("Invalid date format. Use YYYY-MM-DD.")
+
+          {:error, reason} ->
+            error_response("Failed to create event: #{inspect(reason)}")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: YYYY-MM-DD | Title | Description")
+    end
+  end
+
+  defp calendar_month(year, month, host, port) do
+    case Calendar.list_by_month(year, month) do
+      {:ok, events} ->
+        # Navigation
+        {prev_year, prev_month} = if month == 1, do: {year - 1, 12}, else: {year, month - 1}
+        {next_year, next_month} = if month == 12, do: {year + 1, 1}, else: {year, month + 1}
+
+        event_lines = if Enum.empty?(events) do
+          "iNo events this month.\t\t#{host}\t#{port}"
+        else
+          events
+          |> Enum.map(fn e ->
+            day = String.slice(e.date, 8, 2)
+            time_str = if e.time, do: " #{e.time}", else: ""
+            "1#{day}#{time_str}: #{truncate(e.title, 45)}\t/calendar/event/#{e.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        """
+        i=== #{month_name(month)} #{year} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{event_lines}
+        i\t\t#{host}\t#{port}
+        1<< #{month_name(prev_month)} #{prev_year}\t/calendar/month/#{prev_year}/#{prev_month}\t#{host}\t#{port}
+        1>> #{month_name(next_month)} #{next_year}\t/calendar/month/#{next_year}/#{next_month}\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Create Event\t/calendar/create\t#{host}\t#{port}
+        1Back to Calendar\t/calendar\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp calendar_date(date_str, host, port) do
+    case Calendar.list_by_date(date_str) do
+      {:ok, events} ->
+        event_lines = if Enum.empty?(events) do
+          "iNo events on this date.\t\t#{host}\t#{port}"
+        else
+          events
+          |> Enum.map(fn e ->
+            time_str = if e.time, do: "#{e.time}: ", else: ""
+            "1#{time_str}#{truncate(e.title, 50)}\t/calendar/event/#{e.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        """
+        i=== Events on #{date_str} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{event_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Calendar\t/calendar\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp calendar_event(id, host, port) do
+    case Calendar.get(id) do
+      {:ok, event} ->
+        time_line = if event.time, do: "iTime: #{event.time}\t\t#{host}\t#{port}\r\n", else: ""
+        location_line = if event.location && event.location != "", do: "iLocation: #{event.location}\t\t#{host}\t#{port}\r\n", else: ""
+
+        desc_lines = if event.description && event.description != "" do
+          event.description
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+        else
+          "iNo description provided.\t\t#{host}\t#{port}"
+        end
+
+        """
+        i=== #{event.title} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iDate: #{event.date}\t\t#{host}\t#{port}
+        #{time_line}#{location_line}i\t\t#{host}\t#{port}
+        i--- Description ---\t\t#{host}\t#{port}
+        #{desc_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Upcoming\t/calendar/upcoming\t#{host}\t#{port}
+        1Back to Calendar\t/calendar\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Event not found.")
     end
   end
 

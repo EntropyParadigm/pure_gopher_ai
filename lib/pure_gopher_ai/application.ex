@@ -78,6 +78,9 @@ defmodule PureGopherAi.Application do
       # User Profiles
       PureGopherAi.UserProfiles,
 
+      # Calendar / Events
+      PureGopherAi.Calendar,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
