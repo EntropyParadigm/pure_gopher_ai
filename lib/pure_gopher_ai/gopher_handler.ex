@@ -859,6 +859,10 @@ defmodule PureGopherAi.GopherHandler do
     content_dir = Gophermap.content_dir()
     content_status = if File.exists?(content_dir), do: "Active", else: "Not configured"
 
+    # Get cache stats
+    cache_stats = PureGopherAi.ResponseCache.stats()
+    cache_status = if cache_stats.enabled, do: "Enabled", else: "Disabled"
+
     format_text_response(
       """
       === PureGopherAI Server Stats ===
@@ -875,6 +879,11 @@ defmodule PureGopherAi.GopherHandler do
       AI Backend: Bumblebee
       Compute Backend: #{backend_info}
       Model: GPT-2 (openai-community/gpt2)
+
+      Response Cache: #{cache_status}
+      Cache Size: #{cache_stats.size}/#{cache_stats.max_size}
+      Cache Hit Rate: #{cache_stats.hit_rate}%
+      Cache Hits/Misses: #{cache_stats.hits}/#{cache_stats.misses}
 
       Content Directory: #{content_dir}
       Content Status: #{content_status}

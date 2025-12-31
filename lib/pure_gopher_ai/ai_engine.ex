@@ -62,6 +62,7 @@ defmodule PureGopherAi.AiEngine do
   @doc """
   Generates text with optional conversation context.
   The context is prepended to the prompt for continuity.
+  Uses caching when context is nil (stateless queries).
 
   ## Examples
 
@@ -70,6 +71,29 @@ defmodule PureGopherAi.AiEngine do
       "Because..."
   """
   def generate(prompt, context) when is_binary(prompt) do
+    # Only cache stateless queries (no context)
+    cache_opts = [model: "default", context: context]
+
+    # Check cache first for stateless queries
+    case PureGopherAi.ResponseCache.get(prompt, cache_opts) do
+      {:ok, cached_response} ->
+        Logger.debug("Cache hit for query: #{String.slice(prompt, 0..50)}")
+        cached_response
+
+      :miss ->
+        response = do_generate(prompt, context)
+
+        # Cache the response if it's a stateless query
+        if is_nil(context) do
+          PureGopherAi.ResponseCache.put(prompt, response, cache_opts)
+        end
+
+        response
+    end
+  end
+
+  # Internal generation function
+  defp do_generate(prompt, context) do
     full_prompt = build_prompt(prompt, context)
 
     if streaming_enabled?() do

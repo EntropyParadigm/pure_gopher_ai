@@ -70,7 +70,12 @@ config :pure_gopher_ai,
       name: "Code Assistant",
       prompt: "You are a programming expert. Focus on code examples, best practices, and technical accuracy. Be concise."
     }
-  }
+  },
+
+  # Response caching
+  cache_enabled: true,
+  cache_ttl_ms: 3_600_000,       # Cache TTL (1 hour)
+  cache_max_entries: 1000        # Max cached responses
 
 # Logging
 config :logger, :console,

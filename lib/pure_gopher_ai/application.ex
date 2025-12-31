@@ -27,6 +27,9 @@ defmodule PureGopherAi.Application do
       # Conversation Store
       PureGopherAi.ConversationStore,
 
+      # Response Cache
+      PureGopherAi.ResponseCache,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

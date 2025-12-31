@@ -173,20 +173,30 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 2.3 Response Caching
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Cache repeated AI queries to reduce GPU load.
 
 **Implementation:**
-- [ ] Create `ResponseCache` with ETS
-- [ ] Hash-based cache keys (query + model)
-- [ ] Configurable TTL
-- [ ] Cache hit/miss metrics
-- [ ] Max cache size with LRU eviction
+- [x] Create `ResponseCache` GenServer with ETS
+- [x] Hash-based cache keys (SHA256 of query + model + context)
+- [x] Configurable TTL with automatic cleanup
+- [x] Cache hit/miss/write metrics with hit rate calculation
+- [x] Max cache size with LRU eviction
+- [x] Cache stats displayed in /about page
+- [x] Only stateless queries cached (queries with context not cached)
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/response_cache.ex`
-- `lib/pure_gopher_ai/ai_engine.ex`
+**Config options:**
+- `cache_enabled` - Enable/disable caching (default: true)
+- `cache_ttl_ms` - Cache TTL in ms (default: 3600000 = 1 hour)
+- `cache_max_entries` - Max entries before LRU eviction (default: 1000)
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/response_cache.ex` (new)
+- `lib/pure_gopher_ai/ai_engine.ex` (cache integration)
+- `lib/pure_gopher_ai/gopher_handler.ex` (about page stats)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `config/config.exs` (cache options)
 
 ---
 
@@ -333,7 +343,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | Conversation Memory | Complete | c250c19 |
 | 2025-01-01 | Streaming Responses | Complete | e9fff3b |
 | 2025-01-01 | Multiple Model Support | Complete | 4f64be9 |
-| 2025-01-01 | System Prompts / Personas | Complete | (pending) |
+| 2025-01-01 | System Prompts / Personas | Complete | 27170b6 |
+| 2025-01-01 | Response Caching | Complete | (pending) |
 
 ---
 
