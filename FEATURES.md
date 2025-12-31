@@ -765,25 +765,37 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 ---
 
 ### 7.7 Link Directory
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Curated directory of Gopher/Gemini links.
 
-**Planned Implementation:**
-- [ ] Create `LinkDirectory` module with persistent storage
-- [ ] `/links` - Browse categories
-- [ ] `/links/<category>` - Links in category
-- [ ] `/links/suggest` - Suggest a link
-- [ ] Admin approval workflow
-- [ ] AI-generated descriptions
-- [ ] Link health checking
+**Implementation:**
+- [x] Create `LinkDirectory` GenServer module with DETS storage
+- [x] `/links` - Browse categories with link counts
+- [x] `/links/category/<id>` - Links in category
+- [x] `/links/submit` - User link submission
+- [x] `/links/search` - Search links by keyword
+- [x] Admin approval workflow (pending table)
+- [x] AI-generated descriptions support
+- [x] 12 seed links to well-known servers
+- [x] Gemini protocol support
 
-**Selectors:**
-- `/links` - Link directory home
-- `/links/<category>` - Category view
-- `/links/search <query>` - Search links
-- `/links/suggest` - Suggest a link
-- `/links/random` - Random link
+**Categories:**
+- `gopher` - Gopher Servers
+- `gemini` - Gemini Capsules
+- `tech` - Technology
+- `retro` - Retro Computing
+- `programming` - Programming
+- `art` - ASCII Art & Culture
+- `writing` - Writing & Literature
+- `games` - Games & Fun
+- `misc` - Miscellaneous
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/link_directory.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes, handlers)
+- `lib/pure_gopher_ai/gemini_handler.ex` (routes, handlers)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---
 
@@ -879,6 +891,7 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | RSS/Atom Feed Aggregator | Complete | 860c18c |
 | 2025-12-31 | Weather Service | Complete | 7269e06 |
 | 2025-12-31 | Fortune/Quote Service | Complete | 60aa632 |
+| 2025-12-31 | Link Directory | Complete | 39e1f85 |
 
 ---
 
