@@ -121,6 +121,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/phlog.ex` | Gopher blog with Atom feed |
 | `lib/pure_gopher_ai/search.ex` | Full-text search with ranking |
 | `lib/pure_gopher_ai/ascii_art.ex` | Text-to-ASCII art generation |
+| `lib/pure_gopher_ai/admin.ex` | Admin interface with token auth |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -165,6 +166,7 @@ end
 | `/art/text <text>` | Large block letters |
 | `/art/small <text>` | Compact letters |
 | `/art/banner <text>` | Text with border |
+| `/admin/<token>` | Admin panel (token-protected) |
 | `/files` | Browse static content |
 | `/about` | Server info |
 | `/stats` | Detailed metrics |

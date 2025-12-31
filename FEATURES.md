@@ -295,18 +295,32 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 4.2 Admin Gopherhole
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Low
 **Description:** Admin interface accessible via Gopher.
 
 **Implementation:**
-- [ ] Auth via selector token (`/admin/<token>/...`)
-- [ ] View stats, active sessions, cache status
-- [ ] Clear cache, ban IPs
-- [ ] Reload config
-- [ ] View logs
+- [x] Auth via selector token (`/admin/<token>/...`)
+- [x] View system stats (memory, processes, uptime)
+- [x] View cache status and clear cache
+- [x] View request metrics and reset
+- [x] IP banning/unbanning
+- [x] Clear all sessions
+- [x] Secure token comparison
 
-**Files to create/modify:**
+**Config options:**
+- `admin_token` - Token for admin access (or `ADMIN_TOKEN` env var)
+
+**Selectors:**
+- `/admin/<token>` - Admin menu
+- `/admin/<token>/clear-cache` - Clear response cache
+- `/admin/<token>/clear-sessions` - Clear all sessions
+- `/admin/<token>/reset-metrics` - Reset telemetry
+- `/admin/<token>/bans` - View/manage banned IPs
+- `/admin/<token>/ban <ip>` - Ban an IP
+- `/admin/<token>/unban/<ip>` - Unban an IP
+
+**Files created/modified:**
 - `lib/pure_gopher_ai/admin.ex`
 - `lib/pure_gopher_ai/gopher_handler.ex`
 
@@ -390,7 +404,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | Metrics/Telemetry | Complete | (pending) |
 | 2025-12-31 | Phlog Support | Complete | 8998365 |
 | 2025-12-31 | Search (Type 7) | Complete | 35d915b |
-| 2025-12-31 | ASCII Art Generation | Complete | (pending) |
+| 2025-12-31 | ASCII Art Generation | Complete | 1e8809d |
+| 2025-12-31 | Admin Gopherhole | Complete | (pending) |
 
 ---
 

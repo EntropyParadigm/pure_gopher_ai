@@ -18,6 +18,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Phlog
   alias PureGopherAi.Search
   alias PureGopherAi.AsciiArt
+  alias PureGopherAi.Admin
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -67,6 +68,11 @@ defmodule PureGopherAi.GopherHandler do
       {:error, :rate_limited, retry_after} ->
         Logger.warning("Rate limited: #{format_ip(client_ip)}, retry after #{retry_after}ms")
         response = rate_limit_response(retry_after)
+        ThousandIsland.Socket.send(socket, response)
+
+      {:error, :banned} ->
+        Logger.warning("Banned IP attempted access: #{format_ip(client_ip)}")
+        response = banned_response()
         ThousandIsland.Socket.send(socket, response)
     end
 
@@ -244,6 +250,11 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/art/banner " <> text, host, port, _network, _ip, _socket),
     do: handle_art_banner(text, host, port)
+
+  # Admin routes (token-authenticated)
+  defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
+    handle_admin(rest, host, port)
+  end
 
   # Static content via gophermap
   defp route_selector("/files" <> rest, host, port, _network, _ip, _socket),
@@ -1447,6 +1458,164 @@ defmodule PureGopherAi.GopherHandler do
     art_banner_prompt(host, port)
   end
 
+  # === Admin Functions ===
+
+  # Handle admin routes
+  defp handle_admin(path, host, port) do
+    if not Admin.enabled?() do
+      error_response("Admin interface not configured")
+    else
+      # Parse token and command from path
+      case String.split(path, "/", parts: 2) do
+        [token] ->
+          # Just token, show admin menu
+          if Admin.valid_token?(token) do
+            admin_menu(token, host, port)
+          else
+            error_response("Invalid admin token")
+          end
+
+        [token, command] ->
+          if Admin.valid_token?(token) do
+            handle_admin_command(token, command, host, port)
+          else
+            error_response("Invalid admin token")
+          end
+
+        _ ->
+          error_response("Invalid admin path")
+      end
+    end
+  end
+
+  # Admin menu
+  defp admin_menu(token, host, port) do
+    system_stats = Admin.system_stats()
+    cache_stats = Admin.cache_stats()
+    rate_stats = Admin.rate_limiter_stats()
+    telemetry = Telemetry.format_stats()
+
+    """
+    i=== Admin Panel ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- System Status ---\t\t#{host}\t#{port}
+    iUptime: #{system_stats.uptime_hours} hours\t\t#{host}\t#{port}
+    iProcesses: #{system_stats.processes}\t\t#{host}\t#{port}
+    iMemory: #{system_stats.memory.total_mb} MB total\t\t#{host}\t#{port}
+    i  Processes: #{system_stats.memory.processes_mb} MB\t\t#{host}\t#{port}
+    i  ETS: #{system_stats.memory.ets_mb} MB\t\t#{host}\t#{port}
+    i  Binary: #{system_stats.memory.binary_mb} MB\t\t#{host}\t#{port}
+    iSchedulers: #{system_stats.schedulers}\t\t#{host}\t#{port}
+    iOTP: #{system_stats.otp_version} | Elixir: #{system_stats.elixir_version}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Request Stats ---\t\t#{host}\t#{port}
+    iTotal Requests: #{telemetry.total_requests}\t\t#{host}\t#{port}
+    iRequests/Hour: #{telemetry.requests_per_hour}\t\t#{host}\t#{port}
+    iErrors: #{telemetry.total_errors} (#{telemetry.error_rate}%)\t\t#{host}\t#{port}
+    iAvg Latency: #{telemetry.avg_latency_ms}ms\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Cache ---\t\t#{host}\t#{port}
+    iSize: #{cache_stats.size}/#{cache_stats.max_size}\t\t#{host}\t#{port}
+    iHit Rate: #{cache_stats.hit_rate}%\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Rate Limiter ---\t\t#{host}\t#{port}
+    iTracked IPs: #{rate_stats.tracked_ips}\t\t#{host}\t#{port}
+    iBanned IPs: #{rate_stats.banned_ips}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Actions ---\t\t#{host}\t#{port}
+    0Clear Cache\t/admin/#{token}/clear-cache\t#{host}\t#{port}
+    0Clear Sessions\t/admin/#{token}/clear-sessions\t#{host}\t#{port}
+    0Reset Metrics\t/admin/#{token}/reset-metrics\t#{host}\t#{port}
+    1View Bans\t/admin/#{token}/bans\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Handle admin commands
+  defp handle_admin_command(token, "clear-cache", host, port) do
+    Admin.clear_cache()
+    admin_action_result(token, "Cache cleared successfully", host, port)
+  end
+
+  defp handle_admin_command(token, "clear-sessions", host, port) do
+    Admin.clear_sessions()
+    admin_action_result(token, "All sessions cleared", host, port)
+  end
+
+  defp handle_admin_command(token, "reset-metrics", host, port) do
+    Admin.reset_metrics()
+    admin_action_result(token, "Metrics reset", host, port)
+  end
+
+  defp handle_admin_command(token, "bans", host, port) do
+    bans = Admin.list_bans()
+
+    ban_lines =
+      if Enum.empty?(bans) do
+        "iNo banned IPs\t\t#{host}\t#{port}\r\n"
+      else
+        bans
+        |> Enum.map(fn {ip, _timestamp} ->
+          "i  #{ip}\t\t#{host}\t#{port}\r\n0Unban #{ip}\t/admin/#{token}/unban/#{ip}\t#{host}\t#{port}\r\n"
+        end)
+        |> Enum.join("")
+      end
+
+    """
+    i=== Banned IPs ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{ban_lines}i\t\t#{host}\t#{port}
+    7Ban IP\t/admin/#{token}/ban\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Admin\t/admin/#{token}\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_admin_command(token, "ban\t" <> ip, host, port) do
+    handle_ban(token, ip, host, port)
+  end
+
+  defp handle_admin_command(token, "ban " <> ip, host, port) do
+    handle_ban(token, ip, host, port)
+  end
+
+  defp handle_admin_command(token, "unban/" <> ip, host, port) do
+    case Admin.unban_ip(ip) do
+      :ok ->
+        admin_action_result(token, "Unbanned IP: #{ip}", host, port)
+      {:error, :invalid_ip} ->
+        admin_action_result(token, "Invalid IP address: #{ip}", host, port)
+    end
+  end
+
+  defp handle_admin_command(_token, command, host, port) do
+    error_response("Unknown admin command: #{command}")
+  end
+
+  defp handle_ban(token, ip, host, port) do
+    ip = String.trim(ip)
+    case Admin.ban_ip(ip) do
+      :ok ->
+        admin_action_result(token, "Banned IP: #{ip}", host, port)
+      {:error, :invalid_ip} ->
+        admin_action_result(token, "Invalid IP address: #{ip}", host, port)
+    end
+  end
+
+  defp admin_action_result(token, message, host, port) do
+    """
+    i=== Admin Action ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i#{message}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Admin\t/admin/#{token}\t#{host}\t#{port}
+    .
+    """
+  end
+
   # Format as Gopher text response (type 0)
   defp format_text_response(text, host, port) do
     lines =
@@ -1558,6 +1727,14 @@ defmodule PureGopherAi.GopherHandler do
 
     """
     3Rate limit exceeded. Please wait #{retry_seconds} seconds.\t\terror.host\t1
+    .
+    """
+  end
+
+  # Banned IP response
+  defp banned_response do
+    """
+    3Access denied. Your IP has been banned.\t\terror.host\t1
     .
     """
   end

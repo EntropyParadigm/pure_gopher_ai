@@ -88,6 +88,14 @@ defmodule PureGopherAi.ConversationStore do
   end
 
   @doc """
+  Clears all conversation sessions.
+  """
+  def clear_all do
+    :ets.delete_all_objects(@table_name)
+    :ok
+  end
+
+  @doc """
   Gets the number of active sessions.
   """
   def session_count do

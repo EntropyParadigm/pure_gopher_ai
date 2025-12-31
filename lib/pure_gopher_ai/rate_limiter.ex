@@ -13,6 +13,7 @@ defmodule PureGopherAi.RateLimiter do
   require Logger
 
   @table_name :rate_limiter
+  @bans_table :rate_limiter_bans
   @cleanup_interval 60_000  # Clean up old entries every minute
 
   # Client API
@@ -33,10 +34,14 @@ defmodule PureGopherAi.RateLimiter do
   end
 
   def check(ip) when is_binary(ip) do
-    if enabled?() do
-      GenServer.call(__MODULE__, {:check, ip})
+    if banned?(ip) do
+      {:error, :banned}
     else
-      {:ok, :unlimited}
+      if enabled?() do
+        GenServer.call(__MODULE__, {:check, ip})
+      else
+        {:ok, :unlimited}
+      end
     end
   end
 
@@ -87,12 +92,78 @@ defmodule PureGopherAi.RateLimiter do
     Application.get_env(:pure_gopher_ai, :rate_limit_window_ms, 60_000)
   end
 
+  @doc """
+  Gets rate limiter statistics.
+  """
+  def stats do
+    tracked_ips = :ets.info(@table_name, :size) || 0
+    banned_ips = :ets.info(@bans_table, :size) || 0
+
+    %{
+      enabled: enabled?(),
+      limit: limit(),
+      window_ms: window_ms(),
+      tracked_ips: tracked_ips,
+      banned_ips: banned_ips
+    }
+  end
+
+  @doc """
+  Bans an IP address.
+  """
+  def ban(ip) when is_tuple(ip) do
+    ban(format_ip(ip))
+  end
+
+  def ban(ip) when is_binary(ip) do
+    :ets.insert(@bans_table, {ip, System.monotonic_time(:second)})
+    Logger.warning("Banned IP: #{ip}")
+    :ok
+  end
+
+  @doc """
+  Unbans an IP address.
+  """
+  def unban(ip) when is_tuple(ip) do
+    unban(format_ip(ip))
+  end
+
+  def unban(ip) when is_binary(ip) do
+    :ets.delete(@bans_table, ip)
+    Logger.info("Unbanned IP: #{ip}")
+    :ok
+  end
+
+  @doc """
+  Checks if an IP is banned.
+  """
+  def banned?(ip) when is_tuple(ip) do
+    banned?(format_ip(ip))
+  end
+
+  def banned?(ip) when is_binary(ip) do
+    case :ets.lookup(@bans_table, ip) do
+      [{^ip, _}] -> true
+      [] -> false
+    end
+  end
+
+  @doc """
+  Lists all banned IPs.
+  """
+  def list_bans do
+    :ets.tab2list(@bans_table)
+    |> Enum.map(fn {ip, timestamp} -> {ip, timestamp} end)
+  end
+
   # Server Callbacks
 
   @impl true
   def init(_opts) do
     # Create ETS table for storing rate limit data
     :ets.new(@table_name, [:named_table, :public, :set])
+    # Create ETS table for bans
+    :ets.new(@bans_table, [:named_table, :public, :set])
 
     # Schedule periodic cleanup
     schedule_cleanup()

@@ -79,7 +79,11 @@ config :pure_gopher_ai,
 
   # Phlog (Gopher blog)
   phlog_dir: "~/.gopher/phlog",  # Phlog content directory
-  phlog_entries_per_page: 10    # Entries per page
+  phlog_entries_per_page: 10,   # Entries per page
+
+  # Admin interface (set ADMIN_TOKEN env var to enable)
+  # Access via /admin/<token>/
+  admin_token: nil              # Set to a secure token to enable admin
 
 # Logging
 config :logger, :console,
