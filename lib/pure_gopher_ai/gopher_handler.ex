@@ -35,6 +35,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.RequestValidator
   alias PureGopherAi.OutputSanitizer
   alias PureGopherAi.Pastebin
+  alias PureGopherAi.Polls
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -252,6 +253,31 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/paste/" <> id, host, port, _network, _ip, _socket),
     do: paste_view(id, host, port)
+
+  # Polls routes
+  defp route_selector("/polls", host, port, _network, _ip, _socket),
+    do: polls_menu(host, port)
+
+  defp route_selector("/polls/new", host, port, _network, _ip, _socket),
+    do: polls_new_prompt(host, port)
+
+  defp route_selector("/polls/new\t" <> input, host, port, _network, ip, _socket),
+    do: handle_polls_create(input, ip, host, port)
+
+  defp route_selector("/polls/new " <> input, host, port, _network, ip, _socket),
+    do: handle_polls_create(input, ip, host, port)
+
+  defp route_selector("/polls/active", host, port, _network, _ip, _socket),
+    do: polls_active(host, port)
+
+  defp route_selector("/polls/closed", host, port, _network, _ip, _socket),
+    do: polls_closed(host, port)
+
+  defp route_selector("/polls/vote/" <> rest, host, port, _network, ip, _socket),
+    do: handle_polls_vote(rest, ip, host, port)
+
+  defp route_selector("/polls/" <> id, host, port, _network, ip, _socket),
+    do: polls_view(id, ip, host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -4352,6 +4378,229 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, _} ->
         "Error: Failed to retrieve paste.\r\n"
+    end
+  end
+
+  # === Polls Functions ===
+
+  defp polls_menu(host, port) do
+    %{active_polls: active, total_votes: votes} = Polls.stats()
+
+    """
+    i=== Community Polls ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iVote on community polls and create your own!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Active Polls\t/polls/active\t#{host}\t#{port}
+    1Closed Polls\t/polls/closed\t#{host}\t#{port}
+    7Create New Poll\t/polls/new\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Stats ---\t\t#{host}\t#{port}
+    iActive polls: #{active}\t\t#{host}\t#{port}
+    iTotal votes cast: #{votes}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp polls_new_prompt(host, port) do
+    """
+    i=== Create New Poll ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: Question | Option1 | Option2 | Option3 ...\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    iWhat's your favorite protocol? | Gopher | Gemini | HTTP | All of them\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iMinimum 2 options, maximum 10.\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_polls_create(input, ip, host, port) do
+    parts = String.split(input, "|") |> Enum.map(&String.trim/1)
+
+    case parts do
+      [question | options] when length(options) >= 2 ->
+        case Polls.create(question, options, ip) do
+          {:ok, id} ->
+            """
+            i=== Poll Created! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iPoll ID: #{id}\t\t#{host}\t#{port}
+            iQuestion: #{question}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1View Your Poll\t/polls/#{id}\t#{host}\t#{port}
+            1Back to Polls\t/polls\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :question_too_long} ->
+            error_response("Question too long. Maximum 200 characters.")
+
+          {:error, :too_many_options} ->
+            error_response("Too many options. Maximum 10 options.")
+
+          {:error, reason} ->
+            error_response("Failed to create poll: #{inspect(reason)}")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: Question | Option1 | Option2 | ...")
+    end
+  end
+
+  defp polls_active(host, port) do
+    case Polls.list_active(20) do
+      {:ok, polls} when polls == [] ->
+        format_text_response("""
+        === Active Polls ===
+
+        No active polls right now.
+        Create one to get the conversation started!
+        """, host, port)
+
+      {:ok, polls} ->
+        poll_lines = polls
+          |> Enum.map(fn p ->
+            ends = String.slice(p.ends_at, 0, 10)
+            "1[#{p.total_votes} votes] #{truncate(p.question, 50)} (ends #{ends})\t/polls/#{p.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Active Polls ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{poll_lines}
+        i\t\t#{host}\t#{port}
+        7Create New Poll\t/polls/new\t#{host}\t#{port}
+        1Back to Polls\t/polls\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        error_response("Failed to list polls: #{inspect(reason)}")
+    end
+  end
+
+  defp polls_closed(host, port) do
+    case Polls.list_closed(20) do
+      {:ok, polls} when polls == [] ->
+        format_text_response("=== Closed Polls ===\n\nNo closed polls yet.", host, port)
+
+      {:ok, polls} ->
+        poll_lines = polls
+          |> Enum.map(fn p ->
+            "1[#{p.total_votes} votes] #{truncate(p.question, 50)}\t/polls/#{p.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Closed Polls ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{poll_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Polls\t/polls\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        error_response("Failed to list polls: #{inspect(reason)}")
+    end
+  end
+
+  defp polls_view(id, ip, host, port) do
+    case Polls.get(id) do
+      {:ok, poll} ->
+        has_voted = Polls.has_voted?(id, ip)
+        status = if poll.closed, do: "CLOSED", else: "ACTIVE"
+
+        # Build option lines with vote counts
+        option_lines = poll.options
+          |> Enum.with_index()
+          |> Enum.map(fn {option, idx} ->
+            votes = Enum.at(poll.votes, idx, 0)
+            pct = if poll.total_votes > 0, do: round(votes / poll.total_votes * 100), else: 0
+            bar = String.duplicate("█", div(pct, 5)) <> String.duplicate("░", 20 - div(pct, 5))
+
+            if poll.closed or has_voted do
+              "i  #{idx + 1}. #{option}\t\t#{host}\t#{port}\r\n" <>
+              "i     #{bar} #{votes} votes (#{pct}%)\t\t#{host}\t#{port}"
+            else
+              "1  #{idx + 1}. #{option} [VOTE]\t/polls/vote/#{id}/#{idx}\t#{host}\t#{port}"
+            end
+          end)
+          |> Enum.join("\r\n")
+
+        vote_status = cond do
+          poll.closed -> "Poll is closed."
+          has_voted -> "You have already voted."
+          true -> "Click an option to vote!"
+        end
+
+        """
+        i=== Poll: #{status} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{poll.question}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{option_lines}
+        i\t\t#{host}\t#{port}
+        iTotal votes: #{poll.total_votes}\t\t#{host}\t#{port}
+        i#{vote_status}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Polls\t/polls\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Poll not found.")
+
+      {:error, reason} ->
+        error_response("Failed to get poll: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_polls_vote(rest, ip, host, port) do
+    case String.split(rest, "/") do
+      [poll_id, option_str] ->
+        case Integer.parse(option_str) do
+          {option_idx, ""} ->
+            case Polls.vote(poll_id, option_idx, ip) do
+              {:ok, poll} ->
+                """
+                i=== Vote Recorded! ===\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                iThank you for voting!\t\t#{host}\t#{port}
+                iYou voted for: #{Enum.at(poll.options, option_idx)}\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                1View Results\t/polls/#{poll_id}\t#{host}\t#{port}
+                1Back to Polls\t/polls\t#{host}\t#{port}
+                .
+                """
+
+              {:error, :already_voted} ->
+                error_response("You have already voted on this poll.")
+
+              {:error, :poll_closed} ->
+                error_response("This poll is closed.")
+
+              {:error, :invalid_option} ->
+                error_response("Invalid option.")
+
+              {:error, :not_found} ->
+                error_response("Poll not found.")
+
+              {:error, reason} ->
+                error_response("Failed to vote: #{inspect(reason)}")
+            end
+
+          _ ->
+            error_response("Invalid vote format.")
+        end
+
+      _ ->
+        error_response("Invalid vote URL.")
     end
   end
 

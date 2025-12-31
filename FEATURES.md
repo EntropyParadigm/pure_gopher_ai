@@ -1049,6 +1049,81 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Output Sanitization | Complete | 05a5d2c |
 | 2025-12-31 | Abuse Detection & Auto-Ban | Complete | 6f72496 |
 | 2025-12-31 | Security Module Integration | Complete | 12bdf68 |
+| 2025-12-31 | Pastebin / Text Sharing | Complete | (pending) |
+| 2025-12-31 | Polls / Voting System | Complete | (pending) |
+
+---
+
+## Phase 9: Enhanced Community Features
+
+### 9.1 Pastebin / Text Sharing
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Simple pastebin for sharing text snippets via Gopher.
+
+**Implementation:**
+- [x] Create `Pastebin` GenServer with DETS persistent storage
+- [x] `/paste` - Pastebin menu
+- [x] `/paste/new` - Create new paste (Type 7 input)
+- [x] `/paste/recent` - List recent pastes
+- [x] `/paste/<id>` - View paste with metadata
+- [x] `/paste/raw/<id>` - Raw paste content only
+- [x] Optional titles and syntax hints
+- [x] Automatic expiration (1 week default)
+- [x] View count tracking
+- [x] Unlisted paste option
+- [x] Rate limiting per IP
+- [x] Automatic cleanup of expired pastes
+
+**Supported Syntax Types:**
+text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, bash, shell, markdown, json, xml, yaml
+
+**Selectors:**
+- `/paste` - Pastebin menu
+- `/paste/new` - Create new paste
+- `/paste/recent` - Recent pastes
+- `/paste/<id>` - View paste
+- `/paste/raw/<id>` - Raw paste content
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/pastebin.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (paste routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 9.2 Polls / Voting System
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Simple polling/voting system for community engagement.
+
+**Implementation:**
+- [x] Create `Polls` GenServer with DETS persistent storage
+- [x] `/polls` - Polls menu
+- [x] `/polls/new` - Create new poll (Type 7 input)
+- [x] `/polls/active` - List active polls
+- [x] `/polls/closed` - List closed polls
+- [x] `/polls/<id>` - View poll with results
+- [x] `/polls/vote/<id>/<option>` - Vote on poll
+- [x] IP-based duplicate vote prevention (hashed for privacy)
+- [x] Automatic expiration (1 week default)
+- [x] Multiple option support (2-10 options)
+- [x] Vote counts and percentages display
+- [x] Admin close/delete functionality
+- [x] Question and option length limits
+
+**Selectors:**
+- `/polls` - Polls menu
+- `/polls/new` - Create new poll
+- `/polls/active` - Active polls
+- `/polls/closed` - Closed polls
+- `/polls/<id>` - View poll and results
+- `/polls/vote/<id>/<option_index>` - Cast vote
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/polls.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (poll routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---
 

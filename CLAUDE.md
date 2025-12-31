@@ -130,6 +130,8 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/rag/file_watcher.ex` | Auto-ingestion from watch directory |
 | `lib/pure_gopher_ai/summarizer.ex` | AI summarization, translation, digests |
 | `lib/pure_gopher_ai/gopher_proxy.ex` | Fetch external Gopher content |
+| `lib/pure_gopher_ai/pastebin.ex` | Pastebin for text sharing |
+| `lib/pure_gopher_ai/polls.ex` | Polling/voting system |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -197,6 +199,17 @@ end
 | `/files` | Browse static content |
 | `/about` | Server info |
 | `/stats` | Detailed metrics |
+| `/paste` | Pastebin menu |
+| `/paste/new` | Create new paste |
+| `/paste/recent` | Recent pastes |
+| `/paste/<id>` | View paste |
+| `/paste/raw/<id>` | Raw paste content |
+| `/polls` | Polls menu |
+| `/polls/new` | Create new poll |
+| `/polls/active` | Active polls |
+| `/polls/closed` | Closed polls |
+| `/polls/<id>` | View poll results |
+| `/polls/vote/<id>/<n>` | Vote on poll |
 
 ### Response Format
 ```

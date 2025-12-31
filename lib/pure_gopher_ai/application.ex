@@ -69,6 +69,9 @@ defmodule PureGopherAi.Application do
       # Pastebin
       PureGopherAi.Pastebin,
 
+      # Polls / Voting
+      PureGopherAi.Polls,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
