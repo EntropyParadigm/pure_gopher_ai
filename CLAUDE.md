@@ -119,6 +119,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/response_cache.ex` | Response caching with LRU eviction |
 | `lib/pure_gopher_ai/telemetry.ex` | Metrics and request tracking |
 | `lib/pure_gopher_ai/phlog.ex` | Gopher blog with Atom feed |
+| `lib/pure_gopher_ai/search.ex` | Full-text search with ranking |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -157,6 +158,8 @@ end
 | `/phlog/year/<YYYY>` | Entries by year |
 | `/phlog/month/<YYYY>/<MM>` | Entries by month |
 | `/phlog/entry/<path>` | Single phlog entry |
+| `/search` | Search content (Type 7) |
+| `/search <query>` | Execute search |
 | `/files` | Browse static content |
 | `/about` | Server info |
 | `/stats` | Detailed metrics |

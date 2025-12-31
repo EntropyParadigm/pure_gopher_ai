@@ -203,20 +203,27 @@ This document tracks the implementation status of all planned features.
 ## Phase 3: Gopher Protocol Features
 
 ### 3.1 Search (Type 7)
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Implement Gopher search protocol for interactive queries.
 
 **Implementation:**
-- [ ] Type 7 selector handling
-- [ ] Search input prompt
-- [ ] Search across gophermap content
-- [ ] Search AI conversation history
-- [ ] Full-text search with ranking
+- [x] Type 7 selector handling (`/search`)
+- [x] Search input prompt
+- [x] Search across gophermap content
+- [x] Search across phlog entries
+- [x] Full-text search with relevance ranking
+- [x] Snippet extraction around matches
+- [x] Parallel search across content types
+- [x] Title boost in ranking
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/search.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
+**Selectors:**
+- `/search` - Search prompt (Type 7)
+- `/search <query>` - Execute search
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/search.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (search routes)
 
 ---
 
@@ -373,7 +380,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | System Prompts / Personas | Complete | 27170b6 |
 | 2025-01-01 | Response Caching | Complete | 1b4767c |
 | 2025-01-01 | Metrics/Telemetry | Complete | (pending) |
-| 2025-12-31 | Phlog Support | Complete | (pending) |
+| 2025-12-31 | Phlog Support | Complete | 8998365 |
+| 2025-12-31 | Search (Type 7) | Complete | (pending) |
 
 ---
 

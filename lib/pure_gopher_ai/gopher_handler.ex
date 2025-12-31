@@ -16,6 +16,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.ModelRegistry
   alias PureGopherAi.Telemetry
   alias PureGopherAi.Phlog
+  alias PureGopherAi.Search
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -202,6 +203,16 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/phlog/entry/" <> entry_path, host, port, _network, _ip, _socket),
     do: phlog_entry(host, port, entry_path)
 
+  # Search (Type 7)
+  defp route_selector("/search", host, port, _network, _ip, _socket),
+    do: search_prompt(host, port)
+
+  defp route_selector("/search\t" <> query, host, port, _network, _ip, _socket),
+    do: handle_search(query, host, port)
+
+  defp route_selector("/search " <> query, host, port, _network, _ip, _socket),
+    do: handle_search(query, host, port)
+
   # Static content via gophermap
   defp route_selector("/files" <> rest, host, port, _network, _ip, _socket),
     do: serve_static(rest, host, port)
@@ -251,6 +262,7 @@ defmodule PureGopherAi.GopherHandler do
     1Browse AI Personas\t/personas\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== Content ===\t\t#{host}\t#{port}
+    7Search Content\t/search\t#{host}\t#{port}
     1Phlog (Blog)\t/phlog\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
@@ -1202,6 +1214,89 @@ defmodule PureGopherAi.GopherHandler do
       11 -> "November"
       12 -> "December"
       _ -> "Unknown"
+    end
+  end
+
+  # === Search Functions ===
+
+  # Search prompt (Type 7)
+  defp search_prompt(host, port) do
+    """
+    iSearch Content\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSearch across all phlog entries and static files.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your search query below:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Handle search query
+  defp handle_search(query, host, port) when byte_size(query) > 0 do
+    query = String.trim(query)
+
+    if String.length(query) < 2 do
+      """
+      i=== Search Results ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iQuery too short. Please enter at least 2 characters.\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      7Try Again\t/search\t#{host}\t#{port}
+      1Back to Main Menu\t/\t#{host}\t#{port}
+      .
+      """
+    else
+      results = Search.search(query)
+
+      if Enum.empty?(results) do
+        """
+        i=== Search Results ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo results found for: "#{query}"\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Another Search\t/search\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+      else
+        result_lines =
+          results
+          |> Enum.map(fn {type, title, selector, snippet} ->
+            type_char = search_result_type(type)
+            snippet_line = "i  #{truncate_snippet(snippet, 70)}\t\t#{host}\t#{port}\r\n"
+            "#{type_char}#{title}\t#{selector}\t#{host}\t#{port}\r\n#{snippet_line}"
+          end)
+          |> Enum.join("")
+
+        """
+        i=== Search Results ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iQuery: "#{query}"\t\t#{host}\t#{port}
+        iFound #{length(results)} result(s)\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{result_lines}i\t\t#{host}\t#{port}
+        7New Search\t/search\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+      end
+    end
+  end
+
+  defp handle_search(_query, host, port) do
+    search_prompt(host, port)
+  end
+
+  defp search_result_type(:file), do: "0"
+  defp search_result_type(:phlog), do: "0"
+  defp search_result_type(:dir), do: "1"
+  defp search_result_type(_), do: "0"
+
+  defp truncate_snippet(snippet, max_length) do
+    if String.length(snippet) > max_length do
+      String.slice(snippet, 0, max_length - 3) <> "..."
+    else
+      snippet
     end
   end
 
