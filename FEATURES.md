@@ -474,6 +474,88 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -node
 
 ---
 
+## Phase 6: AI Tools & Services
+
+### 6.1 Summarization & Translation
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** AI-powered content summarization and translation services.
+
+**Implementation:**
+- [x] Create `Summarizer` module
+- [x] Phlog entry summarization (TL;DR)
+- [x] RAG document summarization
+- [x] Translation support (25+ languages)
+- [x] Streaming output support
+- [x] Routes for Gopher and Gemini protocols
+
+**Selectors:**
+- `/summary/phlog/<path>` - Summarize phlog entry
+- `/summary/doc/<id>` - Summarize document
+- `/translate` - Translation service menu
+- `/translate/<lang>/phlog/<path>` - Translate phlog
+- `/translate/<lang>/doc/<id>` - Translate document
+
+**Supported languages:**
+en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, sv, da, fi, no, el, he, uk, cs
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/summarizer.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes)
+- `lib/pure_gopher_ai/gemini_handler.ex` (routes)
+
+---
+
+### 6.2 Dynamic Content Generation
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** AI-generated dynamic content and recommendations.
+
+**Implementation:**
+- [x] Daily digest generation from recent phlog entries
+- [x] Topic discovery across all content
+- [x] Content recommendations based on interests
+- [x] Term explanations
+- [x] Streaming output support
+
+**Selectors:**
+- `/digest` - AI daily digest of recent activity
+- `/topics` - Discover themes in content
+- `/discover <interest>` - Content recommendations
+- `/explain <term>` - AI explanations
+
+**Files modified:**
+- `lib/pure_gopher_ai/summarizer.ex`
+- `lib/pure_gopher_ai/gopher_handler.ex`
+- `lib/pure_gopher_ai/gemini_handler.ex`
+
+---
+
+### 6.3 Gopher Proxy
+**Status:** 🟢 Complete
+**Priority:** Low
+**Description:** Fetch and optionally summarize external Gopher content.
+
+**Implementation:**
+- [x] Create `GopherProxy` module
+- [x] Fetch content from external Gopher servers
+- [x] Parse gopher:// URLs
+- [x] Timeout and size limits for safety
+- [x] Optional AI summarization of fetched content
+- [x] Routes for Gopher and Gemini protocols
+
+**Selectors:**
+- `/fetch` - Gopher proxy menu
+- `/fetch <url>` - Fetch external content
+- `/fetch-summary <url>` - Fetch and summarize
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/gopher_proxy.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes)
+- `lib/pure_gopher_ai/gemini_handler.ex` (routes)
+
+---
+
 ## Implementation Log
 
 | Date | Feature | Status | Commit |
@@ -494,6 +576,9 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -node
 | 2025-12-31 | Blocklist + Floodgap + CIDR | Complete | a08f73f |
 | 2025-12-31 | RAG (Retrieval Augmented Generation) | Complete | a4ac1b4 |
 | 2025-12-31 | Gemini Protocol Support | Complete | 22c09ed |
+| 2025-12-31 | Summarizer + GopherProxy modules | Complete | 1a1c530 |
+| 2025-12-31 | AI Tools routes (Gopher) | Complete | a91a814 |
+| 2025-12-31 | AI Tools routes (Gemini) | Complete | 8bed5e0 |
 
 ---
 
