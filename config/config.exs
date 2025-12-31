@@ -19,8 +19,16 @@ config :nx, default_backend: nx_backend
 
 # Server configuration
 config :pure_gopher_ai,
-  port: 7070,
-  host: "localhost"
+  # Clearnet listener (binds to all interfaces)
+  clearnet_port: 7070,
+  clearnet_host: "localhost",
+
+  # Tor hidden service listener (binds to localhost only)
+  tor_enabled: true,
+  tor_port: 7071,
+  tor_host: "127.0.0.1",
+  # Set this after running: sudo cat /var/lib/tor/pure_gopher_ai/hostname
+  onion_address: nil
 
 # Logging
 config :logger, :console,

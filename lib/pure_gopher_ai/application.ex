@@ -1,7 +1,7 @@
 defmodule PureGopherAi.Application do
   @moduledoc """
   OTP Application for PureGopherAI.
-  Supervises the AI Serving and Gopher TCP server.
+  Supervises the AI Serving and Gopher TCP servers (clearnet + Tor).
   """
 
   use Application
@@ -9,7 +9,9 @@ defmodule PureGopherAi.Application do
 
   @impl true
   def start(_type, _args) do
-    port = Application.get_env(:pure_gopher_ai, :port, 7070)
+    clearnet_port = Application.get_env(:pure_gopher_ai, :clearnet_port, 7070)
+    tor_enabled = Application.get_env(:pure_gopher_ai, :tor_enabled, false)
+    tor_port = Application.get_env(:pure_gopher_ai, :tor_port, 7071)
 
     Logger.info("Starting PureGopherAI server...")
     Logger.info("Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
@@ -17,6 +19,7 @@ defmodule PureGopherAi.Application do
     # Setup the AI serving
     serving = PureGopherAi.AiEngine.setup_serving()
 
+    # Base children: AI engine + clearnet listener
     children = [
       # AI Inference Engine - Nx.Serving with batching
       {Nx.Serving,
@@ -25,19 +28,45 @@ defmodule PureGopherAi.Application do
        batch_size: 4,
        batch_timeout: 100},
 
-      # Gopher TCP Server
-      {ThousandIsland,
-       port: port,
-       handler_module: PureGopherAi.GopherHandler,
-       handler_options: []}
+      # Clearnet Gopher TCP Server
+      Supervisor.child_spec(
+        {ThousandIsland,
+         port: clearnet_port,
+         handler_module: PureGopherAi.GopherHandler,
+         handler_options: [network: :clearnet]},
+        id: :clearnet_listener
+      )
     ]
+
+    # Optionally add Tor listener
+    children =
+      if tor_enabled do
+        tor_child =
+          Supervisor.child_spec(
+            {ThousandIsland,
+             port: tor_port,
+             transport_options: [ip: {127, 0, 0, 1}],
+             handler_module: PureGopherAi.GopherHandler,
+             handler_options: [network: :tor]},
+            id: :tor_listener
+          )
+
+        children ++ [tor_child]
+      else
+        children
+      end
 
     opts = [strategy: :one_for_one, name: PureGopherAi.Supervisor]
 
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
-        Logger.info("Gopher server listening on port #{port}")
-        Logger.info("Connect with: gopher localhost #{port}")
+        Logger.info("Clearnet: Gopher server listening on port #{clearnet_port}")
+
+        if tor_enabled do
+          Logger.info("Tor: Hidden service listener on 127.0.0.1:#{tor_port}")
+          Logger.info("Tor: Configure torrc with: HiddenServicePort 70 127.0.0.1:#{tor_port}")
+        end
+
         {:ok, pid}
 
       error ->
