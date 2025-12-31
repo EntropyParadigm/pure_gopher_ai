@@ -1318,6 +1318,40 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.8 Sitemap / Full Index
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Complete index of all server endpoints for navigation and discovery.
+
+**Implementation:**
+- [x] Create `Sitemap` module with endpoint registry
+- [x] `/sitemap` - Full sitemap with categories
+- [x] `/sitemap/category/<name>` - Category-specific endpoints
+- [x] `/sitemap/search` - Search endpoints
+- [x] `/sitemap/text` - Plain text version
+- [x] Statistics (total endpoints, menus, documents, queries)
+- [x] Organized by category (AI Services, AI Tools, Content, Community, Utilities, Server)
+- [x] Type indicators (menu, document, query)
+
+**Features:**
+- Complete listing of 50+ endpoints
+- 6 categories for easy navigation
+- Search functionality across descriptions and selectors
+- Statistics display
+- Plain text export
+
+**Selectors:**
+- `/sitemap` - Full sitemap menu
+- `/sitemap/category/<name>` - Browse category
+- `/sitemap/search` - Search endpoints
+- `/sitemap/text` - Plain text version
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/sitemap.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (sitemap routes)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

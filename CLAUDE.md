@@ -137,6 +137,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/calendar.ex` | Community event calendar |
 | `lib/pure_gopher_ai/url_shortener.ex` | URL shortener service |
 | `lib/pure_gopher_ai/utilities.ex` | Quick utilities (dice, 8ball, hash, etc) |
+| `lib/pure_gopher_ai/sitemap.ex` | Full server sitemap and endpoint registry |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -247,6 +248,10 @@ end
 | `/utils/timestamp` | Convert timestamp |
 | `/utils/now` | Current timestamp |
 | `/utils/count` | Count text |
+| `/sitemap` | Full server sitemap |
+| `/sitemap/category/<name>` | Browse category |
+| `/sitemap/search` | Search endpoints |
+| `/sitemap/text` | Plain text sitemap |
 
 ### Response Format
 ```

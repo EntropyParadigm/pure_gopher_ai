@@ -41,6 +41,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Calendar
   alias PureGopherAi.UrlShortener
   alias PureGopherAi.Utilities
+  alias PureGopherAi.Sitemap
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -493,6 +494,25 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/utils/count " <> text, host, port, _network, _ip, _socket),
     do: handle_count(text, host, port)
+
+  # Sitemap routes
+  defp route_selector("/sitemap", host, port, _network, _ip, _socket),
+    do: sitemap_index(host, port)
+
+  defp route_selector("/sitemap/category/" <> category, host, port, _network, _ip, _socket),
+    do: sitemap_category(category, host, port)
+
+  defp route_selector("/sitemap/search", host, port, _network, _ip, _socket),
+    do: sitemap_search_prompt(host, port)
+
+  defp route_selector("/sitemap/search\t" <> query, host, port, _network, _ip, _socket),
+    do: handle_sitemap_search(query, host, port)
+
+  defp route_selector("/sitemap/search " <> query, host, port, _network, _ip, _socket),
+    do: handle_sitemap_search(query, host, port)
+
+  defp route_selector("/sitemap/text", host, port, _network, _ip, _socket),
+    do: sitemap_text(host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -1017,6 +1037,7 @@ defmodule PureGopherAi.GopherHandler do
     0About this server\t/about\t#{host}\t#{port}
     0Server statistics\t/stats\t#{host}\t#{port}
     0Health check\t/health\t#{host}\t#{port}
+    1Full Sitemap\t/sitemap\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     iTip: /summary/phlog/<path> for TL;DR summaries\t\t#{host}\t#{port}
     .
@@ -6013,6 +6034,141 @@ defmodule PureGopherAi.GopherHandler do
     1Back to Utilities\t/utils\t#{host}\t#{port}
     .
     """
+  end
+
+  # === Sitemap Functions ===
+
+  defp sitemap_index(host, port) do
+    categories = Sitemap.all_selectors()
+    stats = Sitemap.stats()
+
+    category_lines = categories
+      |> Enum.map(fn cat ->
+        "1#{cat.category} (#{length(cat.items)} items)\t/sitemap/category/#{String.downcase(cat.category) |> String.replace(" ", "-")}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Full Sitemap ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iComplete index of all server endpoints.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Statistics ---\t\t#{host}\t#{port}
+    iTotal Endpoints: #{stats.total_selectors}\t\t#{host}\t#{port}
+    iMenus: #{stats.menus} | Documents: #{stats.documents} | Queries: #{stats.search_queries}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Categories ---\t\t#{host}\t#{port}
+    #{category_lines}
+    i\t\t#{host}\t#{port}
+    i--- Actions ---\t\t#{host}\t#{port}
+    7Search Sitemap\t/sitemap/search\t#{host}\t#{port}
+    0Plain Text Version\t/sitemap/text\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp sitemap_category(category_slug, host, port) do
+    # Convert slug back to category name
+    category_name = category_slug
+      |> String.replace("-", " ")
+      |> String.split()
+      |> Enum.map(&String.capitalize/1)
+      |> Enum.join(" ")
+
+    case Sitemap.by_category(category_name) do
+      {:ok, cat} ->
+        item_lines = cat.items
+          |> Enum.map(fn item ->
+            type_char = case item.type do
+              0 -> "0"
+              1 -> "1"
+              7 -> "7"
+              _ -> "i"
+            end
+            "#{type_char}#{item.selector} - #{item.description}\t#{item.selector}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== #{cat.category} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{length(cat.items)} endpoints in this category.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{item_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Sitemap\t/sitemap\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Category not found: #{category_name}")
+    end
+  end
+
+  defp sitemap_search_prompt(host, port) do
+    """
+    i=== Search Sitemap ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a search term to find endpoints:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_sitemap_search(query, host, port) do
+    results = Sitemap.search(query)
+
+    if Enum.empty?(results) do
+      """
+      i=== Search Results ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iNo results found for: #{truncate(query, 40)}\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      7Search Again\t/sitemap/search\t#{host}\t#{port}
+      1Back to Sitemap\t/sitemap\t#{host}\t#{port}
+      .
+      """
+    else
+      result_lines = results
+        |> Enum.take(20)
+        |> Enum.map(fn item ->
+          type_char = case item.type do
+            0 -> "0"
+            1 -> "1"
+            7 -> "7"
+            _ -> "i"
+          end
+          "#{type_char}#{item.selector} - #{item.description}\t#{item.selector}\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\r\n")
+
+      """
+      i=== Search Results: "#{truncate(query, 30)}" ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iFound #{length(results)} matches.\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      #{result_lines}
+      i\t\t#{host}\t#{port}
+      7Search Again\t/sitemap/search\t#{host}\t#{port}
+      1Back to Sitemap\t/sitemap\t#{host}\t#{port}
+      .
+      """
+    end
+  end
+
+  defp sitemap_text(host, port) do
+    text = Sitemap.to_text()
+
+    format_text_response("""
+    PureGopherAI Server - Full Sitemap
+    ===================================
+
+    #{text}
+
+    ---
+    Generated: #{DateTime.utc_now() |> DateTime.to_string()}
+    """, host, port)
   end
 
   # === Link Directory Functions ===
