@@ -326,6 +326,43 @@ This document tracks the implementation status of all planned features.
 
 ---
 
+### 4.3 External Blocklist Integration
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Fetch and cache IP blocklists from external sources for abuse prevention.
+
+**Implementation:**
+- [x] GenServer for blocklist management
+- [x] Support HTTP/HTTPS blocklist sources (FireHOL)
+- [x] Support Gopher protocol blocklist sources (floodgap)
+- [x] Full CIDR notation support with bitmask matching
+- [x] Separate ETS tables for individual IPs and CIDR blocks
+- [x] IPv4 and IPv6 address support
+- [x] Configurable refresh interval (hourly by default)
+- [x] Local blocklist file support (~/.gopher/blocklist.txt)
+- [x] Integration with rate limiter
+- [x] Blocklist stats in admin panel
+
+**Blocklist Sources:**
+- Floodgap responsible-bot list (gopher://gopher.floodgap.com/0/responsible-bot)
+- FireHOL Level 1 (firehol_level1.netset)
+- FireHOL Abusers 1d (firehol_abusers_1d.netset)
+- StopForumSpam 7d (stopforumspam_7d.netset)
+
+**Config options:**
+- `blocklist_enabled` - Enable/disable blocklist (default: true)
+- `blocklist_refresh_ms` - Refresh interval (default: 3600000 = 1 hour)
+- `blocklist_file` - Local blocklist file path
+- `blocklist_sources` - List of {name, url} tuples
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/blocklist.ex` (new)
+- `lib/pure_gopher_ai/rate_limiter.ex` (blocklist check integration)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `config/config.exs` (blocklist options)
+
+---
+
 ## Phase 5: Advanced Features
 
 ### 5.1 RAG (Retrieval Augmented Generation)
@@ -405,7 +442,9 @@ This document tracks the implementation status of all planned features.
 | 2025-12-31 | Phlog Support | Complete | 8998365 |
 | 2025-12-31 | Search (Type 7) | Complete | 35d915b |
 | 2025-12-31 | ASCII Art Generation | Complete | 1e8809d |
-| 2025-12-31 | Admin Gopherhole | Complete | (pending) |
+| 2025-12-31 | Admin Gopherhole | Complete | 1217bca |
+| 2025-12-31 | External Blocklist (basic) | Complete | c024a95 |
+| 2025-12-31 | Blocklist + Floodgap + CIDR | Complete | a08f73f |
 
 ---
 
