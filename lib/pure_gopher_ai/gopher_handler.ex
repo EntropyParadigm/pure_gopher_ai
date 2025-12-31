@@ -31,6 +31,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.LinkDirectory
   alias PureGopherAi.BulletinBoard
   alias PureGopherAi.HealthCheck
+  alias PureGopherAi.InputSanitizer
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -4749,10 +4750,12 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   # Format as Gopher text response (type 0)
+  # Escapes dangerous characters that could break Gopher protocol
   defp format_text_response(text, host, port) do
     lines =
       text
-      |> String.split("\n")
+      |> InputSanitizer.escape_gopher()
+      |> String.split("\r\n")
       |> Enum.map(&"i#{&1}\t\t#{host}\t#{port}")
       |> Enum.join("\r\n")
 
@@ -4765,12 +4768,13 @@ defmodule PureGopherAi.GopherHandler do
     header = format_gopher_lines(["Query: #{query}", "", "Response:"], host, port)
     ThousandIsland.Socket.send(socket, header)
 
-    # Stream the AI response
+    # Stream the AI response with proper escaping
     _response = PureGopherAi.AiEngine.generate_stream(query, nil, fn chunk ->
       # Format each chunk as Gopher info line and send
       if String.length(chunk) > 0 do
-        # Split chunk by newlines and format each line
-        lines = String.split(chunk, "\n", trim: false)
+        # Escape and split chunk by newlines and format each line
+        escaped = InputSanitizer.escape_gopher(chunk)
+        lines = String.split(escaped, "\r\n", trim: false)
         formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
         ThousandIsland.Socket.send(socket, Enum.join(formatted))
       end
@@ -4797,11 +4801,12 @@ defmodule PureGopherAi.GopherHandler do
     response_chunks = Agent.start_link(fn -> [] end)
     {:ok, response_agent} = response_chunks
 
-    # Stream the AI response
+    # Stream the AI response with proper escaping
     _response = PureGopherAi.AiEngine.generate_stream(query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        lines = String.split(chunk, "\n", trim: false)
+        escaped = InputSanitizer.escape_gopher(chunk)
+        lines = String.split(escaped, "\r\n", trim: false)
         formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
         ThousandIsland.Socket.send(socket, Enum.join(formatted))
       end
@@ -4838,10 +4843,13 @@ defmodule PureGopherAi.GopherHandler do
     :streamed
   end
 
-  # Helper to format lines as Gopher info lines
+  # Format lines as Gopher info lines with proper escaping
   defp format_gopher_lines(lines, host, port) do
     lines
-    |> Enum.map(&"i#{&1}\t\t#{host}\t#{port}\r\n")
+    |> Enum.map(fn line ->
+      escaped = InputSanitizer.escape_gopher(line)
+      "i#{escaped}\t\t#{host}\t#{port}\r\n"
+    end)
     |> Enum.join("")
   end
 

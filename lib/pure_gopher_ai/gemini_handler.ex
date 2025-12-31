@@ -32,6 +32,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.LinkDirectory
   alias PureGopherAi.BulletinBoard
   alias PureGopherAi.HealthCheck
+  alias PureGopherAi.InputSanitizer
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -225,6 +226,12 @@ defmodule PureGopherAi.GeminiHandler do
   # Response helpers
   defp success_response(content, mime \\ "text/gemini") do
     "20 #{mime}\r\n#{content}"
+  end
+
+  # Success response with user-generated content (escaped)
+  defp success_response_escaped(content, mime \\ "text/gemini") do
+    escaped = InputSanitizer.escape_gemini(content)
+    "20 #{mime}\r\n#{escaped}"
   end
 
   defp input_response(prompt) do
