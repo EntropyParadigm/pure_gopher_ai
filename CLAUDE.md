@@ -136,6 +136,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/user_profiles.ex` | User profile/homepage system |
 | `lib/pure_gopher_ai/calendar.ex` | Community event calendar |
 | `lib/pure_gopher_ai/url_shortener.ex` | URL shortener service |
+| `lib/pure_gopher_ai/utilities.ex` | Quick utilities (dice, 8ball, hash, etc) |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -231,6 +232,21 @@ end
 | `/short/create` | Create short URL |
 | `/short/recent` | Recent short URLs |
 | `/short/<code>` | Redirect to URL |
+| `/utils` | Quick utilities menu |
+| `/utils/dice` | Roll dice (NdM format) |
+| `/utils/8ball` | Magic 8-Ball |
+| `/utils/coin` | Flip a coin |
+| `/utils/random` | Random number |
+| `/utils/pick` | Random item picker |
+| `/utils/uuid` | Generate UUID v4 |
+| `/utils/password` | Generate password |
+| `/utils/hash` | Calculate hashes |
+| `/utils/base64/encode` | Base64 encode |
+| `/utils/base64/decode` | Base64 decode |
+| `/utils/rot13` | ROT13 cipher |
+| `/utils/timestamp` | Convert timestamp |
+| `/utils/now` | Current timestamp |
+| `/utils/count` | Count text |
 
 ### Response Format
 ```

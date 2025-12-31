@@ -40,6 +40,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.UserProfiles
   alias PureGopherAi.Calendar
   alias PureGopherAi.UrlShortener
+  alias PureGopherAi.Utilities
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -378,6 +379,120 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/short/" <> code, host, port, _network, _ip, _socket),
     do: short_redirect(code, host, port)
+
+  # Quick Utilities routes
+  defp route_selector("/utils", host, port, _network, _ip, _socket),
+    do: utils_menu(host, port)
+
+  defp route_selector("/utils/dice", host, port, _network, _ip, _socket),
+    do: utils_dice_prompt(host, port)
+
+  defp route_selector("/utils/dice\t" <> spec, host, port, _network, _ip, _socket),
+    do: handle_dice(spec, host, port)
+
+  defp route_selector("/utils/dice " <> spec, host, port, _network, _ip, _socket),
+    do: handle_dice(spec, host, port)
+
+  defp route_selector("/utils/8ball", host, port, _network, _ip, _socket),
+    do: utils_8ball_prompt(host, port)
+
+  defp route_selector("/utils/8ball\t" <> question, host, port, _network, _ip, _socket),
+    do: handle_8ball(question, host, port)
+
+  defp route_selector("/utils/8ball " <> question, host, port, _network, _ip, _socket),
+    do: handle_8ball(question, host, port)
+
+  defp route_selector("/utils/coin", host, port, _network, _ip, _socket),
+    do: handle_coin_flip(host, port)
+
+  defp route_selector("/utils/random", host, port, _network, _ip, _socket),
+    do: utils_random_prompt(host, port)
+
+  defp route_selector("/utils/random\t" <> range, host, port, _network, _ip, _socket),
+    do: handle_random(range, host, port)
+
+  defp route_selector("/utils/random " <> range, host, port, _network, _ip, _socket),
+    do: handle_random(range, host, port)
+
+  defp route_selector("/utils/uuid", host, port, _network, _ip, _socket),
+    do: handle_uuid(host, port)
+
+  defp route_selector("/utils/hash", host, port, _network, _ip, _socket),
+    do: utils_hash_prompt(host, port)
+
+  defp route_selector("/utils/hash\t" <> input, host, port, _network, _ip, _socket),
+    do: handle_hash(input, host, port)
+
+  defp route_selector("/utils/hash " <> input, host, port, _network, _ip, _socket),
+    do: handle_hash(input, host, port)
+
+  defp route_selector("/utils/base64/encode", host, port, _network, _ip, _socket),
+    do: utils_base64_encode_prompt(host, port)
+
+  defp route_selector("/utils/base64/encode\t" <> input, host, port, _network, _ip, _socket),
+    do: handle_base64_encode(input, host, port)
+
+  defp route_selector("/utils/base64/encode " <> input, host, port, _network, _ip, _socket),
+    do: handle_base64_encode(input, host, port)
+
+  defp route_selector("/utils/base64/decode", host, port, _network, _ip, _socket),
+    do: utils_base64_decode_prompt(host, port)
+
+  defp route_selector("/utils/base64/decode\t" <> input, host, port, _network, _ip, _socket),
+    do: handle_base64_decode(input, host, port)
+
+  defp route_selector("/utils/base64/decode " <> input, host, port, _network, _ip, _socket),
+    do: handle_base64_decode(input, host, port)
+
+  defp route_selector("/utils/rot13", host, port, _network, _ip, _socket),
+    do: utils_rot13_prompt(host, port)
+
+  defp route_selector("/utils/rot13\t" <> input, host, port, _network, _ip, _socket),
+    do: handle_rot13(input, host, port)
+
+  defp route_selector("/utils/rot13 " <> input, host, port, _network, _ip, _socket),
+    do: handle_rot13(input, host, port)
+
+  defp route_selector("/utils/password", host, port, _network, _ip, _socket),
+    do: handle_password(16, host, port)
+
+  defp route_selector("/utils/password/" <> length_str, host, port, _network, _ip, _socket) do
+    length = case Integer.parse(length_str) do
+      {n, ""} -> n
+      _ -> 16
+    end
+    handle_password(length, host, port)
+  end
+
+  defp route_selector("/utils/timestamp", host, port, _network, _ip, _socket),
+    do: utils_timestamp_prompt(host, port)
+
+  defp route_selector("/utils/timestamp\t" <> ts, host, port, _network, _ip, _socket),
+    do: handle_timestamp(ts, host, port)
+
+  defp route_selector("/utils/timestamp " <> ts, host, port, _network, _ip, _socket),
+    do: handle_timestamp(ts, host, port)
+
+  defp route_selector("/utils/now", host, port, _network, _ip, _socket),
+    do: handle_now(host, port)
+
+  defp route_selector("/utils/pick", host, port, _network, _ip, _socket),
+    do: utils_pick_prompt(host, port)
+
+  defp route_selector("/utils/pick\t" <> items, host, port, _network, _ip, _socket),
+    do: handle_pick(items, host, port)
+
+  defp route_selector("/utils/pick " <> items, host, port, _network, _ip, _socket),
+    do: handle_pick(items, host, port)
+
+  defp route_selector("/utils/count", host, port, _network, _ip, _socket),
+    do: utils_count_prompt(host, port)
+
+  defp route_selector("/utils/count\t" <> text, host, port, _network, _ip, _socket),
+    do: handle_count(text, host, port)
+
+  defp route_selector("/utils/count " <> text, host, port, _network, _ip, _socket),
+    do: handle_count(text, host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -891,6 +1006,12 @@ defmodule PureGopherAi.GopherHandler do
     1Fortune & Quotes\t/fortune\t#{host}\t#{port}
     1Link Directory\t/links\t#{host}\t#{port}
     1Bulletin Board\t/board\t#{host}\t#{port}
+    1Pastebin\t/paste\t#{host}\t#{port}
+    1Polls & Voting\t/polls\t#{host}\t#{port}
+    1User Profiles\t/users\t#{host}\t#{port}
+    1Calendar & Events\t/calendar\t#{host}\t#{port}
+    1URL Shortener\t/short\t#{host}\t#{port}
+    1Quick Utilities\t/utils\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -5437,6 +5558,461 @@ defmodule PureGopherAi.GopherHandler do
       {:error, :not_found} ->
         error_response("Short URL not found: #{code}")
     end
+  end
+
+  # === Quick Utilities Functions ===
+
+  defp utils_menu(host, port) do
+    """
+    i=== Quick Utilities ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iHandy tools for the Gopher community!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Random & Games ---\t\t#{host}\t#{port}
+    7Roll Dice\t/utils/dice\t#{host}\t#{port}
+    7Magic 8-Ball\t/utils/8ball\t#{host}\t#{port}
+    0Flip a Coin\t/utils/coin\t#{host}\t#{port}
+    7Random Number\t/utils/random\t#{host}\t#{port}
+    7Pick Random Item\t/utils/pick\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Generators ---\t\t#{host}\t#{port}
+    0Generate UUID\t/utils/uuid\t#{host}\t#{port}
+    0Generate Password (16)\t/utils/password\t#{host}\t#{port}
+    0Generate Password (32)\t/utils/password/32\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Encoding & Hashing ---\t\t#{host}\t#{port}
+    7Calculate Hash\t/utils/hash\t#{host}\t#{port}
+    7Base64 Encode\t/utils/base64/encode\t#{host}\t#{port}
+    7Base64 Decode\t/utils/base64/decode\t#{host}\t#{port}
+    7ROT13 Cipher\t/utils/rot13\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Time & Text ---\t\t#{host}\t#{port}
+    0Current Timestamp\t/utils/now\t#{host}\t#{port}
+    7Convert Timestamp\t/utils/timestamp\t#{host}\t#{port}
+    7Count Text\t/utils/count\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_dice_prompt(host, port) do
+    """
+    i=== Roll Dice ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter dice notation (e.g., 2d6, 1d20+5, 3d10-2):\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_dice(spec, host, port) do
+    case Utilities.roll_dice(spec) do
+      {:ok, result} ->
+        rolls_str = result.rolls |> Enum.join(", ")
+        modifier_str = cond do
+          result.modifier > 0 -> " + #{result.modifier}"
+          result.modifier < 0 -> " - #{abs(result.modifier)}"
+          true -> ""
+        end
+
+        """
+        i=== Dice Roll: #{result.count}d#{result.sides}#{modifier_str} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iRolls: [#{rolls_str}]\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i  Total: #{result.total}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Roll Again\t/utils/dice\t#{host}\t#{port}
+        1Back to Utilities\t/utils\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_spec} ->
+        error_response("Invalid dice spec. Use format like 2d6 (1-100 dice, 1-1000 sides).")
+
+      {:error, :parse_error} ->
+        error_response("Could not parse dice spec. Use format like 2d6, 1d20+5, 3d10-2.")
+    end
+  end
+
+  defp utils_8ball_prompt(host, port) do
+    """
+    i=== Magic 8-Ball ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAsk your question:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_8ball(question, host, port) do
+    answer = Utilities.magic_8ball()
+
+    """
+    i=== Magic 8-Ball ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iYou asked: #{truncate(question, 50)}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i   *shake shake shake*\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  The 8-Ball says:\t\t#{host}\t#{port}
+    i  "#{answer}"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Ask Another Question\t/utils/8ball\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_coin_flip(host, port) do
+    result = Utilities.coin_flip()
+    result_str = if result == :heads, do: "HEADS", else: "TAILS"
+    emoji = if result == :heads, do: "(o)", else: "(x)"
+
+    """
+    i=== Coin Flip ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i   *flip*\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i    #{emoji}\t\t#{host}\t#{port}
+    i  #{result_str}!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    0Flip Again\t/utils/coin\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_random_prompt(host, port) do
+    """
+    i=== Random Number ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter range as "min max" (e.g., 1 100):\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_random(range, host, port) do
+    case String.split(range, ~r/[\s,\-]+/, trim: true) do
+      [min_str, max_str] ->
+        with {min, ""} <- Integer.parse(min_str),
+             {max, ""} <- Integer.parse(max_str),
+             {:ok, number} <- Utilities.random_number(min, max) do
+          """
+          i=== Random Number ===\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          iRange: #{min} to #{max}\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          i  Result: #{number}\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          7Generate Another\t/utils/random\t#{host}\t#{port}
+          1Back to Utilities\t/utils\t#{host}\t#{port}
+          .
+          """
+        else
+          _ -> error_response("Invalid range. Use format: min max (e.g., 1 100)")
+        end
+
+      [max_str] ->
+        case Integer.parse(max_str) do
+          {max, ""} when max > 0 ->
+            {:ok, number} = Utilities.random_number(1, max)
+            """
+            i=== Random Number ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iRange: 1 to #{max}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            i  Result: #{number}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            7Generate Another\t/utils/random\t#{host}\t#{port}
+            1Back to Utilities\t/utils\t#{host}\t#{port}
+            .
+            """
+
+          _ -> error_response("Invalid number. Enter a positive integer.")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: min max (e.g., 1 100) or just max (e.g., 100)")
+    end
+  end
+
+  defp handle_uuid(host, port) do
+    uuid = Utilities.generate_uuid()
+
+    """
+    i=== UUID Generator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGenerated UUID v4:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  #{uuid}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    0Generate Another\t/utils/uuid\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_hash_prompt(host, port) do
+    """
+    i=== Hash Calculator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to hash:\t\t#{host}\t#{port}
+    i(Calculates MD5, SHA1, SHA256, SHA512)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_hash(input, host, port) do
+    md5 = Utilities.calculate_hash(input, :md5)
+    sha1 = Utilities.calculate_hash(input, :sha1)
+    sha256 = Utilities.calculate_hash(input, :sha256)
+    sha512 = Utilities.calculate_hash(input, :sha512)
+
+    """
+    i=== Hash Results ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iInput: #{truncate(input, 40)}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iMD5:\t\t#{host}\t#{port}
+    i  #{md5}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSHA1:\t\t#{host}\t#{port}
+    i  #{sha1}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSHA256:\t\t#{host}\t#{port}
+    i  #{sha256}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSHA512:\t\t#{host}\t#{port}
+    i  #{String.slice(sha512, 0, 64)}\t\t#{host}\t#{port}
+    i  #{String.slice(sha512, 64, 64)}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Hash Another\t/utils/hash\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_base64_encode_prompt(host, port) do
+    """
+    i=== Base64 Encode ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to encode:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_base64_encode(input, host, port) do
+    encoded = Utilities.base64_encode(input)
+
+    """
+    i=== Base64 Encoded ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iInput: #{truncate(input, 40)}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEncoded:\t\t#{host}\t#{port}
+    i  #{encoded}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Encode Another\t/utils/base64/encode\t#{host}\t#{port}
+    7Decode Base64\t/utils/base64/decode\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_base64_decode_prompt(host, port) do
+    """
+    i=== Base64 Decode ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter Base64 string to decode:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_base64_decode(input, host, port) do
+    case Utilities.base64_decode(input) do
+      {:ok, decoded} ->
+        """
+        i=== Base64 Decoded ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iInput: #{truncate(input, 40)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iDecoded:\t\t#{host}\t#{port}
+        i  #{truncate(decoded, 60)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Decode Another\t/utils/base64/decode\t#{host}\t#{port}
+        7Encode Base64\t/utils/base64/encode\t#{host}\t#{port}
+        1Back to Utilities\t/utils\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_base64} ->
+        error_response("Invalid Base64 string. Please check your input.")
+    end
+  end
+
+  defp utils_rot13_prompt(host, port) do
+    """
+    i=== ROT13 Cipher ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to encode/decode:\t\t#{host}\t#{port}
+    i(ROT13 is its own inverse!)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_rot13(input, host, port) do
+    result = Utilities.rot13(input)
+
+    """
+    i=== ROT13 Result ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iInput:  #{truncate(input, 40)}\t\t#{host}\t#{port}
+    iOutput: #{truncate(result, 40)}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Convert Another\t/utils/rot13\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_password(length, host, port) do
+    password = Utilities.generate_password(length)
+
+    """
+    i=== Password Generator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGenerated Password (#{length} chars):\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  #{password}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i(Contains: a-z, A-Z, 0-9, symbols)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    0Generate Another (16)\t/utils/password\t#{host}\t#{port}
+    0Generate Another (32)\t/utils/password/32\t#{host}\t#{port}
+    0Generate Another (64)\t/utils/password/64\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_timestamp_prompt(host, port) do
+    """
+    i=== Timestamp Converter ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter Unix timestamp to convert:\t\t#{host}\t#{port}
+    i(e.g., 1735689600)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_timestamp(ts_str, host, port) do
+    case Integer.parse(String.trim(ts_str)) do
+      {ts, ""} ->
+        case Utilities.timestamp_to_date(ts) do
+          {:ok, date_str} ->
+            """
+            i=== Timestamp Converted ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iUnix timestamp: #{ts}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iDate/Time (UTC):\t\t#{host}\t#{port}
+            i  #{date_str}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            7Convert Another\t/utils/timestamp\t#{host}\t#{port}
+            0Current Timestamp\t/utils/now\t#{host}\t#{port}
+            1Back to Utilities\t/utils\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _} ->
+            error_response("Invalid timestamp. Must be a valid Unix timestamp.")
+        end
+
+      _ ->
+        error_response("Invalid input. Please enter a numeric timestamp.")
+    end
+  end
+
+  defp handle_now(host, port) do
+    ts = Utilities.current_timestamp()
+    {:ok, date_str} = Utilities.timestamp_to_date(ts)
+
+    """
+    i=== Current Time ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iUnix timestamp: #{ts}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDate/Time (UTC):\t\t#{host}\t#{port}
+    i  #{date_str}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    0Refresh\t/utils/now\t#{host}\t#{port}
+    7Convert Timestamp\t/utils/timestamp\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp utils_pick_prompt(host, port) do
+    """
+    i=== Random Pick ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter comma-separated items:\t\t#{host}\t#{port}
+    i(e.g., red, blue, green)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_pick(items_str, host, port) do
+    items = items_str
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    case Utilities.random_pick(items) do
+      {:ok, winner} ->
+        """
+        i=== Random Pick ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFrom #{length(items)} items:\t\t#{host}\t#{port}
+        i  [#{Enum.join(items, ", ")}]\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i  Winner: #{winner}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Pick Again\t/utils/pick\t#{host}\t#{port}
+        1Back to Utilities\t/utils\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :empty_list} ->
+        error_response("Please provide at least one item to pick from.")
+    end
+  end
+
+  defp utils_count_prompt(host, port) do
+    """
+    i=== Text Counter ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to count:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_count(text, host, port) do
+    counts = Utilities.count_text(text)
+
+    """
+    i=== Text Statistics ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iText: #{truncate(text, 40)}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iCharacters: #{counts.characters}\t\t#{host}\t#{port}
+    iWords: #{counts.words}\t\t#{host}\t#{port}
+    iLines: #{counts.lines}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Count Another\t/utils/count\t#{host}\t#{port}
+    1Back to Utilities\t/utils\t#{host}\t#{port}
+    .
+    """
   end
 
   # === Link Directory Functions ===

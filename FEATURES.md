@@ -1257,6 +1257,67 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.7 Quick Utilities
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Handy tools and fun utilities for the Gopher community.
+
+**Implementation:**
+- [x] Create `Utilities` module with pure functions
+- [x] `/utils` - Utilities menu
+- [x] `/utils/dice` - Dice roller (NdM format: 2d6, 1d20+5)
+- [x] `/utils/8ball` - Magic 8-Ball fortune teller
+- [x] `/utils/coin` - Coin flip (heads/tails)
+- [x] `/utils/random` - Random number generator (range input)
+- [x] `/utils/pick` - Random item picker (comma-separated list)
+- [x] `/utils/uuid` - UUID v4 generator
+- [x] `/utils/password` - Random password generator (8-64 chars)
+- [x] `/utils/hash` - Hash calculator (MD5, SHA1, SHA256, SHA512)
+- [x] `/utils/base64/encode` - Base64 encoder
+- [x] `/utils/base64/decode` - Base64 decoder
+- [x] `/utils/rot13` - ROT13 cipher
+- [x] `/utils/timestamp` - Unix timestamp to date converter
+- [x] `/utils/now` - Current timestamp display
+- [x] `/utils/count` - Text counter (chars, words, lines)
+
+**Utilities Included:**
+- Dice roller with modifier support (e.g., 2d6+5, 3d10-2)
+- Magic 8-Ball with 20 classic responses
+- Coin flip with visual display
+- Random number in custom range
+- Random picker from comma-separated list
+- UUID v4 generation
+- Secure password generation (8-64 chars, mixed case + symbols)
+- Multiple hash algorithms
+- Base64 encoding/decoding
+- ROT13 cipher (self-inverse)
+- Unix timestamp conversion
+- Text statistics (characters, words, lines)
+
+**Selectors:**
+- `/utils` - Utilities menu
+- `/utils/dice` - Roll dice
+- `/utils/8ball` - Magic 8-Ball
+- `/utils/coin` - Flip coin
+- `/utils/random` - Random number
+- `/utils/pick` - Random picker
+- `/utils/uuid` - Generate UUID
+- `/utils/password` - Generate password (default 16)
+- `/utils/password/<length>` - Generate password with length
+- `/utils/hash` - Calculate hash
+- `/utils/base64/encode` - Base64 encode
+- `/utils/base64/decode` - Base64 decode
+- `/utils/rot13` - ROT13 cipher
+- `/utils/timestamp` - Convert timestamp
+- `/utils/now` - Current time
+- `/utils/count` - Count text
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/utilities.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (utils routes)
+
+---
+
 ## Notes
 
 - Implement features in order of priority
