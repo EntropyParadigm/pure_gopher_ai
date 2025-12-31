@@ -24,7 +24,7 @@ A pure Elixir Gopher server (RFC 1436) with native AI inference via Bumblebee. O
 ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
 │   Nx.Serving      │   │  ThousandIsland   │   │  ThousandIsland   │
 │   (AI Engine)     │   │  :clearnet        │   │  :tor             │
-│                   │   │  0.0.0.0:7070     │   │  127.0.0.1:7071   │
+│                   │   │  0.0.0.0:70       │   │  127.0.0.1:7071   │
 │  ┌─────────────┐  │   └─────────┬─────────┘   └─────────┬─────────┘
 │  │ Bumblebee   │  │             │                       │
 │  │ GPT-2/Llama │  │             │                       │
@@ -194,19 +194,36 @@ sudo ./scripts/setup-tor.sh
 
 ## Configuration
 
-Edit `config/config.exs`:
+### Environment Variables
 
-```elixir
-config :pure_gopher_ai,
-  # Clearnet
-  clearnet_port: 7070,
-  clearnet_host: "localhost",
+| Variable | Default (dev) | Default (prod) | Description |
+|----------|---------------|----------------|-------------|
+| `GOPHER_PORT` | 7070 | 70 | Clearnet listening port |
+| `TOR_ENABLED` | true | true | Enable Tor listener (set to "false" to disable) |
+| `TOR_PORT` | 7071 | 7071 | Tor internal listening port |
+| `ONION_ADDRESS` | nil | nil | Your .onion address for Gopher responses |
 
-  # Tor
-  tor_enabled: true,
-  tor_port: 7071,
-  onion_address: "your-address.onion"
+### Example Usage
+
+```bash
+# Development with custom port
+GOPHER_PORT=7070 iex -S mix
+
+# Production with Tor disabled
+TOR_ENABLED=false MIX_ENV=prod mix run --no-halt
+
+# Production with onion address
+ONION_ADDRESS="abc123.onion" MIX_ENV=prod mix run --no-halt
 ```
+
+### Config Files
+
+| File | Purpose |
+|------|---------|
+| `config/config.exs` | Base configuration |
+| `config/dev.exs` | Development (port 7070) |
+| `config/prod.exs` | Production (port 70) |
+| `config/test.exs` | Testing (port 17070, Tor disabled) |
 
 ## Hardware Detection
 
