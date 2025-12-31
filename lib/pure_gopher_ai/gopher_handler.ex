@@ -17,6 +17,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Telemetry
   alias PureGopherAi.Phlog
   alias PureGopherAi.Search
+  alias PureGopherAi.AsciiArt
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -213,6 +214,37 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/search " <> query, host, port, _network, _ip, _socket),
     do: handle_search(query, host, port)
 
+  # ASCII Art
+  defp route_selector("/art", host, port, _network, _ip, _socket),
+    do: art_menu(host, port)
+
+  defp route_selector("/art/text", host, port, _network, _ip, _socket),
+    do: art_text_prompt(host, port)
+
+  defp route_selector("/art/text\t" <> text, host, port, _network, _ip, _socket),
+    do: handle_art_text(text, host, port, :block)
+
+  defp route_selector("/art/text " <> text, host, port, _network, _ip, _socket),
+    do: handle_art_text(text, host, port, :block)
+
+  defp route_selector("/art/small", host, port, _network, _ip, _socket),
+    do: art_small_prompt(host, port)
+
+  defp route_selector("/art/small\t" <> text, host, port, _network, _ip, _socket),
+    do: handle_art_text(text, host, port, :small)
+
+  defp route_selector("/art/small " <> text, host, port, _network, _ip, _socket),
+    do: handle_art_text(text, host, port, :small)
+
+  defp route_selector("/art/banner", host, port, _network, _ip, _socket),
+    do: art_banner_prompt(host, port)
+
+  defp route_selector("/art/banner\t" <> text, host, port, _network, _ip, _socket),
+    do: handle_art_banner(text, host, port)
+
+  defp route_selector("/art/banner " <> text, host, port, _network, _ip, _socket),
+    do: handle_art_banner(text, host, port)
+
   # Static content via gophermap
   defp route_selector("/files" <> rest, host, port, _network, _ip, _socket),
     do: serve_static(rest, host, port)
@@ -264,6 +296,7 @@ defmodule PureGopherAi.GopherHandler do
     i=== Content ===\t\t#{host}\t#{port}
     7Search Content\t/search\t#{host}\t#{port}
     1Phlog (Blog)\t/phlog\t#{host}\t#{port}
+    1ASCII Art Generator\t/art\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -1298,6 +1331,120 @@ defmodule PureGopherAi.GopherHandler do
     else
       snippet
     end
+  end
+
+  # === ASCII Art Functions ===
+
+  # ASCII art menu
+  defp art_menu(host, port) do
+    """
+    i=== ASCII Art Generator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGenerate ASCII art from text!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Font Styles ---\t\t#{host}\t#{port}
+    7Large Block Letters\t/art/text\t#{host}\t#{port}
+    7Small Compact Letters\t/art/small\t#{host}\t#{port}
+    7Banner with Border\t/art/banner\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Examples ---\t\t#{host}\t#{port}
+    0Sample: HELLO\t/art/text HELLO\t#{host}\t#{port}
+    0Sample: GOPHER\t/art/banner GOPHER\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Art text prompt
+  defp art_text_prompt(host, port) do
+    """
+    iASCII Art - Block Letters\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to convert to large block ASCII art.\t\t#{host}\t#{port}
+    i(Letters, numbers, and basic punctuation supported)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your text below:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Art small prompt
+  defp art_small_prompt(host, port) do
+    """
+    iASCII Art - Small Letters\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to convert to compact ASCII art.\t\t#{host}\t#{port}
+    i(Great for shorter messages)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your text below:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Art banner prompt
+  defp art_banner_prompt(host, port) do
+    """
+    iASCII Art - Banner\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter text to create a decorated banner.\t\t#{host}\t#{port}
+    i(Includes a fancy border around the text)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your text below:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Handle art text generation
+  defp handle_art_text(text, host, port, style) when byte_size(text) > 0 do
+    text = String.trim(text) |> String.slice(0, 10)  # Limit to 10 chars
+    art = AsciiArt.generate(text, style: style)
+
+    style_name = case style do
+      :block -> "Block"
+      :small -> "Small"
+      _ -> "Default"
+    end
+
+    format_text_response(
+      """
+      === ASCII Art (#{style_name}) ===
+
+      #{art}
+
+      ---
+      Text: "#{text}"
+      """,
+      host,
+      port
+    )
+  end
+
+  defp handle_art_text(_text, host, port, _style) do
+    art_text_prompt(host, port)
+  end
+
+  # Handle art banner generation
+  defp handle_art_banner(text, host, port) when byte_size(text) > 0 do
+    text = String.trim(text) |> String.slice(0, 8)  # Limit to 8 chars for banner
+    banner = AsciiArt.banner(text)
+
+    format_text_response(
+      """
+      === ASCII Art Banner ===
+
+      #{banner}
+
+      ---
+      Text: "#{text}"
+      """,
+      host,
+      port
+    )
+  end
+
+  defp handle_art_banner(_text, host, port) do
+    art_banner_prompt(host, port)
   end
 
   # Format as Gopher text response (type 0)

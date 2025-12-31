@@ -352,19 +352,27 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 5.3 ASCII Art Generation
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Low
-**Description:** Generate ASCII art from prompts or images.
+**Description:** Generate ASCII art from text.
 
 **Implementation:**
-- [ ] Text-to-ASCII art (figlet style)
-- [ ] Image-to-ASCII conversion
-- [ ] AI-generated descriptions to ASCII
-- [ ] `/art` selector
+- [x] Text-to-ASCII art with block font (7 rows)
+- [x] Compact small font (3 rows)
+- [x] Banner generation with decorative border
+- [x] Support for letters, numbers, punctuation
+- [x] `/art` menu selector
+- [x] `/art/text`, `/art/small`, `/art/banner` routes
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/ascii_art.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
+**Selectors:**
+- `/art` - ASCII art menu
+- `/art/text <text>` - Large block letters
+- `/art/small <text>` - Compact letters
+- `/art/banner <text>` - Text with border
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/ascii_art.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (art routes)
 
 ---
 
@@ -381,7 +389,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | Response Caching | Complete | 1b4767c |
 | 2025-01-01 | Metrics/Telemetry | Complete | (pending) |
 | 2025-12-31 | Phlog Support | Complete | 8998365 |
-| 2025-12-31 | Search (Type 7) | Complete | (pending) |
+| 2025-12-31 | Search (Type 7) | Complete | 35d915b |
+| 2025-12-31 | ASCII Art Generation | Complete | (pending) |
 
 ---
 
