@@ -14,6 +14,8 @@ defmodule PureGopherAi.Application do
     tor_port = Application.get_env(:pure_gopher_ai, :tor_port, 7071)
     gemini_enabled = Application.get_env(:pure_gopher_ai, :gemini_enabled, false)
     gemini_port = Application.get_env(:pure_gopher_ai, :gemini_port, 1965)
+    finger_enabled = Application.get_env(:pure_gopher_ai, :finger_enabled, false)
+    finger_port = Application.get_env(:pure_gopher_ai, :finger_port, 79)
 
     Logger.info("Starting PureGopherAI server...")
     Logger.info("Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
@@ -132,6 +134,22 @@ defmodule PureGopherAi.Application do
         children
       end
 
+    # Optionally add Finger listener (RFC 1288)
+    children =
+      if finger_enabled do
+        finger_child =
+          Supervisor.child_spec(
+            {ThousandIsland,
+             port: finger_port,
+             handler_module: PureGopherAi.FingerHandler},
+            id: :finger_listener
+          )
+
+        children ++ [finger_child]
+      else
+        children
+      end
+
     opts = [strategy: :one_for_one, name: PureGopherAi.Supervisor]
 
     case Supervisor.start_link(children, opts) do
@@ -150,6 +168,10 @@ defmodule PureGopherAi.Application do
           if cert_file && key_file && File.exists?(Path.expand(cert_file)) do
             Logger.info("Gemini: Server listening on port #{gemini_port} (TLS)")
           end
+        end
+
+        if finger_enabled do
+          Logger.info("Finger: Server listening on port #{finger_port} (RFC 1288)")
         end
 
         {:ok, pid}

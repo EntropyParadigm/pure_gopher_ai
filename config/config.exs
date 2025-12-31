@@ -117,6 +117,11 @@ config :pure_gopher_ai,
   gemini_cert_file: "~/.gopher/gemini/cert.pem",  # TLS certificate
   gemini_key_file: "~/.gopher/gemini/key.pem",    # TLS private key
 
+  # Finger protocol support (RFC 1288)
+  finger_enabled: false,                # Enable Finger server
+  finger_port: 79,                      # Standard Finger port
+  finger_plan_dir: "~/.gopher/finger",  # Directory for user .plan files
+
   # Guestbook
   guestbook_max_entries: 1000,          # Maximum guestbook entries (oldest pruned)
   data_dir: "~/.gopher/data",           # Persistent data directory

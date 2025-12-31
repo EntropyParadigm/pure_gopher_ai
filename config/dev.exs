@@ -17,4 +17,9 @@ config :pure_gopher_ai,
   content_dir: System.get_env("CONTENT_DIR") || "priv/gopher",
 
   # Use sample phlog from priv/phlog in dev
-  phlog_dir: System.get_env("PHLOG_DIR") || "priv/phlog"
+  phlog_dir: System.get_env("PHLOG_DIR") || "priv/phlog",
+
+  # Finger protocol (RFC 1288)
+  finger_enabled: System.get_env("FINGER_ENABLED") == "true",
+  finger_port: String.to_integer(System.get_env("FINGER_PORT") || "7979"),
+  finger_plan_dir: System.get_env("FINGER_PLAN_DIR") || "priv/finger"
