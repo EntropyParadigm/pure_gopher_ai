@@ -19,6 +19,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Search
   alias PureGopherAi.AsciiArt
   alias PureGopherAi.Admin
+  alias PureGopherAi.Rag
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -264,6 +265,40 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/art/banner " <> text, host, port, _network, _ip, _socket),
     do: handle_art_banner(text, host, port)
 
+  # RAG (Document Query) routes
+  defp route_selector("/docs", host, port, _network, _ip, _socket),
+    do: docs_menu(host, port)
+
+  defp route_selector("/docs/", host, port, _network, _ip, _socket),
+    do: docs_menu(host, port)
+
+  defp route_selector("/docs/list", host, port, _network, _ip, _socket),
+    do: docs_list(host, port)
+
+  defp route_selector("/docs/stats", host, port, _network, _ip, _socket),
+    do: docs_stats(host, port)
+
+  defp route_selector("/docs/ask", host, port, _network, _ip, _socket),
+    do: docs_ask_prompt(host, port)
+
+  defp route_selector("/docs/ask\t" <> query, host, port, _network, _ip, socket),
+    do: handle_docs_ask(query, host, port, socket)
+
+  defp route_selector("/docs/ask " <> query, host, port, _network, _ip, socket),
+    do: handle_docs_ask(query, host, port, socket)
+
+  defp route_selector("/docs/search", host, port, _network, _ip, _socket),
+    do: docs_search_prompt(host, port)
+
+  defp route_selector("/docs/search\t" <> query, host, port, _network, _ip, _socket),
+    do: handle_docs_search(query, host, port)
+
+  defp route_selector("/docs/search " <> query, host, port, _network, _ip, _socket),
+    do: handle_docs_search(query, host, port)
+
+  defp route_selector("/docs/view/" <> doc_id, host, port, _network, _ip, _socket),
+    do: docs_view(doc_id, host, port)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -319,6 +354,7 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     i=== Content ===\t\t#{host}\t#{port}
     7Search Content\t/search\t#{host}\t#{port}
+    1Document Knowledge Base\t/docs\t#{host}\t#{port}
     1Phlog (Blog)\t/phlog\t#{host}\t#{port}
     1ASCII Art Generator\t/art\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
@@ -1471,6 +1507,257 @@ defmodule PureGopherAi.GopherHandler do
     art_banner_prompt(host, port)
   end
 
+  # === RAG (Document Query) Functions ===
+
+  defp docs_menu(host, port) do
+    stats = Rag.stats()
+    docs_dir = Rag.docs_dir()
+
+    """
+    i=== Document Knowledge Base ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iQuery your documents with AI-powered search.\t\t#{host}\t#{port}
+    iDrop files into #{docs_dir} for auto-ingestion.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Statistics ---\t\t#{host}\t#{port}
+    iDocuments: #{stats.documents}\t\t#{host}\t#{port}
+    iChunks: #{stats.chunks} (#{stats.embedding_coverage}% embedded)\t\t#{host}\t#{port}
+    iEmbedding Model: #{stats.embedding_model}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Actions ---\t\t#{host}\t#{port}
+    7Ask a Question\t/docs/ask\t#{host}\t#{port}
+    7Search Documents\t/docs/search\t#{host}\t#{port}
+    1List All Documents\t/docs/list\t#{host}\t#{port}
+    0View Statistics\t/docs/stats\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp docs_list(host, port) do
+    documents = Rag.list_documents()
+
+    header = """
+    i=== Ingested Documents ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    """
+
+    doc_lines =
+      if documents == [] do
+        "iNo documents ingested yet.\t\t#{host}\t#{port}\n" <>
+        "iDrop files into #{Rag.docs_dir()} to add documents.\t\t#{host}\t#{port}\n"
+      else
+        documents
+        |> Enum.map(fn doc ->
+          size_kb = Float.round(doc.size / 1024, 1)
+          "0#{doc.filename} (#{size_kb} KB, #{doc.chunk_count} chunks)\t/docs/view/#{doc.id}\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\n")
+      end
+
+    footer = """
+    i\t\t#{host}\t#{port}
+    1Back to Docs Menu\t/docs\t#{host}\t#{port}
+    .
+    """
+
+    header <> doc_lines <> "\n" <> footer
+  end
+
+  defp docs_stats(host, port) do
+    stats = Rag.stats()
+
+    format_text_response("""
+    === RAG System Statistics ===
+
+    Documents: #{stats.documents}
+    Total Chunks: #{stats.chunks}
+    Embedded Chunks: #{stats.embedded_chunks}
+    Embedding Coverage: #{stats.embedding_coverage}%
+
+    Embedding Model: #{stats.embedding_model}
+    Embeddings Enabled: #{stats.embeddings_enabled}
+    Model Loaded: #{stats.embeddings_loaded}
+
+    Docs Directory: #{Rag.docs_dir()}
+
+    Supported Formats:
+    - Plain text (.txt, .text)
+    - Markdown (.md, .markdown)
+    - PDF (.pdf)
+    """, host, port)
+  end
+
+  defp docs_ask_prompt(host, port) do
+    """
+    i=== Ask Your Documents ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAsk a question and get an AI-powered answer\t\t#{host}\t#{port}
+    ibased on your ingested documents.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter your question:\t/docs/ask\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Docs Menu\t/docs\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_docs_ask(query, host, port, socket) when byte_size(query) > 0 do
+    query = String.trim(query)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      # Stream the response
+      ThousandIsland.Socket.send(socket, "Answer (based on your documents):\r\n\r\n")
+
+      case Rag.query_stream(query, fn chunk ->
+        ThousandIsland.Socket.send(socket, chunk)
+      end) do
+        {:ok, _response} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          ThousandIsland.Socket.send(socket, "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n")
+          :streamed
+
+        {:error, reason} ->
+          ThousandIsland.Socket.send(socket, "\r\nError: #{inspect(reason)}\r\n.\r\n")
+          :streamed
+      end
+    else
+      # Non-streaming response
+      case Rag.query(query) do
+        {:ok, response} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          Question: #{query}
+
+          Answer (based on your documents):
+          #{response}
+
+          ---
+          Generated in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Query failed: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp handle_docs_ask(_query, host, port, _socket) do
+    docs_ask_prompt(host, port)
+  end
+
+  defp docs_search_prompt(host, port) do
+    """
+    i=== Search Documents ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSearch for relevant content in your documents.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter search query:\t/docs/search\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Docs Menu\t/docs\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_docs_search(query, host, port) when byte_size(query) > 0 do
+    query = String.trim(query)
+
+    case Rag.search(query, top_k: 10) do
+      {:ok, results} when results != [] ->
+        header = """
+        i=== Search Results for "#{query}" ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFound #{length(results)} relevant chunks:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        """
+
+        result_lines =
+          results
+          |> Enum.with_index(1)
+          |> Enum.map(fn {%{chunk: chunk, document: doc, score: score, type: type}, idx} ->
+            snippet = String.slice(chunk.content, 0, 100) |> String.replace(~r/\s+/, " ")
+            type_label = if type == :semantic, do: "semantic", else: "keyword"
+            """
+            i#{idx}. #{doc.filename} (#{type_label}, score: #{score})\t\t#{host}\t#{port}
+            i   #{snippet}...\t\t#{host}\t#{port}
+            0   View document\t/docs/view/#{doc.id}\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            """
+          end)
+          |> Enum.join("")
+
+        footer = """
+        1Back to Docs Menu\t/docs\t#{host}\t#{port}
+        .
+        """
+
+        header <> result_lines <> footer
+
+      {:ok, []} ->
+        """
+        i=== Search Results ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo results found for "#{query}"\t\t#{host}\t#{port}
+        iTry different keywords or add more documents.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try another search\t/docs/search\t#{host}\t#{port}
+        1Back to Docs Menu\t/docs\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        error_response("Search failed: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_docs_search(_query, host, port) do
+    docs_search_prompt(host, port)
+  end
+
+  defp docs_view(doc_id, host, port) do
+    case Rag.get_document(doc_id) do
+      {:ok, doc} ->
+        chunks = PureGopherAi.Rag.DocumentStore.get_chunks(doc_id)
+
+        header = """
+        i=== Document: #{doc.filename} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iPath: #{doc.path}\t\t#{host}\t#{port}
+        iType: #{doc.type}\t\t#{host}\t#{port}
+        iSize: #{Float.round(doc.size / 1024, 1)} KB\t\t#{host}\t#{port}
+        iChunks: #{doc.chunk_count}\t\t#{host}\t#{port}
+        iIngested: #{DateTime.to_string(doc.ingested_at)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Content Preview (first 3 chunks) ---\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        """
+
+        chunk_previews =
+          chunks
+          |> Enum.take(3)
+          |> Enum.map(fn chunk ->
+            preview = String.slice(chunk.content, 0, 200) |> String.replace(~r/\s+/, " ")
+            embedded = if chunk.embedding, do: "✓", else: "○"
+            "i[#{embedded}] Chunk #{chunk.index}: #{preview}...\t\t#{host}\t#{port}\n"
+          end)
+          |> Enum.join("")
+
+        footer = """
+        i\t\t#{host}\t#{port}
+        1Back to Document List\t/docs/list\t#{host}\t#{port}
+        1Back to Docs Menu\t/docs\t#{host}\t#{port}
+        .
+        """
+
+        header <> chunk_previews <> footer
+
+      {:error, :not_found} ->
+        error_response("Document not found: #{doc_id}")
+    end
+  end
+
   # === Admin Functions ===
 
   # Handle admin routes
@@ -1540,6 +1827,7 @@ defmodule PureGopherAi.GopherHandler do
     0Clear Sessions\t/admin/#{token}/clear-sessions\t#{host}\t#{port}
     0Reset Metrics\t/admin/#{token}/reset-metrics\t#{host}\t#{port}
     1View Bans\t/admin/#{token}/bans\t#{host}\t#{port}
+    1Manage Documents (RAG)\t/admin/#{token}/docs\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     1Back to Main Menu\t/\t#{host}\t#{port}
     .
@@ -1604,8 +1892,104 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
+  # RAG admin commands
+  defp handle_admin_command(token, "docs", host, port) do
+    stats = Rag.stats()
+    docs = Rag.list_documents()
+
+    doc_list =
+      if docs == [] do
+        "iNo documents ingested\t\t#{host}\t#{port}\n"
+      else
+        docs
+        |> Enum.map(fn doc ->
+          "i  - #{doc.filename} (#{doc.chunk_count} chunks)\t\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\n")
+      end
+
+    """
+    i=== RAG Document Status ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDocuments: #{stats.documents}\t\t#{host}\t#{port}
+    iChunks: #{stats.chunks}\t\t#{host}\t#{port}
+    iEmbedding Coverage: #{stats.embedding_coverage}%\t\t#{host}\t#{port}
+    iDocs Directory: #{Rag.docs_dir()}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{doc_list}
+    i\t\t#{host}\t#{port}
+    7Ingest file path\t/admin/#{token}/ingest\t#{host}\t#{port}
+    7Ingest URL\t/admin/#{token}/ingest-url\t#{host}\t#{port}
+    0Clear all documents\t/admin/#{token}/clear-docs\t#{host}\t#{port}
+    0Re-embed all chunks\t/admin/#{token}/reembed\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Admin Menu\t/admin/#{token}\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_admin_command(token, "ingest\t" <> path, host, port) do
+    handle_admin_ingest(token, path, host, port)
+  end
+
+  defp handle_admin_command(token, "ingest " <> path, host, port) do
+    handle_admin_ingest(token, path, host, port)
+  end
+
+  defp handle_admin_command(token, "ingest-url\t" <> url, host, port) do
+    handle_admin_ingest_url(token, url, host, port)
+  end
+
+  defp handle_admin_command(token, "ingest-url " <> url, host, port) do
+    handle_admin_ingest_url(token, url, host, port)
+  end
+
+  defp handle_admin_command(token, "clear-docs", host, port) do
+    PureGopherAi.Rag.DocumentStore.clear_all()
+    admin_action_result(token, "Cleared all documents and chunks", host, port)
+  end
+
+  defp handle_admin_command(token, "reembed", host, port) do
+    # Clear existing embeddings and re-embed
+    PureGopherAi.Rag.Embeddings.embed_all_chunks()
+    admin_action_result(token, "Re-embedding all chunks (running in background)", host, port)
+  end
+
+  defp handle_admin_command(token, "remove-doc/" <> doc_id, host, port) do
+    case Rag.remove(doc_id) do
+      :ok ->
+        admin_action_result(token, "Removed document: #{doc_id}", host, port)
+    end
+  end
+
   defp handle_admin_command(_token, command, host, port) do
     error_response("Unknown admin command: #{command}")
+  end
+
+  defp handle_admin_ingest(token, path, host, port) do
+    path = String.trim(path)
+    case Rag.ingest(path) do
+      {:ok, doc} ->
+        admin_action_result(token, "Ingested: #{doc.filename} (#{doc.chunk_count} chunks)", host, port)
+      {:error, :file_not_found} ->
+        admin_action_result(token, "File not found: #{path}", host, port)
+      {:error, :already_ingested} ->
+        admin_action_result(token, "Already ingested: #{path}", host, port)
+      {:error, reason} ->
+        admin_action_result(token, "Ingest failed: #{inspect(reason)}", host, port)
+    end
+  end
+
+  defp handle_admin_ingest_url(token, url, host, port) do
+    url = String.trim(url)
+    case Rag.ingest_url(url) do
+      {:ok, doc} ->
+        admin_action_result(token, "Ingested from URL: #{doc.filename} (#{doc.chunk_count} chunks)", host, port)
+      {:error, {:http_error, status}} ->
+        admin_action_result(token, "HTTP error: #{status}", host, port)
+      {:error, reason} ->
+        admin_action_result(token, "Ingest failed: #{inspect(reason)}", host, port)
+    end
   end
 
   defp handle_ban(token, ip, host, port) do

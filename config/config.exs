@@ -97,7 +97,17 @@ config :pure_gopher_ai,
     {"firehol_level1", "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"},
     {"firehol_abusers_1d", "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_abusers_1d.netset"},
     {"stopforumspam_7d", "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/stopforumspam_7d.netset"}
-  ]
+  ],
+
+  # RAG (Retrieval Augmented Generation)
+  # Query your own documents with AI-enhanced answers
+  rag_enabled: true,                    # Enable RAG system
+  rag_docs_dir: "~/.gopher/docs",       # Document directory (auto-ingested)
+  rag_chunk_size: 512,                  # Words per chunk
+  rag_chunk_overlap: 50,                # Overlap between chunks
+  rag_poll_interval: 30_000,            # File watcher poll interval (30s)
+  rag_embeddings_enabled: true,         # Enable vector embeddings
+  rag_embedding_model: "sentence-transformers/all-MiniLM-L6-v2"  # Embedding model
 
 # Logging
 config :logger, :console,

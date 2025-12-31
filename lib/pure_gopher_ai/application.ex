@@ -36,6 +36,11 @@ defmodule PureGopherAi.Application do
       # Telemetry / Metrics
       PureGopherAi.Telemetry,
 
+      # RAG (Retrieval Augmented Generation)
+      PureGopherAi.Rag.DocumentStore,
+      PureGopherAi.Rag.Embeddings,
+      PureGopherAi.Rag.FileWatcher,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
