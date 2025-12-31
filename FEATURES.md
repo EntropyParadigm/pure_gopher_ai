@@ -111,28 +111,33 @@ This document tracks the implementation status of all planned features.
 ## Phase 2: AI Enhancements
 
 ### 2.1 Multiple Model Support
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Support multiple AI models with different selectors.
 
 **Implementation:**
-- [ ] Model registry in config
-- [ ] Separate Nx.Serving per model
-- [ ] Selectors: `/ask-gpt2`, `/ask-llama`, `/ask-mistral`
-- [ ] Model info in `/about`
-- [ ] Lazy loading (load on first request)
+- [x] Model registry with lazy loading
+- [x] DynamicSupervisor for model Nx.Servings
+- [x] Selectors: `/ask-<model>`, `/chat-<model>`
+- [x] Model listing page: `/models`
+- [x] Lazy loading (load on first request)
+- [x] Streaming support per model
 
-**Models to support:**
-- GPT-2 (default, fast)
-- Llama 2/3 (quality)
-- Mistral (balanced)
-- Phi-2 (small but capable)
+**Models supported:**
+- GPT-2 (default, fast) - 124M params
+- GPT-2 Medium (balanced) - 355M params
+- GPT-2 Large (quality) - 774M params
+- (Llama/Mistral can be added with tokenizer config)
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/model_registry.ex`
-- `lib/pure_gopher_ai/ai_engine.ex`
-- `lib/pure_gopher_ai/application.ex`
-- `config/config.exs`
+**Selectors:**
+- `/models` - List all available models
+- `/ask-gpt2`, `/ask-gpt2-medium`, `/ask-gpt2-large` - Model-specific queries
+- `/chat-gpt2`, `/chat-gpt2-medium`, `/chat-gpt2-large` - Model-specific chat
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/model_registry.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (model routes)
+- `lib/pure_gopher_ai/application.ex` (DynamicSupervisor)
 
 ---
 
@@ -312,7 +317,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | gophermap Support | Complete | 4d9a795 |
 | 2025-01-01 | Rate Limiting | Complete | (pending) |
 | 2025-01-01 | Conversation Memory | Complete | c250c19 |
-| 2025-01-01 | Streaming Responses | Complete | (pending) |
+| 2025-01-01 | Streaming Responses | Complete | e9fff3b |
+| 2025-01-01 | Multiple Model Support | Complete | (pending) |
 
 ---
 

@@ -13,6 +13,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Gophermap
   alias PureGopherAi.RateLimiter
   alias PureGopherAi.ConversationStore
+  alias PureGopherAi.ModelRegistry
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -114,6 +115,26 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/clear", host, port, _network, client_ip, _socket),
     do: handle_clear(host, port, client_ip)
 
+  # List available models
+  defp route_selector("/models", host, port, _network, _ip, _socket),
+    do: models_page(host, port)
+
+  # Model-specific queries (e.g., /ask-gpt2, /ask-gpt2-medium)
+  defp route_selector("/ask-" <> rest, host, port, _network, _ip, socket) do
+    case parse_model_query(rest) do
+      {model_id, ""} -> model_ask_prompt(model_id, host, port)
+      {model_id, query} -> handle_model_ask(model_id, query, host, port, socket)
+    end
+  end
+
+  # Model-specific chat (e.g., /chat-gpt2)
+  defp route_selector("/chat-" <> rest, host, port, _network, client_ip, socket) do
+    case parse_model_query(rest) do
+      {model_id, ""} -> model_chat_prompt(model_id, host, port)
+      {model_id, query} -> handle_model_chat(model_id, query, host, port, client_ip, socket)
+    end
+  end
+
   # Server info
   defp route_selector("/about", host, port, network, _ip, _socket),
     do: about_page(host, port, network)
@@ -163,11 +184,12 @@ defmodule PureGopherAi.GopherHandler do
     7Ask AI (single query)\t/ask\t#{host}\t#{port}
     7Chat (with memory)\t/chat\t#{host}\t#{port}
     0Clear conversation\t/clear\t#{host}\t#{port}
+    1Browse AI Models\t/models\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     #{files_section}0About this server\t/about\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iTip: Use /chat for multi-turn conversations\t\t#{host}\t#{port}
+    iTip: /ask-<model> or /chat-<model> for specific models\t\t#{host}\t#{port}
     .
     """
   end
@@ -180,6 +202,247 @@ defmodule PureGopherAi.GopherHandler do
     iEnter your question below:\t\t#{host}\t#{port}
     .
     """
+  end
+
+  # Models listing page
+  defp models_page(host, port) do
+    models = ModelRegistry.list_models()
+    default_model = ModelRegistry.default_model()
+
+    model_lines =
+      models
+      |> Enum.map(fn {id, info} ->
+        status = if info.loaded, do: "[Loaded]", else: "[Not loaded]"
+        default = if id == default_model, do: " (default)", else: ""
+
+        """
+        i\t\t#{host}\t#{port}
+        i#{info.name}#{default}\t\t#{host}\t#{port}
+        i  #{info.description}\t\t#{host}\t#{port}
+        i  Status: #{status}\t\t#{host}\t#{port}
+        7Ask #{info.name}\t/ask-#{id}\t#{host}\t#{port}
+        7Chat with #{info.name}\t/chat-#{id}\t#{host}\t#{port}
+        """
+      end)
+      |> Enum.join("")
+
+    """
+    i=== Available AI Models ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iModels are loaded on first use (lazy loading)\t\t#{host}\t#{port}
+    #{model_lines}i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Parse model ID and query from selector like "gpt2\tquery" or "gpt2 query"
+  defp parse_model_query(rest) do
+    # Try tab separator first (standard Gopher)
+    case String.split(rest, "\t", parts: 2) do
+      [model_with_query] ->
+        # Try space separator
+        case String.split(model_with_query, " ", parts: 2) do
+          [model_id, query] -> {model_id, query}
+          [model_id] -> {model_id, ""}
+        end
+
+      [model_id, query] ->
+        {model_id, query}
+    end
+  end
+
+  # Model-specific ask prompt
+  defp model_ask_prompt(model_id, host, port) do
+    case ModelRegistry.get_model(model_id) do
+      nil ->
+        error_response("Unknown model: #{model_id}")
+
+      info ->
+        """
+        iAsk #{info.name}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{info.description}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEnter your question below:\t\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # Model-specific chat prompt
+  defp model_chat_prompt(model_id, host, port) do
+    case ModelRegistry.get_model(model_id) do
+      nil ->
+        error_response("Unknown model: #{model_id}")
+
+      info ->
+        """
+        iChat with #{info.name}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{info.description}\t\t#{host}\t#{port}
+        iYour conversation history is preserved.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEnter your message below:\t\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # Handle model-specific ask query
+  defp handle_model_ask(model_id, query, host, port, socket) when byte_size(query) > 0 do
+    if ModelRegistry.exists?(model_id) do
+      Logger.info("AI Query (#{model_id}): #{query}")
+      start_time = System.monotonic_time(:millisecond)
+
+      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+        stream_model_response(socket, model_id, query, nil, host, port, start_time)
+      else
+        response = ModelRegistry.generate(model_id, query)
+        elapsed = System.monotonic_time(:millisecond) - start_time
+        Logger.info("AI Response (#{model_id}) generated in #{elapsed}ms")
+
+        format_text_response(
+          """
+          Query: #{query}
+          Model: #{model_id}
+
+          Response:
+          #{response}
+
+          ---
+          Generated in #{elapsed}ms
+          """,
+          host,
+          port
+        )
+      end
+    else
+      error_response("Unknown model: #{model_id}")
+    end
+  end
+
+  defp handle_model_ask(model_id, _query, _host, _port, _socket) do
+    if ModelRegistry.exists?(model_id) do
+      error_response("Please provide a query after /ask-#{model_id}")
+    else
+      error_response("Unknown model: #{model_id}")
+    end
+  end
+
+  # Handle model-specific chat query
+  defp handle_model_chat(model_id, query, host, port, client_ip, socket) when byte_size(query) > 0 do
+    if ModelRegistry.exists?(model_id) do
+      session_id = ConversationStore.get_session_id(client_ip)
+      Logger.info("Chat query (#{model_id}) from session #{session_id}: #{query}")
+
+      context = ConversationStore.get_context(session_id)
+      ConversationStore.add_message(session_id, :user, query)
+
+      start_time = System.monotonic_time(:millisecond)
+
+      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+        stream_model_chat_response(socket, model_id, query, context, session_id, host, port, start_time)
+      else
+        response = ModelRegistry.generate(model_id, query, context)
+        elapsed = System.monotonic_time(:millisecond) - start_time
+
+        ConversationStore.add_message(session_id, :assistant, response)
+        history = ConversationStore.get_history(session_id)
+        history_count = length(history)
+
+        Logger.info("Chat response (#{model_id}) generated in #{elapsed}ms, history: #{history_count} messages")
+
+        format_text_response(
+          """
+          You: #{query}
+          Model: #{model_id}
+
+          AI: #{response}
+
+          ---
+          Session: #{session_id} | Messages: #{history_count}
+          Generated in #{elapsed}ms
+          """,
+          host,
+          port
+        )
+      end
+    else
+      error_response("Unknown model: #{model_id}")
+    end
+  end
+
+  defp handle_model_chat(model_id, _query, _host, _port, _ip, _socket) do
+    if ModelRegistry.exists?(model_id) do
+      error_response("Please provide a message after /chat-#{model_id}")
+    else
+      error_response("Unknown model: #{model_id}")
+    end
+  end
+
+  # Stream model-specific response
+  defp stream_model_response(socket, model_id, query, _context, host, port, start_time) do
+    header = format_gopher_lines(["Query: #{query}", "Model: #{model_id}", "", "Response:"], host, port)
+    ThousandIsland.Socket.send(socket, header)
+
+    _response = ModelRegistry.generate_stream(model_id, query, nil, fn chunk ->
+      if String.length(chunk) > 0 do
+        lines = String.split(chunk, "\n", trim: false)
+        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+        ThousandIsland.Socket.send(socket, Enum.join(formatted))
+      end
+    end)
+
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    Logger.info("AI Response (#{model_id}) streamed in #{elapsed}ms")
+
+    footer = format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
+    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+
+    :streamed
+  end
+
+  # Stream model-specific chat response
+  defp stream_model_chat_response(socket, model_id, query, context, session_id, host, port, start_time) do
+    header = format_gopher_lines(["You: #{query}", "Model: #{model_id}", "", "AI:"], host, port)
+    ThousandIsland.Socket.send(socket, header)
+
+    {:ok, response_agent} = Agent.start_link(fn -> [] end)
+
+    _response = ModelRegistry.generate_stream(model_id, query, context, fn chunk ->
+      Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
+      if String.length(chunk) > 0 do
+        lines = String.split(chunk, "\n", trim: false)
+        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+        ThousandIsland.Socket.send(socket, Enum.join(formatted))
+      end
+    end)
+
+    full_response =
+      response_agent
+      |> Agent.get(& &1)
+      |> Enum.reverse()
+      |> Enum.join("")
+
+    Agent.stop(response_agent)
+
+    ConversationStore.add_message(session_id, :assistant, full_response)
+    history = ConversationStore.get_history(session_id)
+    history_count = length(history)
+
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    Logger.info("Chat response (#{model_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
+
+    footer = format_gopher_lines([
+      "",
+      "---",
+      "Session: #{session_id} | Messages: #{history_count}",
+      "Generated in #{elapsed}ms (streamed)"
+    ], host, port)
+    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+
+    :streamed
   end
 
   # Handle AI query with streaming support

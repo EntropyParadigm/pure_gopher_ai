@@ -115,6 +115,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/conversation_store.ex` | Session-based chat history storage (ETS) |
 | `lib/pure_gopher_ai/rate_limiter.ex` | Per-IP rate limiting with sliding window |
 | `lib/pure_gopher_ai/gophermap.ex` | Static content serving with gophermap format |
+| `lib/pure_gopher_ai/model_registry.ex` | Multi-model support with lazy loading |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -141,6 +142,9 @@ end
 | `/ask <query>` | AI text generation (stateless) |
 | `/chat <msg>` | Chat with conversation memory |
 | `/clear` | Clear conversation history |
+| `/models` | List available AI models |
+| `/ask-<model> <query>` | Query with specific model |
+| `/chat-<model> <msg>` | Chat with specific model |
 | `/files` | Browse static content |
 | `/about` | Server stats |
 

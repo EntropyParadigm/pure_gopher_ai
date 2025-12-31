@@ -27,11 +27,17 @@ defmodule PureGopherAi.Application do
       # Conversation Store
       PureGopherAi.ConversationStore,
 
-      # AI Inference Engine - Nx.Serving with batching
+      # Dynamic supervisor for multiple model servings
+      {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
+
+      # Model Registry (manages lazy loading of models)
+      PureGopherAi.ModelRegistry,
+
+      # Default AI Inference Engine - Nx.Serving with batching
       {Nx.Serving,
        serving: serving,
        name: PureGopherAi.Serving,
-       batch_size: 4,
+       batch_size: 1,
        batch_timeout: 100},
 
       # Clearnet Gopher TCP Server
