@@ -14,6 +14,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.RateLimiter
   alias PureGopherAi.ConversationStore
   alias PureGopherAi.ModelRegistry
+  alias PureGopherAi.Telemetry
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -46,6 +47,9 @@ defmodule PureGopherAi.GopherHandler do
 
         network_label = if network == :tor, do: "[Tor]", else: "[Clearnet]"
         Logger.info("#{network_label} Gopher request: #{inspect(selector)} from #{format_ip(client_ip)}")
+
+        # Record telemetry
+        Telemetry.record_request(selector, network: network)
 
         # Route selector - pass socket for streaming support
         case route_selector(selector, host, port, network, client_ip, socket) do
@@ -159,6 +163,10 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/about", host, port, network, _ip, _socket),
     do: about_page(host, port, network)
 
+  # Server stats/metrics
+  defp route_selector("/stats", host, port, _network, _ip, _socket),
+    do: stats_page(host, port)
+
   # Static content via gophermap
   defp route_selector("/files" <> rest, host, port, _network, _ip, _socket),
     do: serve_static(rest, host, port)
@@ -209,6 +217,7 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     #{files_section}0About this server\t/about\t#{host}\t#{port}
+    0Server statistics\t/stats\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     iTip: /ask-<model> or /chat-<model> for specific models\t\t#{host}\t#{port}
     .
@@ -890,6 +899,50 @@ defmodule PureGopherAi.GopherHandler do
 
       TCP Server: ThousandIsland
       Architecture: OTP Supervision Tree
+      """,
+      host,
+      port
+    )
+  end
+
+  # Stats page - detailed metrics
+  defp stats_page(host, port) do
+    stats = Telemetry.format_stats()
+    cache_stats = PureGopherAi.ResponseCache.stats()
+
+    format_text_response(
+      """
+      === PureGopherAI Server Metrics ===
+
+      --- Request Statistics ---
+      Total Requests: #{stats.total_requests}
+      Requests/Hour: #{stats.requests_per_hour}
+      Uptime: #{stats.uptime_hours} hours
+
+      --- By Network ---
+      Clearnet: #{stats.clearnet_requests}
+      Tor: #{stats.tor_requests}
+
+      --- By Type ---
+      AI Queries (/ask): #{stats.ask_requests}
+      Chat (/chat): #{stats.chat_requests}
+      Static Content: #{stats.static_requests}
+
+      --- Performance ---
+      Avg Latency: #{stats.avg_latency_ms}ms
+      Max Latency: #{stats.max_latency_ms}ms
+
+      --- Errors ---
+      Total Errors: #{stats.total_errors}
+      Error Rate: #{stats.error_rate}%
+
+      --- Cache ---
+      Status: #{if cache_stats.enabled, do: "Enabled", else: "Disabled"}
+      Size: #{cache_stats.size}/#{cache_stats.max_size}
+      Hit Rate: #{cache_stats.hit_rate}%
+      Hits: #{cache_stats.hits}
+      Misses: #{cache_stats.misses}
+      Writes: #{cache_stats.writes}
       """,
       host,
       port

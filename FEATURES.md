@@ -241,22 +241,31 @@ This document tracks the implementation status of all planned features.
 ## Phase 4: Operations
 
 ### 4.1 Metrics/Telemetry
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Request counts, latency, model usage tracking.
 
 **Implementation:**
-- [ ] Integrate `:telemetry` library
-- [ ] Track: requests, latency, errors, cache hits
-- [ ] Per-model metrics
-- [ ] Per-network (clearnet/tor) metrics
-- [ ] `/stats` selector for public metrics
-- [ ] Optional Prometheus export
+- [x] Custom telemetry module with ETS storage
+- [x] Track: requests, latency, errors
+- [x] Per-selector type metrics (ask, chat, static)
+- [x] Per-network (clearnet/tor) metrics
+- [x] `/stats` selector for public metrics
+- [x] Average and max latency tracking
+- [x] Request rate calculation (requests/hour)
+- [x] Error rate tracking
+- [x] Daily automatic reset
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/telemetry.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
-- `mix.exs` (add telemetry_metrics, telemetry_poller)
+**Metrics tracked:**
+- Total requests, requests by network, requests by type
+- Average/max latency
+- Error count and rate
+- Cache stats integration
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/telemetry.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (/stats route)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---
 
@@ -344,7 +353,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | Streaming Responses | Complete | e9fff3b |
 | 2025-01-01 | Multiple Model Support | Complete | 4f64be9 |
 | 2025-01-01 | System Prompts / Personas | Complete | 27170b6 |
-| 2025-01-01 | Response Caching | Complete | (pending) |
+| 2025-01-01 | Response Caching | Complete | 1b4767c |
+| 2025-01-01 | Metrics/Telemetry | Complete | (pending) |
 
 ---
 

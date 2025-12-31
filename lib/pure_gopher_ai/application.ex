@@ -30,6 +30,9 @@ defmodule PureGopherAi.Application do
       # Response Cache
       PureGopherAi.ResponseCache,
 
+      # Telemetry / Metrics
+      PureGopherAi.Telemetry,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

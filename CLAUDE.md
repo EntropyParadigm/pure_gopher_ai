@@ -116,6 +116,8 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/rate_limiter.ex` | Per-IP rate limiting with sliding window |
 | `lib/pure_gopher_ai/gophermap.ex` | Static content serving with gophermap format |
 | `lib/pure_gopher_ai/model_registry.ex` | Multi-model support with lazy loading |
+| `lib/pure_gopher_ai/response_cache.ex` | Response caching with LRU eviction |
+| `lib/pure_gopher_ai/telemetry.ex` | Metrics and request tracking |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -149,7 +151,8 @@ end
 | `/persona-<name> <query>` | Query with specific persona |
 | `/chat-persona-<name> <msg>` | Chat with specific persona |
 | `/files` | Browse static content |
-| `/about` | Server stats |
+| `/about` | Server info |
+| `/stats` | Detailed metrics |
 
 ### Response Format
 ```
