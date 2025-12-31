@@ -23,6 +23,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.Telemetry
   alias PureGopherAi.Summarizer
   alias PureGopherAi.GopherProxy
+  alias PureGopherAi.Guestbook
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -139,6 +140,12 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/fetch?" <> url), do: handle_fetch(URI.decode(url))
   defp route_path("/fetch-summary?" <> url), do: handle_fetch_summary(URI.decode(url))
 
+  # Guestbook
+  defp route_path("/guestbook"), do: guestbook_page(1)
+  defp route_path("/guestbook/page/" <> page), do: guestbook_page(String.to_integer(page) rescue 1)
+  defp route_path("/guestbook/sign"), do: input_response("Enter: Name | Your message")
+  defp route_path("/guestbook/sign?" <> input), do: handle_guestbook_sign(URI.decode(input))
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -178,6 +185,9 @@ defmodule PureGopherAi.GeminiHandler do
 
     ## Content
     => /phlog Phlog (Blog)
+
+    ## Community
+    => /guestbook Guestbook
 
     ## Server
     => /about About this server
@@ -632,6 +642,105 @@ defmodule PureGopherAi.GeminiHandler do
   end
 
   defp handle_fetch_summary(_), do: input_response("Enter a Gopher URL (gopher://...):")
+
+  # === Guestbook ===
+
+  defp guestbook_page(page) do
+    result = Guestbook.list_entries(page: page, per_page: 15)
+    stats = Guestbook.stats()
+
+    entries_section = if result.entries == [] do
+      "No entries yet. Be the first to sign!"
+    else
+      result.entries
+      |> Enum.map(fn entry ->
+        date = Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")
+        """
+        ### #{entry.name}
+        #{date}
+
+        #{entry.message}
+
+        ---
+        """
+      end)
+      |> Enum.join("\n")
+    end
+
+    pagination = if result.total_pages > 1 do
+      pages = for p <- 1..result.total_pages do
+        if p == page do
+          "[#{p}]"
+        else
+          "=> /guestbook/page/#{p} #{p}"
+        end
+      end
+      |> Enum.join(" ")
+
+      "\n## Pages\n#{pages}\n"
+    else
+      ""
+    end
+
+    success_response("""
+    # Guestbook
+
+    Total entries: #{stats.total_entries}
+
+    => /guestbook/sign Sign the Guestbook
+
+    ## Entries (Page #{result.page}/#{result.total_pages})
+
+    #{entries_section}
+    #{pagination}
+    => / Back to Home
+    """)
+  end
+
+  defp handle_guestbook_sign(input) do
+    input = String.trim(input)
+
+    case String.split(input, "|", parts: 2) do
+      [name, message] ->
+        name = String.trim(name)
+        message = String.trim(message)
+
+        # Use a dummy IP for Gemini (we don't have client IP in this context)
+        case Guestbook.sign(name, message, {0, 0, 0, 0}) do
+          {:ok, entry} ->
+            success_response("""
+            # Thank You!
+
+            Your message has been added to the guestbook.
+
+            **Name:** #{entry.name}
+            **Message:** #{entry.message}
+            **Time:** #{Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")}
+
+            => /guestbook View Guestbook
+            => / Back to Home
+            """)
+
+          {:error, :rate_limited, retry_after_ms} ->
+            minutes = div(retry_after_ms, 60_000)
+            success_response("""
+            # Please Wait
+
+            You can only sign the guestbook once every 5 minutes.
+            Please wait #{minutes} more minute(s) before signing again.
+
+            => /guestbook View Guestbook
+            => / Back to Home
+            """)
+
+          {:error, :invalid_input} ->
+            error_response(59, "Invalid input. Please provide both name and message.")
+        end
+
+      _ ->
+        error_response(59, "Invalid format. Use: Name | Your message")
+    end
+  end
 
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"

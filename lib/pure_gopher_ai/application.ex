@@ -43,6 +43,9 @@ defmodule PureGopherAi.Application do
       PureGopherAi.Rag.Embeddings,
       PureGopherAi.Rag.FileWatcher,
 
+      # Guestbook
+      PureGopherAi.Guestbook,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

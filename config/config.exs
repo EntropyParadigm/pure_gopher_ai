@@ -115,7 +115,11 @@ config :pure_gopher_ai,
   gemini_enabled: false,                # Enable Gemini server
   gemini_port: 1965,                    # Standard Gemini port
   gemini_cert_file: "~/.gopher/gemini/cert.pem",  # TLS certificate
-  gemini_key_file: "~/.gopher/gemini/key.pem"     # TLS private key
+  gemini_key_file: "~/.gopher/gemini/key.pem",    # TLS private key
+
+  # Guestbook
+  guestbook_max_entries: 1000,          # Maximum guestbook entries (oldest pruned)
+  data_dir: "~/.gopher/data"            # Persistent data directory
 
 # Logging
 config :logger, :console,

@@ -22,6 +22,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Rag
   alias PureGopherAi.Summarizer
   alias PureGopherAi.GopherProxy
+  alias PureGopherAi.Guestbook
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -371,6 +372,25 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/fetch-summary " <> url, host, port, _network, _ip, socket),
     do: handle_fetch_summary(url, host, port, socket)
 
+  # === Guestbook ===
+
+  defp route_selector("/guestbook", host, port, _network, _ip, _socket),
+    do: guestbook_page(host, port, 1)
+
+  defp route_selector("/guestbook/page/" <> page_str, host, port, _network, _ip, _socket) do
+    page = String.to_integer(page_str) rescue 1
+    guestbook_page(host, port, page)
+  end
+
+  defp route_selector("/guestbook/sign", host, port, _network, _ip, _socket),
+    do: guestbook_sign_prompt(host, port)
+
+  defp route_selector("/guestbook/sign\t" <> input, host, port, _network, ip, _socket),
+    do: handle_guestbook_sign(input, host, port, ip)
+
+  defp route_selector("/guestbook/sign " <> input, host, port, _network, ip, _socket),
+    do: handle_guestbook_sign(input, host, port, ip)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -437,6 +457,9 @@ defmodule PureGopherAi.GopherHandler do
     1Document Knowledge Base\t/docs\t#{host}\t#{port}
     1Phlog (Blog)\t/phlog\t#{host}\t#{port}
     1ASCII Art Generator\t/art\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i=== Community ===\t\t#{host}\t#{port}
+    1Guestbook\t/guestbook\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -2451,6 +2474,139 @@ defmodule PureGopherAi.GopherHandler do
         {:error, reason} ->
           error_response("Fetch failed: #{inspect(reason)}")
       end
+    end
+  end
+
+  # === Guestbook Functions ===
+
+  defp guestbook_page(host, port, page) do
+    result = Guestbook.list_entries(page: page, per_page: 15)
+    stats = Guestbook.stats()
+
+    entries_section = if result.entries == [] do
+      "iNo entries yet. Be the first to sign!\t\t#{host}\t#{port}"
+    else
+      result.entries
+      |> Enum.map(fn entry ->
+        date = Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")
+        message_lines = entry.message
+          |> String.split("\n")
+          |> Enum.map(&"i  #{&1}\t\t#{host}\t#{port}")
+          |> Enum.join("\r\n")
+
+        """
+        i--- #{entry.name} (#{date}) ---\t\t#{host}\t#{port}
+        #{message_lines}
+        i\t\t#{host}\t#{port}
+        """
+      end)
+      |> Enum.join("")
+    end
+
+    # Pagination
+    pagination = if result.total_pages > 1 do
+      pages = for p <- 1..result.total_pages do
+        if p == page do
+          "i[#{p}]\t\t#{host}\t#{port}"
+        else
+          "1Page #{p}\t/guestbook/page/#{p}\t#{host}\t#{port}"
+        end
+      end
+      |> Enum.join("\r\n")
+
+      "\r\ni--- Pages ---\t\t#{host}\t#{port}\r\n#{pages}\r\n"
+    else
+      ""
+    end
+
+    """
+    i=== Guestbook ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTotal entries: #{stats.total_entries}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Sign the Guestbook\t/guestbook/sign\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Entries (Page #{result.page}/#{result.total_pages}) ---\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{entries_section}#{pagination}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp guestbook_sign_prompt(host, port) do
+    """
+    i=== Sign the Guestbook ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iLeave a message for other visitors!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: Name | Your message here\t\t#{host}\t#{port}
+    iExample: Alice | Hello from the future!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your name and message:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_guestbook_sign(input, host, port, client_ip) do
+    input = String.trim(input)
+
+    # Parse "Name | Message" format
+    case String.split(input, "|", parts: 2) do
+      [name, message] ->
+        name = String.trim(name)
+        message = String.trim(message)
+
+        case Guestbook.sign(name, message, client_ip) do
+          {:ok, entry} ->
+            format_text_response("""
+            === Thank You! ===
+
+            Your message has been added to the guestbook.
+
+            Name: #{entry.name}
+            Message: #{entry.message}
+            Time: #{Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")}
+
+            => /guestbook View Guestbook
+            => / Back to Main Menu
+            """, host, port)
+
+          {:error, :rate_limited, retry_after_ms} ->
+            minutes = div(retry_after_ms, 60_000)
+            format_text_response("""
+            === Please Wait ===
+
+            You can only sign the guestbook once every 5 minutes.
+            Please wait #{minutes} more minute(s) before signing again.
+
+            => /guestbook View Guestbook
+            => / Back to Main Menu
+            """, host, port)
+
+          {:error, :invalid_input} ->
+            format_text_response("""
+            === Invalid Input ===
+
+            Please provide both a name and message.
+            Format: Name | Your message here
+
+            => /guestbook/sign Try Again
+            => /guestbook View Guestbook
+            """, host, port)
+        end
+
+      _ ->
+        format_text_response("""
+        === Invalid Format ===
+
+        Please use the format: Name | Message
+        Example: Alice | Hello from the future!
+
+        => /guestbook/sign Try Again
+        => /guestbook View Guestbook
+        """, host, port)
     end
   end
 
