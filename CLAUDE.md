@@ -1,7 +1,7 @@
 # PureGopherAI - Project Context
 
 ## Overview
-A pure Elixir Gopher server (RFC 1436) with native AI inference via Bumblebee. Optimized for Apple Silicon with Metal GPU acceleration. Dual-stack: clearnet + Tor hidden service.
+A pure Elixir Gopher server (RFC 1436) with native AI inference via Bumblebee. Optimized for Apple Silicon with Metal GPU acceleration. Triple-stack: clearnet + Tor hidden service + Gemini protocol (TLS).
 
 ## Architecture
 
@@ -109,11 +109,13 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 
 | File | Purpose |
 |------|---------|
-| `lib/pure_gopher_ai/application.ex` | Supervisor - starts AI serving + dual TCP listeners |
+| `lib/pure_gopher_ai/application.ex` | Supervisor - starts AI serving + TCP/TLS listeners |
 | `lib/pure_gopher_ai/ai_engine.ex` | Loads Bumblebee model, exposes `generate/1,2` |
 | `lib/pure_gopher_ai/gopher_handler.ex` | RFC 1436 protocol, network-aware responses |
+| `lib/pure_gopher_ai/gemini_handler.ex` | Gemini protocol handler (TLS on port 1965) |
 | `lib/pure_gopher_ai/conversation_store.ex` | Session-based chat history storage (ETS) |
 | `lib/pure_gopher_ai/rate_limiter.ex` | Per-IP rate limiting with sliding window |
+| `lib/pure_gopher_ai/blocklist.ex` | External blocklist integration (FireHOL, Floodgap) |
 | `lib/pure_gopher_ai/gophermap.ex` | Static content serving with gophermap format |
 | `lib/pure_gopher_ai/model_registry.ex` | Multi-model support with lazy loading |
 | `lib/pure_gopher_ai/response_cache.ex` | Response caching with LRU eviction |
@@ -122,6 +124,12 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/search.ex` | Full-text search with ranking |
 | `lib/pure_gopher_ai/ascii_art.ex` | Text-to-ASCII art generation |
 | `lib/pure_gopher_ai/admin.ex` | Admin interface with token auth |
+| `lib/pure_gopher_ai/rag.ex` | RAG main module - document queries |
+| `lib/pure_gopher_ai/rag/document_store.ex` | Document storage, chunking, extraction |
+| `lib/pure_gopher_ai/rag/embeddings.ex` | Vector embeddings with sentence-transformers |
+| `lib/pure_gopher_ai/rag/file_watcher.ex` | Auto-ingestion from watch directory |
+| `lib/pure_gopher_ai/summarizer.ex` | AI summarization, translation, digests |
+| `lib/pure_gopher_ai/gopher_proxy.ex` | Fetch external Gopher content |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -154,6 +162,22 @@ end
 | `/personas` | List available AI personas |
 | `/persona-<name> <query>` | Query with specific persona |
 | `/chat-persona-<name> <msg>` | Chat with specific persona |
+| `/docs` | Document knowledge base |
+| `/docs/list` | List ingested documents |
+| `/docs/ask <query>` | Query documents with RAG |
+| `/docs/search <query>` | Search documents |
+| `/docs/view/<id>` | View document details |
+| `/summary/phlog/<path>` | TL;DR summary of phlog entry |
+| `/summary/doc/<id>` | Summarize document |
+| `/translate` | Translation service menu |
+| `/translate/<lang>/phlog/<path>` | Translate phlog entry |
+| `/translate/<lang>/doc/<id>` | Translate document |
+| `/digest` | AI daily digest |
+| `/topics` | Discover content themes |
+| `/discover <interest>` | AI content recommendations |
+| `/explain <term>` | AI explanation of term |
+| `/fetch <url>` | Fetch external Gopher content |
+| `/fetch-summary <url>` | Fetch and summarize |
 | `/phlog` | Gopher blog index |
 | `/phlog/page/<n>` | Paginated phlog index |
 | `/phlog/feed` | Atom feed |
@@ -270,9 +294,90 @@ GOPHER_PORT=70 MIX_ENV=prod mix run --no-halt
 Default: `openai-community/gpt2` (lightweight, ~500MB)
 Production: Consider Llama 2/3 or Mistral for better quality
 
+## Gemini Protocol
+
+PureGopherAI also supports the Gemini protocol (gemini://) on port 1965 with TLS.
+
+### Setup
+```bash
+# Generate TLS certificates
+mkdir -p ~/.gopher/gemini
+openssl req -x509 -newkey rsa:4096 -keyout ~/.gopher/gemini/key.pem -out ~/.gopher/gemini/cert.pem -days 365 -nodes
+
+# Enable in config/config.exs
+config :pure_gopher_ai,
+  gemini_enabled: true,
+  gemini_port: 1965,
+  gemini_cert_file: "~/.gopher/gemini/cert.pem",
+  gemini_key_file: "~/.gopher/gemini/key.pem"
+```
+
+### Gemini Response Codes
+- 10: Input required (meta = prompt)
+- 20: Success (meta = MIME type)
+- 30: Redirect (meta = new URL)
+- 40: Temporary failure
+- 50: Permanent failure
+- 60: Client certificate required
+
+## RAG (Retrieval Augmented Generation)
+
+Query your own documents with AI-enhanced answers.
+
+### Setup
+```bash
+# Create docs directory
+mkdir -p ~/.gopher/docs
+
+# Drop documents into the directory (auto-ingested)
+cp mydoc.pdf ~/.gopher/docs/
+cp notes.md ~/.gopher/docs/
+```
+
+### Supported Formats
+- Plain text (.txt, .text)
+- Markdown (.md, .markdown)
+- PDF (.pdf) - requires `pdftotext` for best results
+
+### Configuration
+```elixir
+config :pure_gopher_ai,
+  rag_enabled: true,
+  rag_docs_dir: "~/.gopher/docs",
+  rag_chunk_size: 512,          # Words per chunk
+  rag_chunk_overlap: 50,        # Overlap between chunks
+  rag_embeddings_enabled: true,
+  rag_embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+```
+
+## AI Tools
+
+### Summarization
+- `/summary/phlog/<path>` - TL;DR for blog posts
+- `/summary/doc/<id>` - Document summaries
+
+### Translation (25+ languages)
+- `/translate` - List supported languages
+- `/translate/<lang>/phlog/<path>` - Translate blog post
+- `/translate/<lang>/doc/<id>` - Translate document
+
+Supported: en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, sv, da, fi, no, el, he, uk, cs
+
+### Dynamic Content
+- `/digest` - AI-generated daily digest
+- `/topics` - Discover themes in your content
+- `/discover <interest>` - Content recommendations
+- `/explain <term>` - AI explanations
+
+### Gopher Proxy
+- `/fetch <url>` - Fetch external Gopher content
+- `/fetch-summary <url>` - Fetch and AI summarize
+
 ## Notes
 - First model load downloads from Hugging Face
 - Nx.Serving provides automatic request batching
 - All inference runs locally - no external API calls
 - Tor listener only binds to localhost for security
 - macOS allows port 70 without root; Linux requires setcap
+- Gemini requires TLS certificates (self-signed OK)
+- RAG auto-ingests documents from watch directory every 30s
