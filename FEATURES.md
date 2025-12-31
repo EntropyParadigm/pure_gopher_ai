@@ -1051,6 +1051,7 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Security Module Integration | Complete | 12bdf68 |
 | 2025-12-31 | Pastebin / Text Sharing | Complete | (pending) |
 | 2025-12-31 | Polls / Voting System | Complete | (pending) |
+| 2025-12-31 | Phlog Comments | Complete | (pending) |
 
 ---
 
@@ -1123,6 +1124,35 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 **Files created/modified:**
 - `lib/pure_gopher_ai/polls.ex` (new)
 - `lib/pure_gopher_ai/gopher_handler.ex` (poll routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 9.3 Phlog Comments
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Comment system for phlog (blog) entries.
+
+**Implementation:**
+- [x] Create `PhlogComments` GenServer with DETS persistent storage
+- [x] `/phlog/comments/<path>` - View comments for an entry
+- [x] `/phlog/comments/<path>/comment` - Add comment (Type 7 input)
+- [x] `/phlog/comments/recent` - Recent comments across all entries
+- [x] Rate limiting per IP (1 minute cooldown)
+- [x] Author name and message input (Name | Message format)
+- [x] Max 100 comments per entry
+- [x] Input sanitization (HTML stripping, control char removal)
+- [x] Admin delete functionality
+- [x] Comment count display on phlog entries
+
+**Selectors:**
+- `/phlog/comments/<path>` - View comments for entry
+- `/phlog/comments/<path>/comment` - Add comment
+- `/phlog/comments/recent` - Recent comments
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/phlog_comments.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (comment routes)
 - `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---

@@ -36,6 +36,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.OutputSanitizer
   alias PureGopherAi.Pastebin
   alias PureGopherAi.Polls
+  alias PureGopherAi.PhlogComments
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -320,6 +321,29 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/phlog/entry/" <> entry_path, host, port, _network, _ip, _socket),
     do: phlog_entry(host, port, entry_path)
+
+  # Phlog Comments
+  defp route_selector("/phlog/comments/recent", host, port, _network, _ip, _socket),
+    do: phlog_recent_comments(host, port)
+
+  defp route_selector("/phlog/comments/" <> rest, host, port, _network, ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [entry_path, "comment"] ->
+        phlog_comment_prompt(entry_path, host, port)
+
+      [entry_path, "comment\t" <> input] ->
+        handle_phlog_comment(entry_path, input, host, port, ip)
+
+      [entry_path, "comment " <> input] ->
+        handle_phlog_comment(entry_path, input, host, port, ip)
+
+      [entry_path] ->
+        phlog_view_comments(entry_path, host, port)
+
+      _ ->
+        error_response("Invalid comment path")
+    end
+  end
 
   # Search (Type 7)
   defp route_selector("/search", host, port, _network, _ip, _socket),
@@ -1749,23 +1773,157 @@ defmodule PureGopherAi.GopherHandler do
   defp phlog_entry(host, port, entry_path) do
     case Phlog.get_entry(entry_path) do
       {:ok, entry} ->
-        format_text_response(
-          """
-          === #{entry.title} ===
-          Date: #{entry.date}
+        comment_count = PhlogComments.count_comments(entry_path)
+        comment_text = if comment_count == 1, do: "1 comment", else: "#{comment_count} comments"
 
-          #{entry.content}
-          ---
-          """,
-          host,
-          port
-        )
+        """
+        i=== #{entry.title} ===\t\t#{host}\t#{port}
+        iDate: #{entry.date}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{entry.content |> String.split("\n") |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end) |> Enum.join("\r\n")}
+        i\t\t#{host}\t#{port}
+        i---\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Comments (#{comment_text})\t/phlog/comments/#{entry_path}\t#{host}\t#{port}
+        7Add Comment\t/phlog/comments/#{entry_path}/comment\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
 
       {:error, :invalid_path} ->
         error_response("Invalid phlog path")
 
       {:error, _} ->
         error_response("Phlog entry not found: #{entry_path}")
+    end
+  end
+
+  # Phlog Comments handlers
+  defp phlog_view_comments(entry_path, host, port) do
+    case PhlogComments.get_comments(entry_path, order: :desc) do
+      {:ok, comments} ->
+        header = """
+        i=== Comments for #{entry_path} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        """
+
+        comments_text = if Enum.empty?(comments) do
+          "iNo comments yet. Be the first to comment!\t\t#{host}\t#{port}\r\n"
+        else
+          comments
+          |> Enum.map(fn c ->
+            date = format_date(c.created_at)
+            """
+            i--- #{c.author} (#{date}) ---\t\t#{host}\t#{port}
+            #{c.message |> String.split("\n") |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end) |> Enum.join("\r\n")}
+            i\t\t#{host}\t#{port}
+            """
+          end)
+          |> Enum.join("")
+        end
+
+        footer = """
+        7Add Comment\t/phlog/comments/#{entry_path}/comment\t#{host}\t#{port}
+        1Back to Entry\t/phlog/entry/#{entry_path}\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+
+        header <> comments_text <> footer
+
+      {:error, _} ->
+        error_response("Could not load comments")
+    end
+  end
+
+  defp phlog_comment_prompt(entry_path, host, port) do
+    """
+    7Leave a comment on #{entry_path}\t/phlog/comments/#{entry_path}/comment\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: Name | Your message here\t\t#{host}\t#{port}
+    iExample: Alice | Great post, thanks!\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_comment(entry_path, input, host, port, ip) do
+    case String.split(input, "|", parts: 2) do
+      [author, message] ->
+        case PhlogComments.add_comment(entry_path, String.trim(author), String.trim(message), ip) do
+          {:ok, _id} ->
+            """
+            i=== Comment Posted! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iThank you for your comment!\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1View Comments\t/phlog/comments/#{entry_path}\t#{host}\t#{port}
+            1Back to Entry\t/phlog/entry/#{entry_path}\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :rate_limited} ->
+            error_response("Please wait before commenting again")
+
+          {:error, :empty_author} ->
+            error_response("Please provide your name")
+
+          {:error, :empty_message} ->
+            error_response("Please provide a message")
+
+          {:error, :author_too_long} ->
+            error_response("Name is too long (max 50 characters)")
+
+          {:error, :message_too_long} ->
+            error_response("Message is too long (max 1000 characters)")
+
+          {:error, :too_many_comments} ->
+            error_response("Maximum comments reached for this entry")
+
+          {:error, _} ->
+            error_response("Could not post comment")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: Name | Your message")
+    end
+  end
+
+  defp phlog_recent_comments(host, port) do
+    case PhlogComments.recent_comments(20) do
+      {:ok, comments} ->
+        header = """
+        i=== Recent Phlog Comments ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        """
+
+        comments_text = if Enum.empty?(comments) do
+          "iNo comments yet.\t\t#{host}\t#{port}\r\n"
+        else
+          comments
+          |> Enum.map(fn c ->
+            date = format_date(c.created_at)
+            preview = c.message |> String.slice(0, 60) |> String.replace("\n", " ")
+            preview = if String.length(c.message) > 60, do: preview <> "...", else: preview
+            """
+            i#{c.author} on #{c.entry_path} (#{date})\t\t#{host}\t#{port}
+            i  \"#{preview}\"\t\t#{host}\t#{port}
+            1  View full comment\t/phlog/comments/#{c.entry_path}\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            """
+          end)
+          |> Enum.join("")
+        end
+
+        footer = """
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+
+        header <> comments_text <> footer
+
+      {:error, _} ->
+        error_response("Could not load recent comments")
     end
   end
 

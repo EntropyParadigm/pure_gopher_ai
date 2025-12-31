@@ -72,6 +72,9 @@ defmodule PureGopherAi.Application do
       # Polls / Voting
       PureGopherAi.Polls,
 
+      # Phlog Comments
+      PureGopherAi.PhlogComments,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
