@@ -31,6 +31,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.Fortune
   alias PureGopherAi.LinkDirectory
   alias PureGopherAi.BulletinBoard
+  alias PureGopherAi.HealthCheck
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -213,6 +214,12 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/board/recent"), do: handle_board_recent()
   defp route_path("/board/" <> rest), do: handle_board_route(rest)
 
+  # Health Check
+  defp route_path("/health"), do: health_page()
+  defp route_path("/health/live"), do: health_live()
+  defp route_path("/health/ready"), do: health_ready()
+  defp route_path("/health/json"), do: health_json()
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -266,6 +273,7 @@ defmodule PureGopherAi.GeminiHandler do
     ## Server
     => /about About this server
     => /stats Server statistics
+    => /health Health check
 
     ---
     Powered by Elixir + Bumblebee
@@ -2068,6 +2076,43 @@ defmodule PureGopherAi.GeminiHandler do
       {num, _} -> num
       :error -> default
     end
+  end
+
+  # === Health Check ===
+
+  defp health_page do
+    success_response("""
+    # Health Check
+
+    PureGopherAI Health Status
+
+    #{HealthCheck.status_text()}
+
+    ## Endpoints
+    => /health/live Liveness probe
+    => /health/ready Readiness probe
+    => /health/json JSON status
+
+    => / Back to Home
+    """)
+  end
+
+  defp health_live do
+    case HealthCheck.live() do
+      :ok -> success_response("OK")
+      _ -> error_response(50, "FAIL")
+    end
+  end
+
+  defp health_ready do
+    case HealthCheck.ready() do
+      :ok -> success_response("OK")
+      {:error, reasons} -> error_response(50, "FAIL: #{inspect(reasons)}")
+    end
+  end
+
+  defp health_json do
+    "20 application/json\r\n#{HealthCheck.status_json()}"
   end
 
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"

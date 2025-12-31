@@ -30,6 +30,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Fortune
   alias PureGopherAi.LinkDirectory
   alias PureGopherAi.BulletinBoard
+  alias PureGopherAi.HealthCheck
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -210,6 +211,19 @@ defmodule PureGopherAi.GopherHandler do
   # Server stats/metrics
   defp route_selector("/stats", host, port, _network, _ip, _socket),
     do: stats_page(host, port)
+
+  # Health check routes
+  defp route_selector("/health", host, port, _network, _ip, _socket),
+    do: health_status(host, port)
+
+  defp route_selector("/health/live", _host, _port, _network, _ip, _socket),
+    do: health_live()
+
+  defp route_selector("/health/ready", _host, _port, _network, _ip, _socket),
+    do: health_ready()
+
+  defp route_selector("/health/json", _host, _port, _network, _ip, _socket),
+    do: health_json()
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -704,6 +718,7 @@ defmodule PureGopherAi.GopherHandler do
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
     0Server statistics\t/stats\t#{host}\t#{port}
+    0Health check\t/health\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     iTip: /summary/phlog/<path> for TL;DR summaries\t\t#{host}\t#{port}
     .
@@ -1433,6 +1448,30 @@ defmodule PureGopherAi.GopherHandler do
       host,
       port
     )
+  end
+
+  # === Health Check Functions ===
+
+  defp health_status(host, port) do
+    format_text_response(HealthCheck.status_text(), host, port)
+  end
+
+  defp health_live do
+    case HealthCheck.live() do
+      :ok -> "OK\r\n"
+      _ -> "FAIL\r\n"
+    end
+  end
+
+  defp health_ready do
+    case HealthCheck.ready() do
+      :ok -> "OK\r\n"
+      {:error, reasons} -> "FAIL: #{inspect(reasons)}\r\n"
+    end
+  end
+
+  defp health_json do
+    HealthCheck.status_json() <> "\r\n"
   end
 
   # === Phlog Functions ===

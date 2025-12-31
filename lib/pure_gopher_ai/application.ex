@@ -17,6 +17,9 @@ defmodule PureGopherAi.Application do
     finger_enabled = Application.get_env(:pure_gopher_ai, :finger_enabled, false)
     finger_port = Application.get_env(:pure_gopher_ai, :finger_port, 79)
 
+    # Record start time for uptime tracking
+    Application.put_env(:pure_gopher_ai, :start_time, System.system_time(:second))
+
     Logger.info("Starting PureGopherAI server...")
     Logger.info("Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
 
