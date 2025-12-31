@@ -221,20 +221,38 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 3.2 Phlog Support
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Low
 **Description:** Gopher blog with dated entries.
 
 **Implementation:**
-- [ ] Phlog directory structure (`phlog/YYYY/MM/DD-title.txt`)
-- [ ] Auto-generated index by date
-- [ ] RSS/Atom feed generation
-- [ ] `/phlog` selector
-- [ ] Pagination
+- [x] Phlog directory structure (`phlog/YYYY/MM/DD-title.txt`)
+- [x] Auto-generated index by date
+- [x] RSS/Atom feed generation (`/phlog/feed`)
+- [x] `/phlog` selector with pagination
+- [x] Browse by year (`/phlog/year/<YYYY>`)
+- [x] Browse by month (`/phlog/month/<YYYY>/<MM>`)
+- [x] Individual entries (`/phlog/entry/<path>`)
+- [x] Sample phlog content in `priv/phlog/`
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/phlog.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
+**Config options:**
+- `phlog_dir` - Phlog content directory (default: ~/.gopher/phlog)
+- `phlog_entries_per_page` - Entries per page (default: 10)
+
+**Selectors:**
+- `/phlog` - Main phlog index
+- `/phlog/page/<n>` - Paginated index
+- `/phlog/feed` - Atom feed
+- `/phlog/year/<YYYY>` - Entries by year
+- `/phlog/month/<YYYY>/<MM>` - Entries by month
+- `/phlog/entry/<path>` - Single entry
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/phlog.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (phlog routes)
+- `config/config.exs` (phlog options)
+- `config/dev.exs` (dev phlog dir)
+- `priv/phlog/*` (sample content)
 
 ---
 
@@ -355,6 +373,7 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | System Prompts / Personas | Complete | 27170b6 |
 | 2025-01-01 | Response Caching | Complete | 1b4767c |
 | 2025-01-01 | Metrics/Telemetry | Complete | (pending) |
+| 2025-12-31 | Phlog Support | Complete | (pending) |
 
 ---
 

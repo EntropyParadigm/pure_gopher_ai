@@ -1,0 +1,36 @@
+Understanding the Gopher Protocol
+
+Gopher is an Internet protocol designed for distributing, searching,
+and retrieving documents. It predates the World Wide Web and was
+developed at the University of Minnesota in 1991.
+
+Key Concepts:
+
+1. Selectors
+   A selector is like a URL path. When you connect to a Gopher server,
+   you send a selector string, and the server responds with content.
+
+2. Item Types
+   Each line in a Gopher menu has a type indicator:
+   - 0: Text file
+   - 1: Directory (menu)
+   - 7: Search query
+   - i: Info line (non-selectable)
+   - 3: Error
+
+3. Menu Format
+   Each menu line has the format:
+   <type><display>\t<selector>\t<host>\t<port>
+
+4. Termination
+   All Gopher responses end with a period on its own line: "."
+
+Why Gopher in 2025?
+
+- Simplicity: No JavaScript, no tracking, no cookies
+- Speed: Pure text is fast
+- Privacy: Works great over Tor
+- Retro computing: Connect from vintage machines
+- Focus on content: No ads, no distractions
+
+PureGopherAI brings modern AI to this classic protocol!

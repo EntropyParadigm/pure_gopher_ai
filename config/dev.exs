@@ -14,4 +14,7 @@ config :pure_gopher_ai,
   onion_address: System.get_env("ONION_ADDRESS"),
 
   # Use sample content from priv/gopher in dev
-  content_dir: System.get_env("CONTENT_DIR") || "priv/gopher"
+  content_dir: System.get_env("CONTENT_DIR") || "priv/gopher",
+
+  # Use sample phlog from priv/phlog in dev
+  phlog_dir: System.get_env("PHLOG_DIR") || "priv/phlog"

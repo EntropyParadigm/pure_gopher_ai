@@ -15,6 +15,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.ConversationStore
   alias PureGopherAi.ModelRegistry
   alias PureGopherAi.Telemetry
+  alias PureGopherAi.Phlog
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -167,6 +168,40 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/stats", host, port, _network, _ip, _socket),
     do: stats_page(host, port)
 
+  # Phlog (Gopher blog) routes
+  defp route_selector("/phlog", host, port, network, _ip, _socket),
+    do: phlog_index(host, port, network, 1)
+
+  defp route_selector("/phlog/", host, port, network, _ip, _socket),
+    do: phlog_index(host, port, network, 1)
+
+  defp route_selector("/phlog/page/" <> page_str, host, port, network, _ip, _socket) do
+    page = String.to_integer(page_str) rescue 1
+    phlog_index(host, port, network, page)
+  end
+
+  defp route_selector("/phlog/feed", host, port, network, _ip, _socket),
+    do: phlog_feed(host, port, network)
+
+  defp route_selector("/phlog/year/" <> year_str, host, port, _network, _ip, _socket) do
+    year = String.to_integer(year_str) rescue nil
+    if year, do: phlog_year(host, port, year), else: error_response("Invalid year")
+  end
+
+  defp route_selector("/phlog/month/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [year_str, month_str] ->
+        year = String.to_integer(year_str) rescue nil
+        month = String.to_integer(month_str) rescue nil
+        if year && month, do: phlog_month(host, port, year, month), else: error_response("Invalid date")
+      _ ->
+        error_response("Invalid date format")
+    end
+  end
+
+  defp route_selector("/phlog/entry/" <> entry_path, host, port, _network, _ip, _socket),
+    do: phlog_entry(host, port, entry_path)
+
   # Static content via gophermap
   defp route_selector("/files" <> rest, host, port, _network, _ip, _socket),
     do: serve_static(rest, host, port)
@@ -215,8 +250,11 @@ defmodule PureGopherAi.GopherHandler do
     1Browse AI Models\t/models\t#{host}\t#{port}
     1Browse AI Personas\t/personas\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
+    i=== Content ===\t\t#{host}\t#{port}
+    1Phlog (Blog)\t/phlog\t#{host}\t#{port}
+    #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
-    #{files_section}0About this server\t/about\t#{host}\t#{port}
+    0About this server\t/about\t#{host}\t#{port}
     0Server statistics\t/stats\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     iTip: /ask-<model> or /chat-<model> for specific models\t\t#{host}\t#{port}
@@ -947,6 +985,224 @@ defmodule PureGopherAi.GopherHandler do
       host,
       port
     )
+  end
+
+  # === Phlog Functions ===
+
+  # Phlog index page with pagination
+  defp phlog_index(host, port, network, page) do
+    phlog_dir = Phlog.content_dir()
+
+    if not File.dir?(phlog_dir) do
+      phlog_empty_page(host, port)
+    else
+      result = Phlog.list_entries(page)
+
+      if result.total_entries == 0 do
+        phlog_empty_page(host, port)
+      else
+        years = Phlog.list_years()
+
+        entry_lines =
+          result.entries
+          |> Enum.map(fn {date, title, path} ->
+            "0[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
+          end)
+          |> Enum.join("")
+
+        year_lines =
+          years
+          |> Enum.map(fn year ->
+            "1Browse #{year}\t/phlog/year/#{year}\t#{host}\t#{port}\r\n"
+          end)
+          |> Enum.join("")
+
+        prev_link =
+          if result.page > 1 do
+            "1← Previous Page\t/phlog/page/#{result.page - 1}\t#{host}\t#{port}\r\n"
+          else
+            ""
+          end
+
+        next_link =
+          if result.page < result.total_pages do
+            "1Next Page →\t/phlog/page/#{result.page + 1}\t#{host}\t#{port}\r\n"
+          else
+            ""
+          end
+
+        base_url = phlog_base_url(host, port, network)
+
+        """
+        i=== PureGopherAI Phlog ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iPage #{result.page} of #{result.total_pages} (#{result.total_entries} entries)\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Recent Entries ---\t\t#{host}\t#{port}
+        #{entry_lines}i\t\t#{host}\t#{port}
+        #{prev_link}#{next_link}i\t\t#{host}\t#{port}
+        i--- Browse by Year ---\t\t#{host}\t#{port}
+        #{year_lines}i\t\t#{host}\t#{port}
+        0Atom Feed\t/phlog/feed\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+      end
+    end
+  end
+
+  defp phlog_empty_page(host, port) do
+    """
+    i=== PureGopherAI Phlog ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iNo phlog entries yet.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTo add entries, create text files in:\t\t#{host}\t#{port}
+    i  #{Phlog.content_dir()}/YYYY/MM/DD-title.txt\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Phlog entries by year
+  defp phlog_year(host, port, year) do
+    entries = Phlog.entries_by_year(year)
+    months = Phlog.list_months(year)
+
+    if Enum.empty?(entries) do
+      """
+      i=== Phlog: #{year} ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iNo entries for #{year}.\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Back to Phlog\t/phlog\t#{host}\t#{port}
+      .
+      """
+    else
+      month_lines =
+        months
+        |> Enum.map(fn month ->
+          month_name = month_name(String.to_integer(month))
+          "1#{month_name} #{year}\t/phlog/month/#{year}/#{month}\t#{host}\t#{port}\r\n"
+        end)
+        |> Enum.join("")
+
+      entry_lines =
+        entries
+        |> Enum.take(20)
+        |> Enum.map(fn {date, title, path} ->
+          "0[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
+        end)
+        |> Enum.join("")
+
+      """
+      i=== Phlog: #{year} ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      i#{length(entries)} entries\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      i--- Browse by Month ---\t\t#{host}\t#{port}
+      #{month_lines}i\t\t#{host}\t#{port}
+      i--- All Entries ---\t\t#{host}\t#{port}
+      #{entry_lines}i\t\t#{host}\t#{port}
+      1Back to Phlog\t/phlog\t#{host}\t#{port}
+      .
+      """
+    end
+  end
+
+  # Phlog entries by month
+  defp phlog_month(host, port, year, month) do
+    entries = Phlog.entries_by_month(year, month)
+    month_name = month_name(month)
+
+    if Enum.empty?(entries) do
+      """
+      i=== Phlog: #{month_name} #{year} ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iNo entries for #{month_name} #{year}.\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Back to #{year}\t/phlog/year/#{year}\t#{host}\t#{port}
+      1Back to Phlog\t/phlog\t#{host}\t#{port}
+      .
+      """
+    else
+      entry_lines =
+        entries
+        |> Enum.map(fn {date, title, path} ->
+          "0[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
+        end)
+        |> Enum.join("")
+
+      """
+      i=== Phlog: #{month_name} #{year} ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      i#{length(entries)} entries\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      #{entry_lines}i\t\t#{host}\t#{port}
+      1Back to #{year}\t/phlog/year/#{year}\t#{host}\t#{port}
+      1Back to Phlog\t/phlog\t#{host}\t#{port}
+      .
+      """
+    end
+  end
+
+  # Phlog single entry
+  defp phlog_entry(host, port, entry_path) do
+    case Phlog.get_entry(entry_path) do
+      {:ok, entry} ->
+        format_text_response(
+          """
+          === #{entry.title} ===
+          Date: #{entry.date}
+
+          #{entry.content}
+          ---
+          """,
+          host,
+          port
+        )
+
+      {:error, :invalid_path} ->
+        error_response("Invalid phlog path")
+
+      {:error, _} ->
+        error_response("Phlog entry not found: #{entry_path}")
+    end
+  end
+
+  # Phlog Atom feed
+  defp phlog_feed(host, port, network) do
+    base_url = phlog_base_url(host, port, network)
+    feed = Phlog.generate_atom_feed(base_url, title: "PureGopherAI Phlog")
+    feed
+  end
+
+  defp phlog_base_url(host, port, network) do
+    case network do
+      :tor -> "gopher://#{host}"
+      :clearnet when port == 70 -> "gopher://#{host}"
+      :clearnet -> "gopher://#{host}:#{port}"
+    end
+  end
+
+  defp month_name(month) do
+    case month do
+      1 -> "January"
+      2 -> "February"
+      3 -> "March"
+      4 -> "April"
+      5 -> "May"
+      6 -> "June"
+      7 -> "July"
+      8 -> "August"
+      9 -> "September"
+      10 -> "October"
+      11 -> "November"
+      12 -> "December"
+      _ -> "Unknown"
+    end
   end
 
   # Format as Gopher text response (type 0)

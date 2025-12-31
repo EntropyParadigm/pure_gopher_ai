@@ -75,7 +75,11 @@ config :pure_gopher_ai,
   # Response caching
   cache_enabled: true,
   cache_ttl_ms: 3_600_000,       # Cache TTL (1 hour)
-  cache_max_entries: 1000        # Max cached responses
+  cache_max_entries: 1000,       # Max cached responses
+
+  # Phlog (Gopher blog)
+  phlog_dir: "~/.gopher/phlog",  # Phlog content directory
+  phlog_entries_per_page: 10    # Entries per page
 
 # Logging
 config :logger, :console,

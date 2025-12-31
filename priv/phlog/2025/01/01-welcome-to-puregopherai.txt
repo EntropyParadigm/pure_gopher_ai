@@ -1,0 +1,20 @@
+Welcome to PureGopherAI Phlog!
+
+This is the official phlog (Gopher blog) for the PureGopherAI server.
+
+PureGopherAI is a pure Elixir Gopher server with native AI inference
+powered by Bumblebee. It runs locally on your machine, supporting
+both clearnet and Tor hidden service connections.
+
+Key Features:
+- RFC 1436 compliant Gopher protocol
+- Native AI inference with GPT-2 (no external APIs)
+- Apple Silicon Metal GPU acceleration
+- Conversation memory for chat sessions
+- Multiple AI models and personas
+- Rate limiting and response caching
+- Tor hidden service support
+
+Stay tuned for more updates!
+
+-- The PureGopherAI Team
