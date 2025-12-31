@@ -21,6 +21,8 @@ defmodule PureGopherAi.GeminiHandler do
 
   alias PureGopherAi.RateLimiter
   alias PureGopherAi.Telemetry
+  alias PureGopherAi.Summarizer
+  alias PureGopherAi.GopherProxy
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -116,6 +118,27 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/phlog"), do: phlog_page()
   defp route_path("/phlog/" <> rest), do: phlog_entry(rest)
 
+  # AI Tools - Summarization
+  defp route_path("/summary/phlog/" <> path), do: handle_phlog_summary(path)
+  defp route_path("/summary/doc/" <> doc_id), do: handle_doc_summary(doc_id)
+
+  # AI Tools - Translation
+  defp route_path("/translate"), do: translate_page()
+  defp route_path("/translate/" <> rest), do: handle_translate(rest)
+
+  # AI Tools - Dynamic Content
+  defp route_path("/digest"), do: handle_digest()
+  defp route_path("/topics"), do: handle_topics()
+  defp route_path("/discover"), do: input_response("What topics interest you?")
+  defp route_path("/discover?" <> query), do: handle_discover(URI.decode(query))
+  defp route_path("/explain"), do: input_response("Enter a term to explain:")
+  defp route_path("/explain?" <> term), do: handle_explain(URI.decode(term))
+
+  # Gopher Proxy
+  defp route_path("/fetch"), do: input_response("Enter a Gopher URL (gopher://...):")
+  defp route_path("/fetch?" <> url), do: handle_fetch(URI.decode(url))
+  defp route_path("/fetch-summary?" <> url), do: handle_fetch_summary(URI.decode(url))
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -140,6 +163,14 @@ defmodule PureGopherAi.GeminiHandler do
 
     ## AI Services
     => /ask Ask AI a Question
+
+    ## AI Tools
+    => /digest Daily Digest
+    => /topics Topic Discovery
+    => /discover Content Recommendations
+    => /explain Explain a Term
+    => /translate Translation Service
+    => /fetch Gopher Proxy
 
     ## Documents
     => /docs Document Knowledge Base
@@ -328,6 +359,7 @@ defmodule PureGopherAi.GeminiHandler do
 
         #{entry.content}
 
+        => /summary/phlog/#{path} TL;DR Summary
         => /phlog Back to Phlog
         """)
 
@@ -335,6 +367,271 @@ defmodule PureGopherAi.GeminiHandler do
         error_response(51, "Phlog entry not found")
     end
   end
+
+  # === AI Tools: Summarization ===
+
+  defp handle_phlog_summary(path) do
+    case Summarizer.summarize_phlog(path) do
+      {:ok, result} ->
+        success_response("""
+        # TL;DR: #{result.title}
+
+        #{result.date}
+
+        ## Summary
+        #{result.summary}
+
+        => /phlog/#{path} Read Full Entry
+        => /phlog Back to Phlog
+        """)
+
+      {:error, _} ->
+        error_response(51, "Phlog entry not found: #{path}")
+    end
+  end
+
+  defp handle_doc_summary(doc_id) do
+    case Summarizer.summarize_document(doc_id) do
+      {:ok, result} ->
+        success_response("""
+        # Document Summary: #{result.filename}
+
+        ## Summary
+        #{result.summary}
+
+        => /docs/view/#{doc_id} View Full Document
+        => /docs Back to Documents
+        """)
+
+      {:error, _} ->
+        error_response(51, "Document not found: #{doc_id}")
+    end
+  end
+
+  # === AI Tools: Translation ===
+
+  defp translate_page do
+    languages = Summarizer.supported_languages()
+    |> Enum.map(fn {code, name} -> "* #{code} - #{name}" end)
+    |> Enum.join("\n")
+
+    success_response("""
+    # Translation Service
+
+    Translate content using AI.
+
+    ## Supported Languages
+    #{languages}
+
+    ## Usage
+    Translate phlog: /translate/<lang>/phlog/<path>
+    Translate document: /translate/<lang>/doc/<id>
+
+    ## Examples
+    => /translate/es/phlog/2025/01/01-hello Translate to Spanish
+    => /translate/ja/doc/abc123 Translate to Japanese
+
+    => / Back to Home
+    """)
+  end
+
+  defp handle_translate(rest) do
+    case String.split(rest, "/", parts: 3) do
+      [lang, "phlog", path] ->
+        handle_translate_phlog(lang, path)
+
+      [lang, "doc", doc_id] ->
+        handle_translate_doc(lang, doc_id)
+
+      _ ->
+        error_response(59, "Invalid translation path. Use /translate/<lang>/phlog/<path> or /translate/<lang>/doc/<id>")
+    end
+  end
+
+  defp handle_translate_phlog(lang, path) do
+    lang_name = Summarizer.language_name(lang)
+
+    case Summarizer.translate_phlog(path, lang) do
+      {:ok, result} ->
+        success_response("""
+        # Translation: #{result.title}
+
+        Original: English -> #{lang_name}
+
+        ## Translated Content
+        #{result.translated_content}
+
+        => /phlog/#{path} Original Entry
+        => /phlog Back to Phlog
+        """)
+
+      {:error, _} ->
+        error_response(51, "Phlog entry not found: #{path}")
+    end
+  end
+
+  defp handle_translate_doc(lang, doc_id) do
+    lang_name = Summarizer.language_name(lang)
+
+    case Summarizer.translate_document(doc_id, lang) do
+      {:ok, result} ->
+        success_response("""
+        # Translation: #{result.filename}
+
+        Original: English -> #{lang_name}
+
+        ## Translated Content
+        #{result.translated_content}
+
+        => /docs/view/#{doc_id} Original Document
+        => /docs Back to Documents
+        """)
+
+      {:error, _} ->
+        error_response(51, "Document not found: #{doc_id}")
+    end
+  end
+
+  # === AI Tools: Dynamic Content ===
+
+  defp handle_digest do
+    case Summarizer.daily_digest() do
+      {:ok, digest} ->
+        success_response("""
+        # Daily Digest
+
+        AI-generated summary of recent activity.
+
+        #{digest}
+
+        => /phlog Browse All Entries
+        => / Back to Home
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Failed to generate digest: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_topics do
+    case Summarizer.discover_topics() do
+      {:ok, topics} ->
+        success_response("""
+        # Topic Discovery
+
+        AI-identified themes from your content.
+
+        #{topics}
+
+        => /discover Get Recommendations
+        => / Back to Home
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Failed to discover topics: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_discover(interest) when byte_size(interest) > 0 do
+    interest = String.trim(interest)
+
+    case Summarizer.recommend(interest) do
+      {:ok, recommendations} ->
+        success_response("""
+        # Content Recommendations
+
+        Based on your interest: "#{interest}"
+
+        #{recommendations}
+
+        => /discover Try Another Interest
+        => / Back to Home
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Failed to get recommendations: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_discover(_), do: input_response("What topics interest you?")
+
+  defp handle_explain(term) when byte_size(term) > 0 do
+    term = String.trim(term)
+
+    case Summarizer.explain(term) do
+      {:ok, explanation} ->
+        success_response("""
+        # Explanation: #{term}
+
+        #{explanation}
+
+        => /explain Explain Another Term
+        => / Back to Home
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Failed to explain: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_explain(_), do: input_response("Enter a term to explain:")
+
+  # === Gopher Proxy ===
+
+  defp handle_fetch(url) when byte_size(url) > 0 do
+    url = String.trim(url)
+
+    case GopherProxy.fetch(url) do
+      {:ok, result} ->
+        success_response("""
+        # Fetched: #{result.host}
+
+        URL: #{result.url}
+        Selector: #{result.selector}
+        Size: #{result.size} bytes
+
+        ## Content
+        ```
+        #{result.content}
+        ```
+
+        => /fetch-summary?#{URI.encode(url)} Get AI Summary
+        => /fetch Fetch Another URL
+        => / Back to Home
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Fetch failed: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fetch(_), do: input_response("Enter a Gopher URL (gopher://...):")
+
+  defp handle_fetch_summary(url) when byte_size(url) > 0 do
+    url = String.trim(url)
+
+    case GopherProxy.fetch_and_summarize(url) do
+      {:ok, result} ->
+        success_response("""
+        # Fetched: #{result.host}
+
+        URL: #{result.url}
+        Size: #{result.size} bytes
+
+        ## AI Summary
+        #{result.summary}
+
+        => /fetch?#{URI.encode(url)} View Full Content
+        => /fetch Fetch Another URL
+        => / Back to Home
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Fetch failed: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fetch_summary(_), do: input_response("Enter a Gopher URL (gopher://...):")
 
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
