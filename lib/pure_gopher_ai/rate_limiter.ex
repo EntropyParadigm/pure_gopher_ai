@@ -34,14 +34,18 @@ defmodule PureGopherAi.RateLimiter do
   end
 
   def check(ip) when is_binary(ip) do
-    if banned?(ip) do
-      {:error, :banned}
-    else
-      if enabled?() do
+    cond do
+      banned?(ip) ->
+        {:error, :banned}
+
+      PureGopherAi.Blocklist.blocked?(ip) ->
+        {:error, :blocklisted}
+
+      enabled?() ->
         GenServer.call(__MODULE__, {:check, ip})
-      else
+
+      true ->
         {:ok, :unlimited}
-      end
     end
   end
 

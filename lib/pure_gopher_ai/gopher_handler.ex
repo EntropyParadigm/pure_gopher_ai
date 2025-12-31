@@ -74,6 +74,11 @@ defmodule PureGopherAi.GopherHandler do
         Logger.warning("Banned IP attempted access: #{format_ip(client_ip)}")
         response = banned_response()
         ThousandIsland.Socket.send(socket, response)
+
+      {:error, :blocklisted} ->
+        Logger.warning("Blocklisted IP attempted access: #{format_ip(client_ip)}")
+        response = blocklisted_response()
+        ThousandIsland.Socket.send(socket, response)
     end
 
     {:close, state}
@@ -1735,6 +1740,14 @@ defmodule PureGopherAi.GopherHandler do
   defp banned_response do
     """
     3Access denied. Your IP has been banned.\t\terror.host\t1
+    .
+    """
+  end
+
+  # Blocklisted IP response
+  defp blocklisted_response do
+    """
+    3Access denied. Your IP is on a public blocklist.\t\terror.host\t1
     .
     """
   end

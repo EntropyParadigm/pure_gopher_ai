@@ -83,7 +83,15 @@ config :pure_gopher_ai,
 
   # Admin interface (set ADMIN_TOKEN env var to enable)
   # Access via /admin/<token>/
-  admin_token: nil              # Set to a secure token to enable admin
+  admin_token: nil,             # Set to a secure token to enable admin
+
+  # External blocklist integration
+  blocklist_enabled: false,     # Enable external blocklist fetching
+  blocklist_refresh_ms: 3_600_000,  # Refresh interval (1 hour)
+  blocklist_file: "~/.gopher/blocklist.txt",  # Local blocklist file
+  blocklist_sources: [          # Remote blocklist sources
+    {"floodgap", "https://gopher.floodgap.com/gopher/blocklist.txt"}
+  ]
 
 # Logging
 config :logger, :console,

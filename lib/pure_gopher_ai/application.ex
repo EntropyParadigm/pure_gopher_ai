@@ -21,6 +21,9 @@ defmodule PureGopherAi.Application do
 
     # Base children: rate limiter, conversation store, AI engine, clearnet listener
     children = [
+      # External Blocklist (optional, for Tor abuse prevention)
+      PureGopherAi.Blocklist,
+
       # Rate Limiter
       PureGopherAi.RateLimiter,
 
