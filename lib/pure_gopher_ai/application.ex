@@ -49,6 +49,9 @@ defmodule PureGopherAi.Application do
       # Text Adventure
       PureGopherAi.Adventure,
 
+      # Feed Aggregator
+      PureGopherAi.FeedAggregator,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

@@ -25,6 +25,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Guestbook
   alias PureGopherAi.CodeAssistant
   alias PureGopherAi.Adventure
+  alias PureGopherAi.FeedAggregator
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -469,6 +470,23 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/adventure/load " <> code, host, port, _network, ip, _socket),
     do: handle_adventure_load(code, host, port, ip)
 
+  # === RSS/Atom Feed Aggregator ===
+
+  defp route_selector("/feeds", host, port, _network, _ip, _socket),
+    do: feeds_menu(host, port)
+
+  defp route_selector("/feeds/digest", host, port, _network, _ip, socket),
+    do: feeds_digest(host, port, socket)
+
+  defp route_selector("/feeds/opml", host, port, _network, _ip, _socket),
+    do: feeds_opml(host, port)
+
+  defp route_selector("/feeds/stats", host, port, _network, _ip, _socket),
+    do: feeds_stats(host, port)
+
+  defp route_selector("/feeds/" <> rest, host, port, _network, _ip, _socket),
+    do: handle_feed_route(rest, host, port)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -535,6 +553,7 @@ defmodule PureGopherAi.GopherHandler do
     7Search Content\t/search\t#{host}\t#{port}
     1Document Knowledge Base\t/docs\t#{host}\t#{port}
     1Phlog (Blog)\t/phlog\t#{host}\t#{port}
+    1RSS/Atom Feeds\t/feeds\t#{host}\t#{port}
     1ASCII Art Generator\t/art\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== Community ===\t\t#{host}\t#{port}
@@ -3368,6 +3387,204 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
     end
+  end
+
+  # === Feed Aggregator Functions ===
+
+  defp feeds_menu(host, port) do
+    feeds = FeedAggregator.list_feeds()
+
+    feed_lines = if length(feeds) > 0 do
+      feeds
+      |> Enum.map(fn {id, feed} ->
+        "1#{feed.name}\t/feeds/#{id}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+    else
+      "iNo feeds configured.\t\t#{host}\t#{port}\r\niAdd feeds in config.exs\t\t#{host}\t#{port}"
+    end
+
+    """
+    i=== RSS/Atom Feed Aggregator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSubscribed Feeds:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{feed_lines}
+    i\t\t#{host}\t#{port}
+    i=== Actions ===\t\t#{host}\t#{port}
+    0AI Digest\t/feeds/digest\t#{host}\t#{port}
+    0OPML Export\t/feeds/opml\t#{host}\t#{port}
+    0Feed Statistics\t/feeds/stats\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_feed_route(rest, host, port) do
+    case String.split(rest, "/", parts: 2) do
+      [feed_id] ->
+        # Show feed entries
+        feed_entries(feed_id, host, port)
+
+      [feed_id, "entry", entry_id] ->
+        # Show single entry
+        feed_entry(feed_id, entry_id, host, port)
+
+      [feed_id, "entry/" <> entry_id] ->
+        # Show single entry (alternate path)
+        feed_entry(feed_id, entry_id, host, port)
+
+      _ ->
+        error_response("Invalid feed path")
+    end
+  end
+
+  defp feed_entries(feed_id, host, port) do
+    case FeedAggregator.get_feed(feed_id) do
+      {:ok, feed} ->
+        {:ok, entries} = FeedAggregator.get_entries(feed_id, limit: 30)
+
+        entry_lines = if length(entries) > 0 do
+          entries
+          |> Enum.map(fn entry ->
+            date = if entry.published_at, do: Calendar.strftime(entry.published_at, "%Y-%m-%d"), else: ""
+            title = String.slice(entry.title || "Untitled", 0, 60)
+            "0[#{date}] #{title}\t/feeds/#{feed_id}/entry/#{entry.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        else
+          "iNo entries available.\t\t#{host}\t#{port}"
+        end
+
+        """
+        i=== #{feed.name} ===\t\t#{host}\t#{port}
+        i#{feed.url}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{entry_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Feeds\t/feeds\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Feed not found")
+    end
+  end
+
+  defp feed_entry(feed_id, entry_id, host, port) do
+    case FeedAggregator.get_entry(feed_id, entry_id) do
+      {:ok, entry} ->
+        date = if entry.published_at, do: Calendar.strftime(entry.published_at, "%Y-%m-%d %H:%M"), else: "Unknown date"
+        content = entry.content || entry.summary || "No content available."
+        # Truncate very long content
+        content = if String.length(content) > 3000, do: String.slice(content, 0, 3000) <> "...", else: content
+
+        format_text_response("""
+        === #{entry.title} ===
+
+        Date: #{date}
+        Link: #{entry.link}
+
+        #{content}
+        """, host, port) <>
+          "i\t\t#{host}\t#{port}\r\n" <>
+          "1Back to Feed\t/feeds/#{feed_id}\t#{host}\t#{port}\r\n" <>
+          "1All Feeds\t/feeds\t#{host}\t#{port}\r\n" <>
+          ".\r\n"
+
+      {:error, :not_found} ->
+        error_response("Entry not found")
+    end
+  end
+
+  defp feeds_digest(host, port, socket) do
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Feed Digest ===",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      case FeedAggregator.generate_digest() do
+        {:ok, digest} ->
+          lines = String.split(digest, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+
+        {:error, reason} ->
+          ThousandIsland.Socket.send(socket, "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n")
+      end
+
+      elapsed = System.monotonic_time(:millisecond) - start_time
+      footer = format_gopher_lines([
+        "",
+        "---",
+        "Generated in #{elapsed}ms"
+      ], host, port) <>
+        "i\t\t#{host}\t#{port}\r\n" <>
+        "1Back to Feeds\t/feeds\t#{host}\t#{port}\r\n"
+
+      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+      :streamed
+    else
+      case FeedAggregator.generate_digest() do
+        {:ok, digest} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+
+          format_text_response("""
+          === Feed Digest ===
+
+          #{digest}
+
+          ---
+          Generated in #{elapsed}ms
+          """, host, port) <>
+            "i\t\t#{host}\t#{port}\r\n" <>
+            "1Back to Feeds\t/feeds\t#{host}\t#{port}\r\n" <>
+            ".\r\n"
+
+        {:error, reason} ->
+          error_response("Failed to generate digest: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp feeds_opml(host, port) do
+    case FeedAggregator.export_opml() do
+      {:ok, opml} ->
+        format_text_response(opml, host, port) <>
+          "i\t\t#{host}\t#{port}\r\n" <>
+          "1Back to Feeds\t/feeds\t#{host}\t#{port}\r\n" <>
+          ".\r\n"
+    end
+  end
+
+  defp feeds_stats(host, port) do
+    stats = FeedAggregator.stats()
+
+    feed_lines = stats.feeds
+      |> Enum.map(fn feed ->
+        last = if feed.last_fetched, do: Calendar.strftime(feed.last_fetched, "%Y-%m-%d %H:%M"), else: "Never"
+        "i  #{feed.name}: #{feed.entries} entries (last: #{last})\t\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Feed Statistics ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTotal Feeds: #{stats.feed_count}\t\t#{host}\t#{port}
+    iTotal Entries: #{stats.entry_count}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i=== Per Feed ===\t\t#{host}\t#{port}
+    #{feed_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Feeds\t/feeds\t#{host}\t#{port}
+    .
+    """
   end
 
   # === Admin Functions ===

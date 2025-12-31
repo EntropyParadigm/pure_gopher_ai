@@ -26,6 +26,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.Guestbook
   alias PureGopherAi.CodeAssistant
   alias PureGopherAi.Adventure
+  alias PureGopherAi.FeedAggregator
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -171,6 +172,13 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/adventure/load"), do: input_response("Enter save code:")
   defp route_path("/adventure/load?" <> code), do: handle_adventure_load(URI.decode(code))
 
+  # Feed Aggregator
+  defp route_path("/feeds"), do: feeds_menu()
+  defp route_path("/feeds/digest"), do: feeds_digest()
+  defp route_path("/feeds/opml"), do: feeds_opml()
+  defp route_path("/feeds/stats"), do: feeds_stats()
+  defp route_path("/feeds/" <> rest), do: handle_feed_route(rest)
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -211,6 +219,7 @@ defmodule PureGopherAi.GeminiHandler do
 
     ## Content
     => /phlog Phlog (Blog)
+    => /feeds RSS/Atom Feeds
 
     ## Community
     => /guestbook Guestbook
@@ -1164,6 +1173,163 @@ defmodule PureGopherAi.GeminiHandler do
         => /adventure/new Start New Game
         """)
     end
+  end
+
+  # === Feed Aggregator ===
+
+  defp feeds_menu do
+    feeds = FeedAggregator.list_feeds()
+
+    feed_lines = if length(feeds) > 0 do
+      feeds
+      |> Enum.map(fn {id, feed} ->
+        "=> /feeds/#{id} #{feed.name}"
+      end)
+      |> Enum.join("\n")
+    else
+      "No feeds configured. Add feeds in config.exs"
+    end
+
+    success_response("""
+    # RSS/Atom Feed Aggregator
+
+    ## Subscribed Feeds
+    #{feed_lines}
+
+    ## Actions
+    => /feeds/digest AI Digest
+    => /feeds/opml OPML Export
+    => /feeds/stats Feed Statistics
+
+    => / Back to Home
+    """)
+  end
+
+  defp handle_feed_route(rest) do
+    case String.split(rest, "/", parts: 2) do
+      [feed_id] ->
+        feed_entries(feed_id)
+
+      [feed_id, "entry/" <> entry_id] ->
+        feed_entry(feed_id, entry_id)
+
+      _ ->
+        error_response(51, "Invalid feed path")
+    end
+  end
+
+  defp feed_entries(feed_id) do
+    case FeedAggregator.get_feed(feed_id) do
+      {:ok, feed} ->
+        {:ok, entries} = FeedAggregator.get_entries(feed_id, limit: 30)
+
+        entry_lines = if length(entries) > 0 do
+          entries
+          |> Enum.map(fn entry ->
+            date = if entry.published_at, do: Calendar.strftime(entry.published_at, "%Y-%m-%d"), else: ""
+            title = String.slice(entry.title || "Untitled", 0, 60)
+            "=> /feeds/#{feed_id}/entry/#{URI.encode(entry.id)} [#{date}] #{title}"
+          end)
+          |> Enum.join("\n")
+        else
+          "No entries available."
+        end
+
+        success_response("""
+        # #{feed.name}
+
+        #{feed.url}
+
+        ## Entries
+        #{entry_lines}
+
+        => /feeds Back to Feeds
+        """)
+
+      {:error, :not_found} ->
+        error_response(51, "Feed not found")
+    end
+  end
+
+  defp feed_entry(feed_id, entry_id) do
+    entry_id = URI.decode(entry_id)
+
+    case FeedAggregator.get_entry(feed_id, entry_id) do
+      {:ok, entry} ->
+        date = if entry.published_at, do: Calendar.strftime(entry.published_at, "%Y-%m-%d %H:%M"), else: "Unknown date"
+        content = entry.content || entry.summary || "No content available."
+        content = if String.length(content) > 3000, do: String.slice(content, 0, 3000) <> "...", else: content
+
+        success_response("""
+        # #{entry.title}
+
+        **Date:** #{date}
+        **Link:** #{entry.link}
+
+        ## Content
+        #{content}
+
+        => /feeds/#{feed_id} Back to Feed
+        => /feeds All Feeds
+        """)
+
+      {:error, :not_found} ->
+        error_response(51, "Entry not found")
+    end
+  end
+
+  defp feeds_digest do
+    case FeedAggregator.generate_digest() do
+      {:ok, digest} ->
+        success_response("""
+        # Feed Digest
+
+        #{digest}
+
+        => /feeds Back to Feeds
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Failed to generate digest: #{inspect(reason)}")
+    end
+  end
+
+  defp feeds_opml do
+    case FeedAggregator.export_opml() do
+      {:ok, opml} ->
+        success_response("""
+        # OPML Export
+
+        ```xml
+        #{opml}
+        ```
+
+        => /feeds Back to Feeds
+        """)
+    end
+  end
+
+  defp feeds_stats do
+    stats = FeedAggregator.stats()
+
+    feed_lines = stats.feeds
+      |> Enum.map(fn feed ->
+        last = if feed.last_fetched, do: Calendar.strftime(feed.last_fetched, "%Y-%m-%d %H:%M"), else: "Never"
+        "* #{feed.name}: #{feed.entries} entries (last: #{last})"
+      end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Feed Statistics
+
+    * Total Feeds: #{stats.feed_count}
+    * Total Entries: #{stats.entry_count}
+
+    ## Per Feed
+    #{feed_lines}
+
+    => /feeds Back to Feeds
+    """)
   end
 
   defp get_session_id do

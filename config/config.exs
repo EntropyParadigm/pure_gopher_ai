@@ -119,7 +119,16 @@ config :pure_gopher_ai,
 
   # Guestbook
   guestbook_max_entries: 1000,          # Maximum guestbook entries (oldest pruned)
-  data_dir: "~/.gopher/data"            # Persistent data directory
+  data_dir: "~/.gopher/data",           # Persistent data directory
+
+  # RSS/Atom Feed Aggregator
+  # List of {name, url} tuples for subscribed feeds
+  rss_feeds: [
+    # Example feeds (uncomment to enable):
+    # {"Hacker News", "https://hnrss.org/frontpage"},
+    # {"Lobsters", "https://lobste.rs/rss"},
+    # {"Elixir Blog", "https://elixir-lang.org/blog.atom"}
+  ]
 
 # Logging
 config :logger, :console,
