@@ -34,6 +34,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.InputSanitizer
   alias PureGopherAi.RequestValidator
   alias PureGopherAi.OutputSanitizer
+  alias PureGopherAi.Pastebin
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -229,6 +230,28 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/health/json", _host, _port, _network, _ip, _socket),
     do: health_json()
+
+  # Pastebin routes
+  defp route_selector("/paste", host, port, _network, _ip, _socket),
+    do: paste_menu(host, port)
+
+  defp route_selector("/paste/new", host, port, _network, _ip, _socket),
+    do: paste_new_prompt(host, port)
+
+  defp route_selector("/paste/new\t" <> content, host, port, _network, ip, _socket),
+    do: handle_paste_create(content, ip, host, port)
+
+  defp route_selector("/paste/new " <> content, host, port, _network, ip, _socket),
+    do: handle_paste_create(content, ip, host, port)
+
+  defp route_selector("/paste/recent", host, port, _network, _ip, _socket),
+    do: paste_recent(host, port)
+
+  defp route_selector("/paste/raw/" <> id, _host, _port, _network, _ip, _socket),
+    do: paste_raw(id)
+
+  defp route_selector("/paste/" <> id, host, port, _network, _ip, _socket),
+    do: paste_view(id, host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -4163,6 +4186,172 @@ defmodule PureGopherAi.GopherHandler do
       String.slice(text, 0, max_len - 3) <> "..."
     else
       text
+    end
+  end
+
+  # === Pastebin Functions ===
+
+  defp paste_menu(host, port) do
+    %{active_pastes: active, total_views: views} = Pastebin.stats()
+
+    """
+    i=== Pastebin ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iShare text snippets with the Gopher community.\t\t#{host}\t#{port}
+    iPastes expire after 1 week by default.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Create New Paste\t/paste/new\t#{host}\t#{port}
+    1Recent Pastes\t/paste/recent\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Stats ---\t\t#{host}\t#{port}
+    iActive pastes: #{active}\t\t#{host}\t#{port}
+    iTotal views: #{views}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Format ---\t\t#{host}\t#{port}
+    iTo create a paste, enter your text.\t\t#{host}\t#{port}
+    iOptional: Start with "title: Your Title" on first line.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp paste_new_prompt(host, port) do
+    """
+    i=== Create New Paste ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your text below.\t\t#{host}\t#{port}
+    iOptional: Start with "title: Your Title"\t\t#{host}\t#{port}
+    iMax size: #{div(Pastebin.max_size(), 1000)}KB\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_paste_create(content, ip, host, port) do
+    # Parse optional title from first line
+    {title, body} = case String.split(content, "\n", parts: 2) do
+      [first_line, rest] ->
+        case Regex.run(~r/^title:\s*(.+)$/i, String.trim(first_line)) do
+          [_, title] -> {title, rest}
+          nil -> {nil, content}
+        end
+      _ -> {nil, content}
+    end
+
+    opts = if title, do: [title: title], else: []
+
+    case Pastebin.create(body, ip, opts) do
+      {:ok, id} ->
+        """
+        i=== Paste Created! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iPaste ID: #{id}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        0View Paste\t/paste/#{id}\t#{host}\t#{port}
+        0Raw Text\t/paste/raw/#{id}\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iShare this link: gopher://#{host}:#{port}/0/paste/#{id}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Create Another\t/paste/new\t#{host}\t#{port}
+        1Back to Pastebin\t/paste\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :too_large} ->
+        error_response("Paste too large. Maximum size is #{div(Pastebin.max_size(), 1000)}KB.")
+
+      {:error, :empty_content} ->
+        error_response("Cannot create empty paste.")
+
+      {:error, reason} ->
+        error_response("Failed to create paste: #{inspect(reason)}")
+    end
+  end
+
+  defp paste_recent(host, port) do
+    case Pastebin.list_recent(20) do
+      {:ok, pastes} when pastes == [] ->
+        format_text_response("""
+        === Recent Pastes ===
+
+        No pastes yet. Be the first to create one!
+        """, host, port)
+
+      {:ok, pastes} ->
+        paste_lines = pastes
+          |> Enum.map(fn p ->
+            title = p.title || "Untitled"
+            created = String.slice(p.created_at, 0, 10)
+            "0[#{created}] #{title} (#{p.lines} lines, #{p.views} views)\t/paste/#{p.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Recent Pastes ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{paste_lines}
+        i\t\t#{host}\t#{port}
+        7Create New Paste\t/paste/new\t#{host}\t#{port}
+        1Back to Pastebin\t/paste\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        error_response("Failed to list pastes: #{inspect(reason)}")
+    end
+  end
+
+  defp paste_view(id, host, port) do
+    case Pastebin.get(id) do
+      {:ok, paste} ->
+        title = paste.title || "Untitled Paste"
+        created = String.slice(paste.created_at, 0, 19) |> String.replace("T", " ")
+        expires = String.slice(paste.expires_at, 0, 10)
+
+        format_text_response("""
+        === #{title} ===
+
+        ID: #{paste.id}
+        Syntax: #{paste.syntax}
+        Size: #{paste.size} bytes (#{paste.lines} lines)
+        Created: #{created}
+        Expires: #{expires}
+        Views: #{paste.views}
+
+        ========== Content ==========
+
+        #{paste.content}
+
+        =============================
+
+        Raw: gopher://#{host}:#{port}/0/paste/raw/#{id}
+        """, host, port)
+
+      {:error, :not_found} ->
+        error_response("Paste not found.")
+
+      {:error, :expired} ->
+        error_response("This paste has expired.")
+
+      {:error, reason} ->
+        error_response("Failed to get paste: #{inspect(reason)}")
+    end
+  end
+
+  defp paste_raw(id) do
+    case Pastebin.get_raw(id) do
+      {:ok, content} ->
+        # Return raw text as Type 0
+        content <> "\r\n"
+
+      {:error, :not_found} ->
+        "Error: Paste not found.\r\n"
+
+      {:error, :expired} ->
+        "Error: This paste has expired.\r\n"
+
+      {:error, _} ->
+        "Error: Failed to retrieve paste.\r\n"
     end
   end
 

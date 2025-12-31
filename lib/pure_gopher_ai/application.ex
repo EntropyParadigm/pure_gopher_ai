@@ -66,6 +66,9 @@ defmodule PureGopherAi.Application do
       # Bulletin Board
       PureGopherAi.BulletinBoard,
 
+      # Pastebin
+      PureGopherAi.Pastebin,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
