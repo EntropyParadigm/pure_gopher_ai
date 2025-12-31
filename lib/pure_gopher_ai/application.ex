@@ -12,6 +12,8 @@ defmodule PureGopherAi.Application do
     clearnet_port = Application.get_env(:pure_gopher_ai, :clearnet_port, 7070)
     tor_enabled = Application.get_env(:pure_gopher_ai, :tor_enabled, false)
     tor_port = Application.get_env(:pure_gopher_ai, :tor_port, 7071)
+    gemini_enabled = Application.get_env(:pure_gopher_ai, :gemini_enabled, false)
+    gemini_port = Application.get_env(:pure_gopher_ai, :gemini_port, 1965)
 
     Logger.info("Starting PureGopherAI server...")
     Logger.info("Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
@@ -82,6 +84,36 @@ defmodule PureGopherAi.Application do
         children
       end
 
+    # Optionally add Gemini listener (requires TLS certificates)
+    children =
+      if gemini_enabled do
+        cert_file = Application.get_env(:pure_gopher_ai, :gemini_cert_file)
+        key_file = Application.get_env(:pure_gopher_ai, :gemini_key_file)
+
+        if cert_file && key_file && File.exists?(Path.expand(cert_file)) && File.exists?(Path.expand(key_file)) do
+          gemini_child =
+            Supervisor.child_spec(
+              {ThousandIsland,
+               port: gemini_port,
+               transport_module: ThousandIsland.Transports.SSL,
+               transport_options: [
+                 certfile: Path.expand(cert_file),
+                 keyfile: Path.expand(key_file)
+               ],
+               handler_module: PureGopherAi.GeminiHandler},
+              id: :gemini_listener
+            )
+
+          children ++ [gemini_child]
+        else
+          Logger.warning("Gemini: Disabled - certificate files not found")
+          Logger.warning("Gemini: Set gemini_cert_file and gemini_key_file in config")
+          children
+        end
+      else
+        children
+      end
+
     opts = [strategy: :one_for_one, name: PureGopherAi.Supervisor]
 
     case Supervisor.start_link(children, opts) do
@@ -91,6 +123,15 @@ defmodule PureGopherAi.Application do
         if tor_enabled do
           Logger.info("Tor: Hidden service listener on 127.0.0.1:#{tor_port}")
           Logger.info("Tor: Configure torrc with: HiddenServicePort 70 127.0.0.1:#{tor_port}")
+        end
+
+        if gemini_enabled do
+          cert_file = Application.get_env(:pure_gopher_ai, :gemini_cert_file)
+          key_file = Application.get_env(:pure_gopher_ai, :gemini_key_file)
+
+          if cert_file && key_file && File.exists?(Path.expand(cert_file)) do
+            Logger.info("Gemini: Server listening on port #{gemini_port} (TLS)")
+          end
         end
 
         {:ok, pid}

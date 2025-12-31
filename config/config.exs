@@ -107,7 +107,15 @@ config :pure_gopher_ai,
   rag_chunk_overlap: 50,                # Overlap between chunks
   rag_poll_interval: 30_000,            # File watcher poll interval (30s)
   rag_embeddings_enabled: true,         # Enable vector embeddings
-  rag_embedding_model: "sentence-transformers/all-MiniLM-L6-v2"  # Embedding model
+  rag_embedding_model: "sentence-transformers/all-MiniLM-L6-v2",  # Embedding model
+
+  # Gemini protocol support (gemini://)
+  # Requires TLS certificates - generate with:
+  # openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+  gemini_enabled: false,                # Enable Gemini server
+  gemini_port: 1965,                    # Standard Gemini port
+  gemini_cert_file: "~/.gopher/gemini/cert.pem",  # TLS certificate
+  gemini_key_file: "~/.gopher/gemini/key.pem"     # TLS private key
 
 # Logging
 config :logger, :console,
