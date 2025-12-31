@@ -24,6 +24,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.Summarizer
   alias PureGopherAi.GopherProxy
   alias PureGopherAi.Guestbook
+  alias PureGopherAi.CodeAssistant
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -146,6 +147,16 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/guestbook/sign"), do: input_response("Enter: Name | Your message")
   defp route_path("/guestbook/sign?" <> input), do: handle_guestbook_sign(URI.decode(input))
 
+  # Code Assistant
+  defp route_path("/code"), do: code_menu()
+  defp route_path("/code/languages"), do: code_languages()
+  defp route_path("/code/generate"), do: input_response("Enter: language | description")
+  defp route_path("/code/generate?" <> input), do: handle_code_generate(URI.decode(input))
+  defp route_path("/code/explain"), do: input_response("Paste code to explain:")
+  defp route_path("/code/explain?" <> input), do: handle_code_explain(URI.decode(input))
+  defp route_path("/code/review"), do: input_response("Paste code to review:")
+  defp route_path("/code/review?" <> input), do: handle_code_review(URI.decode(input))
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -172,6 +183,7 @@ defmodule PureGopherAi.GeminiHandler do
     => /ask Ask AI a Question
 
     ## AI Tools
+    => /code Code Assistant
     => /digest Daily Digest
     => /topics Topic Discovery
     => /discover Content Recommendations
@@ -739,6 +751,123 @@ defmodule PureGopherAi.GeminiHandler do
 
       _ ->
         error_response(59, "Invalid format. Use: Name | Your message")
+    end
+  end
+
+  # === Code Assistant ===
+
+  defp code_menu do
+    langs = CodeAssistant.supported_languages()
+      |> Enum.take(10)
+      |> Enum.map(fn {code, name} -> "* #{code} - #{name}" end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Code Assistant
+
+    AI-powered code generation, explanation, and review.
+
+    ## Services
+    => /code/generate Generate Code
+    => /code/explain Explain Code
+    => /code/review Review Code
+
+    ## Supported Languages (showing first 10)
+    #{langs}
+
+    => /code/languages View All Languages
+
+    ## Usage
+    Generate: language | description
+    Example: python | fibonacci function
+
+    => / Back to Home
+    """)
+  end
+
+  defp code_languages do
+    langs = CodeAssistant.supported_languages()
+      |> Enum.map(fn {code, name} -> "* #{code} - #{name}" end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Supported Languages
+
+    #{langs}
+
+    => /code Back to Code Assistant
+    """)
+  end
+
+  defp handle_code_generate(input) do
+    input = String.trim(input)
+
+    case String.split(input, "|", parts: 2) do
+      [language, description] ->
+        language = String.trim(language) |> String.downcase()
+        description = String.trim(description)
+        lang_name = CodeAssistant.language_name(language)
+
+        case CodeAssistant.generate(language, description) do
+          {:ok, code} ->
+            success_response("""
+            # Generated #{lang_name} Code
+
+            **Task:** #{description}
+
+            ## Code
+            ```#{language}
+            #{code}
+            ```
+
+            => /code/generate Generate More Code
+            => /code Back to Code Assistant
+            """)
+
+          {:error, reason} ->
+            error_response(42, "Code generation failed: #{inspect(reason)}")
+        end
+
+      _ ->
+        error_response(59, "Invalid format. Use: language | description")
+    end
+  end
+
+  defp handle_code_explain(code) do
+    code = String.trim(code)
+
+    case CodeAssistant.explain(code) do
+      {:ok, explanation} ->
+        success_response("""
+        # Code Explanation
+
+        #{explanation}
+
+        => /code/explain Explain More Code
+        => /code Back to Code Assistant
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Code explanation failed: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_code_review(code) do
+    code = String.trim(code)
+
+    case CodeAssistant.review(code) do
+      {:ok, review} ->
+        success_response("""
+        # Code Review
+
+        #{review}
+
+        => /code/review Review More Code
+        => /code Back to Code Assistant
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Code review failed: #{inspect(reason)}")
     end
   end
 

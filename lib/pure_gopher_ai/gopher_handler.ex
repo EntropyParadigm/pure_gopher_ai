@@ -23,6 +23,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Summarizer
   alias PureGopherAi.GopherProxy
   alias PureGopherAi.Guestbook
+  alias PureGopherAi.CodeAssistant
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -391,6 +392,41 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/guestbook/sign " <> input, host, port, _network, ip, _socket),
     do: handle_guestbook_sign(input, host, port, ip)
 
+  # === Code Assistant ===
+
+  defp route_selector("/code", host, port, _network, _ip, _socket),
+    do: code_menu(host, port)
+
+  defp route_selector("/code/languages", host, port, _network, _ip, _socket),
+    do: code_languages(host, port)
+
+  defp route_selector("/code/generate", host, port, _network, _ip, _socket),
+    do: code_generate_prompt(host, port)
+
+  defp route_selector("/code/generate\t" <> input, host, port, _network, _ip, socket),
+    do: handle_code_generate(input, host, port, socket)
+
+  defp route_selector("/code/generate " <> input, host, port, _network, _ip, socket),
+    do: handle_code_generate(input, host, port, socket)
+
+  defp route_selector("/code/explain", host, port, _network, _ip, _socket),
+    do: code_explain_prompt(host, port)
+
+  defp route_selector("/code/explain\t" <> input, host, port, _network, _ip, socket),
+    do: handle_code_explain(input, host, port, socket)
+
+  defp route_selector("/code/explain " <> input, host, port, _network, _ip, socket),
+    do: handle_code_explain(input, host, port, socket)
+
+  defp route_selector("/code/review", host, port, _network, _ip, _socket),
+    do: code_review_prompt(host, port)
+
+  defp route_selector("/code/review\t" <> input, host, port, _network, _ip, socket),
+    do: handle_code_review(input, host, port, socket)
+
+  defp route_selector("/code/review " <> input, host, port, _network, _ip, socket),
+    do: handle_code_review(input, host, port, socket)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -445,6 +481,7 @@ defmodule PureGopherAi.GopherHandler do
     1Browse AI Personas\t/personas\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== AI Tools ===\t\t#{host}\t#{port}
+    1Code Assistant\t/code\t#{host}\t#{port}
     0Daily Digest\t/digest\t#{host}\t#{port}
     0Topic Discovery\t/topics\t#{host}\t#{port}
     7Content Recommendations\t/discover\t#{host}\t#{port}
@@ -2607,6 +2644,245 @@ defmodule PureGopherAi.GopherHandler do
         => /guestbook/sign Try Again
         => /guestbook View Guestbook
         """, host, port)
+    end
+  end
+
+  # === Code Assistant Functions ===
+
+  defp code_menu(host, port) do
+    """
+    i=== Code Assistant ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAI-powered code generation, explanation, and review.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Services ---\t\t#{host}\t#{port}
+    7Generate Code\t/code/generate\t#{host}\t#{port}
+    7Explain Code\t/code/explain\t#{host}\t#{port}
+    7Review Code\t/code/review\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Info ---\t\t#{host}\t#{port}
+    1Supported Languages\t/code/languages\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Usage ---\t\t#{host}\t#{port}
+    iGenerate: <language> | <description>\t\t#{host}\t#{port}
+    iExample: python | fibonacci function\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_languages(host, port) do
+    langs = CodeAssistant.supported_languages()
+      |> Enum.map(fn {code, name} -> "i  #{code} - #{name}\t\t#{host}\t#{port}" end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Supported Languages ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{langs}
+    i\t\t#{host}\t#{port}
+    1Back to Code Assistant\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_generate_prompt(host, port) do
+    """
+    i=== Generate Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: <language> | <description>\t\t#{host}\t#{port}
+    iExample: python | function to calculate fibonacci numbers\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter language and description:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_code_generate(input, host, port, socket) do
+    input = String.trim(input)
+    start_time = System.monotonic_time(:millisecond)
+
+    case String.split(input, "|", parts: 2) do
+      [language, description] ->
+        language = String.trim(language) |> String.downcase()
+        description = String.trim(description)
+        lang_name = CodeAssistant.language_name(language)
+
+        if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+          header = format_gopher_lines([
+            "=== Generated #{lang_name} Code ===",
+            "",
+            "Task: #{description}",
+            "",
+            "Code:"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, header)
+
+          CodeAssistant.generate_stream(language, description, fn chunk ->
+            if String.length(chunk) > 0 do
+              lines = String.split(chunk, "\n", trim: false)
+              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+              ThousandIsland.Socket.send(socket, Enum.join(formatted))
+            end
+          end)
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Generated in #{elapsed}ms"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+        else
+          case CodeAssistant.generate(language, description) do
+            {:ok, code} ->
+              elapsed = System.monotonic_time(:millisecond) - start_time
+              format_text_response("""
+              === Generated #{lang_name} Code ===
+
+              Task: #{description}
+
+              Code:
+              #{code}
+
+              ---
+              Generated in #{elapsed}ms
+              """, host, port)
+
+            {:error, reason} ->
+              error_response("Code generation failed: #{inspect(reason)}")
+          end
+        end
+
+      _ ->
+        format_text_response("""
+        === Invalid Format ===
+
+        Please use: <language> | <description>
+        Example: python | function to sort a list
+
+        => /code/generate Try Again
+        => /code/languages View Supported Languages
+        """, host, port)
+    end
+  end
+
+  defp code_explain_prompt(host, port) do
+    """
+    i=== Explain Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste the code you want explained:\t\t#{host}\t#{port}
+    i(Multi-line code works best with Type 7 input)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter code:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_code_explain(input, host, port, socket) do
+    code = String.trim(input)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Code Explanation ===",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      CodeAssistant.explain_stream(code, fn chunk ->
+        if String.length(chunk) > 0 do
+          lines = String.split(chunk, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+        end
+      end)
+
+      elapsed = System.monotonic_time(:millisecond) - start_time
+      footer = format_gopher_lines([
+        "",
+        "---",
+        "Explained in #{elapsed}ms"
+      ], host, port)
+      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+      :streamed
+    else
+      case CodeAssistant.explain(code) do
+        {:ok, explanation} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Code Explanation ===
+
+          #{explanation}
+
+          ---
+          Explained in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Code explanation failed: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp code_review_prompt(host, port) do
+    """
+    i=== Review Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste the code you want reviewed:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter code:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_code_review(input, host, port, socket) do
+    code = String.trim(input)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Code Review ===",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      CodeAssistant.review_stream(code, fn chunk ->
+        if String.length(chunk) > 0 do
+          lines = String.split(chunk, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+        end
+      end)
+
+      elapsed = System.monotonic_time(:millisecond) - start_time
+      footer = format_gopher_lines([
+        "",
+        "---",
+        "Reviewed in #{elapsed}ms"
+      ], host, port)
+      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+      :streamed
+    else
+      case CodeAssistant.review(code) do
+        {:ok, review} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Code Review ===
+
+          #{review}
+
+          ---
+          Reviewed in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Code review failed: #{inspect(reason)}")
+      end
     end
   end
 
