@@ -67,9 +67,69 @@ mix deps.get
 # Run (first run downloads AI model ~500MB)
 iex -S mix
 
-# Test
+# Test with netcat
 echo "" | nc localhost 7070
 echo "/ask What is Elixir?" | nc localhost 7070
+```
+
+## Connecting with Gopher Clients
+
+### Clearnet (port 7070)
+
+```bash
+# Lynx (text browser)
+lynx gopher://localhost:7070/
+
+# Bombadillo
+bombadillo gopher://localhost:7070
+
+# sacc
+sacc localhost 7070
+
+# cgo
+cgo -h localhost -p 7070
+
+# gopher command (if available)
+gopher -p 7070 localhost
+
+# curl (basic test)
+curl gopher://localhost:7070/
+curl gopher://localhost:7070/0/ask%20What%20is%20Elixir
+```
+
+### Tor (.onion on port 70)
+
+```bash
+# Lynx via torsocks
+torsocks lynx gopher://abc123.onion/
+
+# Bombadillo with Tor proxy
+bombadillo gopher://abc123.onion
+
+# sacc via torsocks
+torsocks sacc abc123.onion 70
+
+# netcat via torsocks
+torsocks sh -c 'echo "" | nc abc123.onion 70'
+torsocks sh -c 'echo "/ask Hello" | nc abc123.onion 70'
+```
+
+**Note:** Tor connections use standard port 70, so most clients work without port specification.
+
+### Using Standard Port 70 (Clearnet)
+
+If you want clearnet clients to connect on port 70 without specifying a port:
+
+```bash
+# Option 1: setcap (recommended - no root at runtime)
+sudo setcap 'cap_net_bind_service=+ep' $(which erl)
+# Then update config: clearnet_port: 70
+
+# Option 2: iptables redirect
+sudo iptables -t nat -A PREROUTING -p tcp --dport 70 -j REDIRECT --to-port 7070
+
+# Option 3: socat proxy
+socat TCP-LISTEN:70,fork,reuseaddr TCP:localhost:7070
 ```
 
 ## Tor Hidden Service Setup

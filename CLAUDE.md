@@ -161,13 +161,52 @@ iex -S mix
 
 # Production
 MIX_ENV=prod mix run --no-halt
+```
 
-# Test clearnet
+## Client Connections
+
+### Clearnet (port 7070)
+```bash
+# Lynx
+lynx gopher://localhost:7070/
+
+# Bombadillo
+bombadillo gopher://localhost:7070
+
+# sacc
+sacc localhost 7070
+
+# curl
+curl gopher://localhost:7070/
+curl gopher://localhost:7070/0/ask%20What%20is%20Elixir
+
+# netcat
 echo "" | nc localhost 7070
 echo "/ask Hello" | nc localhost 7070
+```
 
-# Test Tor
-torsocks nc <onion-address>.onion 70
+### Tor (port 70)
+```bash
+# Lynx via torsocks
+torsocks lynx gopher://<onion>.onion/
+
+# sacc via torsocks
+torsocks sacc <onion>.onion 70
+
+# netcat via torsocks
+torsocks sh -c 'echo "" | nc <onion>.onion 70'
+```
+
+### Port 70 on Clearnet (optional)
+```bash
+# setcap (no root at runtime)
+sudo setcap 'cap_net_bind_service=+ep' $(which erl)
+
+# iptables redirect
+sudo iptables -t nat -A PREROUTING -p tcp --dport 70 -j REDIRECT --to-port 7070
+
+# socat proxy
+socat TCP-LISTEN:70,fork,reuseaddr TCP:localhost:7070
 ```
 
 ## Dependencies
