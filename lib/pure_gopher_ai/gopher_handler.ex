@@ -32,6 +32,8 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.BulletinBoard
   alias PureGopherAi.HealthCheck
   alias PureGopherAi.InputSanitizer
+  alias PureGopherAi.RequestValidator
+  alias PureGopherAi.OutputSanitizer
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -80,6 +82,8 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :rate_limited, retry_after} ->
         Logger.warning("Rate limited: #{format_ip(client_ip)}, retry after #{retry_after}ms")
+        # Record violation for abuse detection (may trigger auto-ban)
+        RateLimiter.record_violation(client_ip)
         response = rate_limit_response(retry_after)
         ThousandIsland.Socket.send(socket, response)
 
@@ -1220,33 +1224,61 @@ defmodule PureGopherAi.GopherHandler do
     :streamed
   end
 
-  # Handle AI query with streaming support
+  # Handle AI query with streaming support and security checks
   defp handle_ask(query, host, port, socket) when byte_size(query) > 0 do
-    Logger.info("AI Query: #{query}")
-    start_time = System.monotonic_time(:millisecond)
+    # Validate and sanitize the query
+    case RequestValidator.validate_query(query) do
+      {:ok, _} ->
+        case InputSanitizer.sanitize_prompt(query) do
+          {:ok, sanitized_query} ->
+            Logger.info("AI Query: #{sanitized_query}")
+            start_time = System.monotonic_time(:millisecond)
 
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      # Stream response to socket
-      stream_ai_response(socket, query, nil, host, port, start_time)
-    else
-      # Non-streaming fallback
-      response = PureGopherAi.AiEngine.generate(query)
-      elapsed = System.monotonic_time(:millisecond) - start_time
-      Logger.info("AI Response generated in #{elapsed}ms")
+            if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+              # Stream response to socket
+              stream_ai_response(socket, sanitized_query, nil, host, port, start_time)
+            else
+              # Non-streaming fallback
+              response = PureGopherAi.AiEngine.generate(sanitized_query)
+              # Sanitize output for potential sensitive data
+              safe_response = OutputSanitizer.sanitize(response)
+              elapsed = System.monotonic_time(:millisecond) - start_time
+              Logger.info("AI Response generated in #{elapsed}ms")
 
-      format_text_response(
-        """
-        Query: #{query}
+              format_text_response(
+                """
+                Query: #{sanitized_query}
 
-        Response:
-        #{response}
+                Response:
+                #{safe_response}
 
-        ---
-        Generated in #{elapsed}ms using GPU acceleration
-        """,
-        host,
-        port
-      )
+                ---
+                Generated in #{elapsed}ms using GPU acceleration
+                """,
+                host,
+                port
+              )
+            end
+
+          {:blocked, reason} ->
+            Logger.warning("Blocked AI query (injection attempt): #{String.slice(query, 0..50)}")
+            format_text_response(
+              """
+              Query Blocked
+
+              Your query was rejected for security reasons.
+              Reason: #{reason}
+
+              Please rephrase your question without special instructions.
+              """,
+              host,
+              port
+            )
+        end
+
+      {:error, reason} ->
+        Logger.warning("Invalid AI query: #{reason}")
+        error_response("Invalid query: #{reason}")
     end
   end
 
@@ -1263,49 +1295,77 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  # Handle chat query with conversation memory and streaming support
+  # Handle chat query with conversation memory, streaming support, and security checks
   defp handle_chat(query, host, port, client_ip, socket) when byte_size(query) > 0 do
-    session_id = ConversationStore.get_session_id(client_ip)
-    Logger.info("Chat query from session #{session_id}: #{query}")
+    # Validate and sanitize the query
+    case RequestValidator.validate_query(query) do
+      {:ok, _} ->
+        case InputSanitizer.sanitize_prompt(query) do
+          {:ok, sanitized_query} ->
+            session_id = ConversationStore.get_session_id(client_ip)
+            Logger.info("Chat query from session #{session_id}: #{sanitized_query}")
 
-    # Get existing conversation context
-    context = ConversationStore.get_context(session_id)
+            # Get existing conversation context
+            context = ConversationStore.get_context(session_id)
 
-    # Add user message to history
-    ConversationStore.add_message(session_id, :user, query)
+            # Add user message to history
+            ConversationStore.add_message(session_id, :user, sanitized_query)
 
-    start_time = System.monotonic_time(:millisecond)
+            start_time = System.monotonic_time(:millisecond)
 
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      # Stream response to socket with chat context
-      stream_chat_response(socket, query, context, session_id, host, port, start_time)
-    else
-      # Non-streaming fallback
-      response = PureGopherAi.AiEngine.generate(query, context)
-      elapsed = System.monotonic_time(:millisecond) - start_time
+            if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+              # Stream response to socket with chat context
+              stream_chat_response(socket, sanitized_query, context, session_id, host, port, start_time)
+            else
+              # Non-streaming fallback
+              response = PureGopherAi.AiEngine.generate(sanitized_query, context)
+              # Sanitize output for potential sensitive data
+              safe_response = OutputSanitizer.sanitize(response)
+              elapsed = System.monotonic_time(:millisecond) - start_time
 
-      # Add assistant response to history
-      ConversationStore.add_message(session_id, :assistant, response)
+              # Add assistant response to history
+              ConversationStore.add_message(session_id, :assistant, safe_response)
 
-      # Get updated history for display
-      history = ConversationStore.get_history(session_id)
-      history_count = length(history)
+              # Get updated history for display
+              history = ConversationStore.get_history(session_id)
+              history_count = length(history)
 
-      Logger.info("Chat response generated in #{elapsed}ms, history: #{history_count} messages")
+              Logger.info("Chat response generated in #{elapsed}ms, history: #{history_count} messages")
 
-      format_text_response(
-        """
-        You: #{query}
+              format_text_response(
+                """
+                You: #{sanitized_query}
 
-        AI: #{response}
+                AI: #{safe_response}
 
-        ---
-        Session: #{session_id} | Messages: #{history_count}
-        Generated in #{elapsed}ms
-        """,
-        host,
-        port
-      )
+                ---
+                Session: #{session_id} | Messages: #{history_count}
+                Generated in #{elapsed}ms
+                """,
+                host,
+                port
+              )
+            end
+
+          {:blocked, reason} ->
+            Logger.warning("Blocked chat message (injection attempt): #{String.slice(query, 0..50)}")
+            format_text_response(
+              """
+              Message Blocked
+
+              Your message was rejected for security reasons.
+              Reason: #{reason}
+
+              Please rephrase your message without special instructions.
+              """,
+              host,
+              port
+            )
+        end
+
+      {:error, reason} ->
+        Logger.warning("Invalid chat query: #{reason}")
+        error_response("Invalid message: #{reason}")
     end
   end
 
