@@ -87,19 +87,24 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 1.4 Streaming Responses
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Stream AI output as it generates for better UX with slow models.
 
 **Implementation:**
-- [ ] Enable Bumblebee streaming mode
-- [ ] Chunk responses over TCP
-- [ ] Handle client disconnection gracefully
-- [ ] Fallback for non-streaming clients
+- [x] Enable Bumblebee streaming mode (`stream: true`, `stream_done: true`)
+- [x] Chunk responses over TCP as tokens are generated
+- [x] Add `generate_stream/3` function with callback for real-time output
+- [x] Fallback for non-streaming mode (configurable via `streaming_enabled`)
+- [x] Collect streamed chunks for conversation history storage
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/ai_engine.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
+**Config options:**
+- `streaming_enabled` - Enable/disable streaming (default: true)
+
+**Files modified:**
+- `lib/pure_gopher_ai/ai_engine.ex` (streaming support)
+- `lib/pure_gopher_ai/gopher_handler.ex` (socket streaming)
+- `config/config.exs` (streaming_enabled option)
 
 ---
 
@@ -306,7 +311,8 @@ This document tracks the implementation status of all planned features.
 |------|---------|--------|--------|
 | 2025-01-01 | gophermap Support | Complete | 4d9a795 |
 | 2025-01-01 | Rate Limiting | Complete | (pending) |
-| 2025-01-01 | Conversation Memory | Complete | (pending) |
+| 2025-01-01 | Conversation Memory | Complete | c250c19 |
+| 2025-01-01 | Streaming Responses | Complete | (pending) |
 
 ---
 

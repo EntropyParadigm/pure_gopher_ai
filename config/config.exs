@@ -43,7 +43,10 @@ config :pure_gopher_ai,
 
   # Conversation memory (for /chat)
   conversation_max_messages: 10,    # Max messages per session
-  conversation_ttl_ms: 3_600_000    # Session TTL (1 hour)
+  conversation_ttl_ms: 3_600_000,   # Session TTL (1 hour)
+
+  # Streaming AI responses
+  streaming_enabled: true           # Stream AI output as it generates
 
 # Logging
 config :logger, :console,
