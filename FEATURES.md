@@ -1054,6 +1054,7 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Phlog Comments | Complete | (pending) |
 | 2025-12-31 | User Profiles / Homepages | Complete | (pending) |
 | 2025-12-31 | Calendar / Events | Complete | (pending) |
+| 2025-12-31 | URL Shortener | Complete | (pending) |
 
 ---
 
@@ -1221,6 +1222,37 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 **Files created/modified:**
 - `lib/pure_gopher_ai/calendar.ex` (new)
 - `lib/pure_gopher_ai/gopher_handler.ex` (calendar routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 9.6 URL Shortener
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Simple URL shortener for sharing links.
+
+**Implementation:**
+- [x] Create `UrlShortener` GenServer with DETS persistent storage
+- [x] `/short` - URL shortener menu with stats
+- [x] `/short/create` - Create short URL (Type 7 input)
+- [x] `/short/recent` - List recent short URLs
+- [x] `/short/info/<code>` - View link info and stats
+- [x] `/short/<code>` - Redirect to original URL
+- [x] Support for http, https, gopher, gemini URLs
+- [x] Click tracking
+- [x] Rate limiting (1 min cooldown per IP)
+- [x] 6-character short codes
+
+**Selectors:**
+- `/short` - URL shortener menu
+- `/short/create` - Create short URL
+- `/short/recent` - Recent short URLs
+- `/short/info/<code>` - Link info
+- `/short/<code>` - Redirect
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/url_shortener.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (short routes)
 - `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---

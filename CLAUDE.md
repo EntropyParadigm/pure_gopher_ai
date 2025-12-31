@@ -135,6 +135,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/phlog_comments.ex` | Phlog comment system |
 | `lib/pure_gopher_ai/user_profiles.ex` | User profile/homepage system |
 | `lib/pure_gopher_ai/calendar.ex` | Community event calendar |
+| `lib/pure_gopher_ai/url_shortener.ex` | URL shortener service |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -226,6 +227,10 @@ end
 | `/calendar/upcoming` | Upcoming events |
 | `/calendar/month/YYYY/MM` | View month |
 | `/calendar/event/<id>` | View event |
+| `/short` | URL shortener menu |
+| `/short/create` | Create short URL |
+| `/short/recent` | Recent short URLs |
+| `/short/<code>` | Redirect to URL |
 
 ### Response Format
 ```

@@ -39,6 +39,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.PhlogComments
   alias PureGopherAi.UserProfiles
   alias PureGopherAi.Calendar
+  alias PureGopherAi.UrlShortener
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -355,6 +356,28 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/calendar/event/" <> id, host, port, _network, _ip, _socket),
     do: calendar_event(id, host, port)
+
+  # URL Shortener
+  defp route_selector("/short", host, port, _network, _ip, _socket),
+    do: short_menu(host, port)
+
+  defp route_selector("/short/create", host, port, _network, _ip, _socket),
+    do: short_create_prompt(host, port)
+
+  defp route_selector("/short/create\t" <> url, host, port, _network, ip, _socket),
+    do: handle_short_create(url, ip, host, port)
+
+  defp route_selector("/short/create " <> url, host, port, _network, ip, _socket),
+    do: handle_short_create(url, ip, host, port)
+
+  defp route_selector("/short/recent", host, port, _network, _ip, _socket),
+    do: short_recent(host, port)
+
+  defp route_selector("/short/info/" <> code, host, port, _network, _ip, _socket),
+    do: short_info(code, host, port)
+
+  defp route_selector("/short/" <> code, host, port, _network, _ip, _socket),
+    do: short_redirect(code, host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -5248,6 +5271,171 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :not_found} ->
         error_response("Event not found.")
+    end
+  end
+
+  # === URL Shortener Functions ===
+
+  defp short_menu(host, port) do
+    %{total_urls: total, total_clicks: clicks} = UrlShortener.stats()
+
+    """
+    i=== URL Shortener ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iCreate short links to share!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Create Short URL\t/short/create\t#{host}\t#{port}
+    1Recent Links\t/short/recent\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Stats ---\t\t#{host}\t#{port}
+    iTotal URLs: #{total}\t\t#{host}\t#{port}
+    iTotal clicks: #{clicks}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp short_create_prompt(host, port) do
+    """
+    i=== Create Short URL ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter the URL to shorten:\t\t#{host}\t#{port}
+    i(Supports http, https, gopher, gemini)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_short_create(url, ip, host, port) do
+    case UrlShortener.create(url, ip) do
+      {:ok, code} ->
+        """
+        i=== Short URL Created! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iOriginal: #{truncate(url, 50)}\t\t#{host}\t#{port}
+        iShort code: #{code}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iShare this link:\t\t#{host}\t#{port}
+        i  gopher://#{host}:#{port}/1/short/#{code}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Link Info\t/short/info/#{code}\t#{host}\t#{port}
+        7Create Another\t/short/create\t#{host}\t#{port}
+        1Back to Short URLs\t/short\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :rate_limited} ->
+        error_response("Please wait before creating another short URL.")
+
+      {:error, :empty_url} ->
+        error_response("Please provide a URL.")
+
+      {:error, :url_too_long} ->
+        error_response("URL is too long (max 2000 characters).")
+
+      {:error, :invalid_url} ->
+        error_response("Invalid URL. Must start with http://, https://, gopher://, or gemini://")
+
+      {:error, reason} ->
+        error_response("Failed to create short URL: #{inspect(reason)}")
+    end
+  end
+
+  defp short_recent(host, port) do
+    case UrlShortener.list_recent(20) do
+      {:ok, []} ->
+        format_text_response("""
+        === Recent Short URLs ===
+
+        No short URLs created yet.
+        Be the first to create one!
+        """, host, port)
+
+      {:ok, urls} ->
+        url_lines = urls
+          |> Enum.map(fn u ->
+            clicks = if u.clicks == 1, do: "1 click", else: "#{u.clicks} clicks"
+            "1#{u.code}: #{truncate(u.url, 40)} (#{clicks})\t/short/info/#{u.code}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Recent Short URLs ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{url_lines}
+        i\t\t#{host}\t#{port}
+        7Create Short URL\t/short/create\t#{host}\t#{port}
+        1Back to Short URLs\t/short\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp short_info(code, host, port) do
+    case UrlShortener.info(code) do
+      {:ok, info} ->
+        created = format_date(info.created_at)
+        clicks = if info.clicks == 1, do: "1 click", else: "#{info.clicks} clicks"
+
+        """
+        i=== Short URL Info ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCode: #{info.code}\t\t#{host}\t#{port}
+        iOriginal URL:\t\t#{host}\t#{port}
+        i  #{info.url}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCreated: #{created}\t\t#{host}\t#{port}
+        iClicks: #{clicks}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Go to URL\t/short/#{code}\t#{host}\t#{port}
+        1Back to Recent\t/short/recent\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Short URL not found.")
+    end
+  end
+
+  defp short_redirect(code, host, port) do
+    case UrlShortener.get(code) do
+      {:ok, url} ->
+        cond do
+          String.starts_with?(url, "gopher://") ->
+            # Parse gopher URL and redirect
+            uri = URI.parse(url)
+            target_host = uri.host || host
+            target_port = uri.port || 70
+            path = uri.path || ""
+
+            """
+            i=== Redirecting ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iYou are being redirected to:\t\t#{host}\t#{port}
+            i#{url}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Click here to continue\t#{path}\t#{target_host}\t#{target_port}
+            .
+            """
+
+          String.starts_with?(url, "gemini://") or String.starts_with?(url, "http") ->
+            # External URL - show as HTML link type
+            """
+            i=== External Link ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iThis link goes to an external site:\t\t#{host}\t#{port}
+            i#{url}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            hClick here to open\tURL:#{url}\t#{host}\t#{port}
+            .
+            """
+
+          true ->
+            error_response("Unknown URL type.")
+        end
+
+      {:error, :not_found} ->
+        error_response("Short URL not found: #{code}")
     end
   end
 

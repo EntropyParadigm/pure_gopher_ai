@@ -81,6 +81,9 @@ defmodule PureGopherAi.Application do
       # Calendar / Events
       PureGopherAi.Calendar,
 
+      # URL Shortener
+      PureGopherAi.UrlShortener,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
