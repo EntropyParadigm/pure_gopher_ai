@@ -899,6 +899,116 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 
 ---
 
+## Phase 8: Security Hardening
+
+### 8.1 Input Sanitization & Prompt Injection Defense
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Comprehensive input sanitization and prompt injection protection.
+
+**Implementation:**
+- [x] Create `InputSanitizer` module
+- [x] Prompt injection pattern detection (instruction override, role manipulation, jailbreaks)
+- [x] Control character and null byte removal
+- [x] Unicode normalization (prevents homoglyph attacks)
+- [x] Gopher protocol escape character handling
+- [x] Gemini protocol escape handling
+- [x] Configurable max length limits
+
+**Injection Patterns Detected:**
+- Instruction override attempts ("ignore previous instructions")
+- Role manipulation ("you are now", "pretend to be")
+- System prompt injection (`[SYSTEM]`, `<<SYS>>`, etc.)
+- Template/variable injection (`{{}}`, `${}`)
+- Jailbreak keywords (DAN mode, developer mode)
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/input_sanitizer.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (integration)
+- `lib/pure_gopher_ai/gemini_handler.ex` (integration)
+
+---
+
+### 8.2 Request Validation
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Validate all incoming requests for size, complexity, and malicious patterns.
+
+**Implementation:**
+- [x] Create `RequestValidator` module
+- [x] Selector/path length limits
+- [x] Query length limits
+- [x] Blocked pattern detection (path traversal, command injection)
+- [x] Special character ratio limits
+- [x] Unicode complexity limits
+- [x] Path traversal prevention
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/request_validator.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (integration)
+
+---
+
+### 8.3 AI Engine Security
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Secure AI generation with prompt sandboxing.
+
+**Implementation:**
+- [x] Prompt sandboxing with `<user_input>` delimiters
+- [x] Defensive instructions to ignore override attempts
+- [x] `generate_safe/2` function with injection detection
+- [x] `generate_stream_safe/3` for streaming with protection
+- [x] Automatic input sanitization before prompt construction
+
+**Files modified:**
+- `lib/pure_gopher_ai/ai_engine.ex`
+
+---
+
+### 8.4 Output Sanitization
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Sanitize AI outputs to prevent sensitive data leakage.
+
+**Implementation:**
+- [x] Create `OutputSanitizer` module
+- [x] API key redaction (OpenAI, Anthropic, AWS, GitHub)
+- [x] Password and secret pattern redaction
+- [x] System prompt leakage detection
+- [x] Email address redaction
+- [x] Private IP address redaction
+- [x] Analysis function for monitoring
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/output_sanitizer.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (integration)
+
+---
+
+### 8.5 Abuse Detection & Auto-Ban
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Detect abuse patterns and automatically ban repeat offenders.
+
+**Implementation:**
+- [x] Violation tracking per IP in dedicated ETS table
+- [x] Burst detection (>20 requests in 5 seconds)
+- [x] Auto-ban after configurable violation threshold (default: 5)
+- [x] `check_abuse/1` for pattern detection
+- [x] `get_abuse_stats/1` for monitoring
+- [x] Automatic cleanup of old abuse records (1 hour TTL)
+
+**Config options:**
+- `rate_limit_auto_ban` - Enable auto-ban (default: true)
+- `rate_limit_ban_threshold` - Violations before ban (default: 5)
+
+**Files modified:**
+- `lib/pure_gopher_ai/rate_limiter.ex`
+- `lib/pure_gopher_ai/gopher_handler.ex`
+
+---
+
 ## Implementation Log
 
 | Date | Feature | Status | Commit |
@@ -932,6 +1042,13 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Bulletin Board | Complete | 0a8c90b |
 | 2025-12-31 | Finger Protocol | Complete | b20defc |
 | 2025-12-31 | Health/Status API | Complete | d766273 |
+| 2025-12-31 | Input Sanitization & Prompt Injection Defense | Complete | f0d4029 |
+| 2025-12-31 | Gopher/Gemini Escape Handling | Complete | ec58798 |
+| 2025-12-31 | Request Validation | Complete | be9da52 |
+| 2025-12-31 | AI Engine Prompt Sandboxing | Complete | 541d215 |
+| 2025-12-31 | Output Sanitization | Complete | 05a5d2c |
+| 2025-12-31 | Abuse Detection & Auto-Ban | Complete | 6f72496 |
+| 2025-12-31 | Security Module Integration | Complete | 12bdf68 |
 
 ---
 
