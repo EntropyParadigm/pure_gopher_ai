@@ -74,12 +74,17 @@ TCP Connection
 
 ## Ports
 
-| Network  | Internal | External | Binding          |
-|----------|----------|----------|------------------|
-| Clearnet | 7070     | 7070     | 0.0.0.0 (all)    |
-| Tor      | 7071     | 70       | 127.0.0.1 (local)|
+| Environment | Clearnet | Tor Internal | Tor External |
+|-------------|----------|--------------|--------------|
+| prod (macOS) | 70 | 7071 | 70 |
+| dev (Linux) | 7070 | 7071 | 70 |
 
-**Port 70 vs 7070**: Standard Gopher is port 70, but it's privileged (requires root). We use 7070 for clearnet dev. Tor maps external 70 → internal 7071.
+**Config files:**
+- `config/config.exs` - Base config (port 70)
+- `config/dev.exs` - Development override (port 7070, env var support)
+- `config/prod.exs` - Production (port 70, env var support)
+
+**Override:** `GOPHER_PORT=7070 iex -S mix`
 
 ## Key Files
 
@@ -165,48 +170,32 @@ MIX_ENV=prod mix run --no-halt
 
 ## Client Connections
 
-### Clearnet (port 7070)
+### Production (port 70)
 ```bash
-# Lynx
+lynx gopher://your-server.com/
+bombadillo gopher://your-server.com
+sacc your-server.com
+curl gopher://your-server.com/
+```
+
+### Development (port 7070)
+```bash
 lynx gopher://localhost:7070/
-
-# Bombadillo
-bombadillo gopher://localhost:7070
-
-# sacc
 sacc localhost 7070
-
-# curl
-curl gopher://localhost:7070/
-curl gopher://localhost:7070/0/ask%20What%20is%20Elixir
-
-# netcat
 echo "" | nc localhost 7070
-echo "/ask Hello" | nc localhost 7070
 ```
 
-### Tor (port 70)
+### Tor
 ```bash
-# Lynx via torsocks
 torsocks lynx gopher://<onion>.onion/
-
-# sacc via torsocks
-torsocks sacc <onion>.onion 70
-
-# netcat via torsocks
-torsocks sh -c 'echo "" | nc <onion>.onion 70'
+torsocks sacc <onion>.onion
 ```
 
-### Port 70 on Clearnet (optional)
+### Linux Port 70
 ```bash
-# setcap (no root at runtime)
+# setcap (recommended)
 sudo setcap 'cap_net_bind_service=+ep' $(which erl)
-
-# iptables redirect
-sudo iptables -t nat -A PREROUTING -p tcp --dport 70 -j REDIRECT --to-port 7070
-
-# socat proxy
-socat TCP-LISTEN:70,fork,reuseaddr TCP:localhost:7070
+GOPHER_PORT=70 iex -S mix
 ```
 
 ## Dependencies

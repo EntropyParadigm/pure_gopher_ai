@@ -19,8 +19,10 @@ config :nx, default_backend: nx_backend
 
 # Server configuration
 config :pure_gopher_ai,
-  # Clearnet listener (binds to all interfaces)
-  clearnet_port: 7070,
+  # Clearnet listener - standard Gopher port 70
+  # macOS: works without root
+  # Linux: requires setcap or GOPHER_PORT=7070 override
+  clearnet_port: 70,
   clearnet_host: "localhost",
 
   # Tor hidden service listener (binds to localhost only)
@@ -34,3 +36,6 @@ config :pure_gopher_ai,
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
+
+# Import environment-specific config (if exists)
+import_config "#{config_env()}.exs"

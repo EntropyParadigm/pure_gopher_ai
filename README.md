@@ -44,15 +44,14 @@ A pure Elixir Gopher server (RFC 1436) with native AI inference via Bumblebee. O
 
 ## Ports
 
-| Network   | Internal Port | External Port | Notes |
-|-----------|---------------|---------------|-------|
-| Clearnet  | 7070          | 7070          | Non-privileged, no root needed |
-| Tor       | 7071          | 70            | Tor maps standard port 70 → local 7071 |
+| Environment | Clearnet Port | Tor Internal | Tor External |
+|-------------|---------------|--------------|--------------|
+| Production (macOS) | **70** | 7071 | 70 |
+| Development (Linux) | **7070** | 7071 | 70 |
 
-**Why not port 70?** Port 70 is the standard Gopher port but requires root (privileged port < 1024). Options:
-- Keep 7070 for clearnet (many Gopher servers use non-standard ports)
-- Use `setcap` to allow port 70 without root: `sudo setcap 'cap_net_bind_service=+ep' /path/to/beam.smp`
-- Tor handles port mapping automatically (external 70 → internal 7071)
+- **macOS**: Port 70 works without root - standard clients just work
+- **Linux dev**: Uses 7070 by default (override with `GOPHER_PORT=70`)
+- **Tor**: Always maps external port 70 → internal 7071
 
 ## Quick Start
 
@@ -74,10 +73,30 @@ echo "/ask What is Elixir?" | nc localhost 7070
 
 ## Connecting with Gopher Clients
 
-### Clearnet (port 7070)
+### Production (port 70) - Standard Clients Just Work
 
 ```bash
-# Lynx (text browser)
+# Lynx
+lynx gopher://your-server.com/
+
+# Bombadillo
+bombadillo gopher://your-server.com
+
+# sacc
+sacc your-server.com
+
+# gopher command
+gopher your-server.com
+
+# curl
+curl gopher://your-server.com/
+curl "gopher://your-server.com/0/ask What is Elixir"
+```
+
+### Development (port 7070)
+
+```bash
+# Lynx
 lynx gopher://localhost:7070/
 
 # Bombadillo
@@ -86,50 +105,41 @@ bombadillo gopher://localhost:7070
 # sacc
 sacc localhost 7070
 
-# cgo
-cgo -h localhost -p 7070
-
-# gopher command (if available)
-gopher -p 7070 localhost
-
-# curl (basic test)
-curl gopher://localhost:7070/
-curl gopher://localhost:7070/0/ask%20What%20is%20Elixir
+# netcat
+echo "" | nc localhost 7070
+echo "/ask Hello" | nc localhost 7070
 ```
 
-### Tor (.onion on port 70)
+### Tor (.onion)
 
 ```bash
 # Lynx via torsocks
 torsocks lynx gopher://abc123.onion/
 
-# Bombadillo with Tor proxy
+# Bombadillo (configure SOCKS proxy)
 bombadillo gopher://abc123.onion
 
 # sacc via torsocks
-torsocks sacc abc123.onion 70
+torsocks sacc abc123.onion
 
 # netcat via torsocks
 torsocks sh -c 'echo "" | nc abc123.onion 70'
-torsocks sh -c 'echo "/ask Hello" | nc abc123.onion 70'
 ```
 
-**Note:** Tor connections use standard port 70, so most clients work without port specification.
+### Linux: Enabling Port 70
 
-### Using Standard Port 70 (Clearnet)
-
-If you want clearnet clients to connect on port 70 without specifying a port:
+On Linux, port 70 requires elevated privileges. Options:
 
 ```bash
-# Option 1: setcap (recommended - no root at runtime)
+# Option 1: setcap (recommended)
 sudo setcap 'cap_net_bind_service=+ep' $(which erl)
-# Then update config: clearnet_port: 70
+GOPHER_PORT=70 iex -S mix
 
-# Option 2: iptables redirect
+# Option 2: Environment variable (use dev port)
+GOPHER_PORT=7070 MIX_ENV=prod mix run --no-halt
+
+# Option 3: iptables redirect
 sudo iptables -t nat -A PREROUTING -p tcp --dport 70 -j REDIRECT --to-port 7070
-
-# Option 3: socat proxy
-socat TCP-LISTEN:70,fork,reuseaddr TCP:localhost:7070
 ```
 
 ## Tor Hidden Service Setup
