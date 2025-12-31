@@ -30,6 +30,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.Weather
   alias PureGopherAi.Fortune
   alias PureGopherAi.LinkDirectory
+  alias PureGopherAi.BulletinBoard
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -207,6 +208,11 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/links/search"), do: input_response("Enter keyword to search links:")
   defp route_path("/links/search?" <> query), do: handle_links_search(URI.decode(query))
 
+  # Bulletin Board
+  defp route_path("/board"), do: board_menu()
+  defp route_path("/board/recent"), do: handle_board_recent()
+  defp route_path("/board/" <> rest), do: handle_board_route(rest)
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -255,6 +261,7 @@ defmodule PureGopherAi.GeminiHandler do
     => /adventure Text Adventure
     => /fortune Fortune & Quotes
     => /links Link Directory
+    => /board Bulletin Board
 
     ## Server
     => /about About this server
@@ -1773,6 +1780,282 @@ defmodule PureGopherAi.GeminiHandler do
         """)
     end
   end
+
+  # === Bulletin Board ===
+
+  defp board_menu do
+    {:ok, boards} = BulletinBoard.list_boards()
+    {:ok, stats} = BulletinBoard.stats()
+
+    board_lines = boards
+      |> Enum.map(fn board ->
+        activity = if board.last_activity do
+          " (#{format_board_date(board.last_activity)})"
+        else
+          ""
+        end
+        "=> /board/#{board.id} #{board.name} [#{board.thread_count} threads]#{activity}"
+      end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Bulletin Board
+
+    Community discussions and message boards.
+
+    * Threads: #{stats.total_threads}
+    * Posts: #{stats.total_posts}
+
+    ## Boards
+    #{board_lines}
+
+    ## Actions
+    => /board/recent Recent Posts
+
+    => / Back to Home
+    """)
+  end
+
+  defp handle_board_route(rest) do
+    parts = String.split(rest, "/", parts: 4)
+
+    case parts do
+      [board_id] ->
+        handle_board_list(board_id, 1)
+
+      [board_id, "page", page_str] ->
+        handle_board_list(board_id, parse_int(page_str, 1))
+
+      [board_id, "thread", thread_id] ->
+        handle_board_thread(board_id, thread_id)
+
+      [board_id, "new"] ->
+        input_response("Enter: Title | Your message")
+
+      [board_id, second] when is_binary(second) ->
+        if String.starts_with?(second, "new?") do
+          input = String.replace_prefix(second, "new?", "")
+          handle_board_new_thread(board_id, URI.decode(input))
+        else
+          error_response(51, "Invalid board path")
+        end
+
+      [board_id, "reply", thread_part] ->
+        if String.contains?(thread_part, "?") do
+          [thread_id, input] = String.split(thread_part, "?", parts: 2)
+          handle_board_reply(board_id, thread_id, URI.decode(input))
+        else
+          input_response("Enter your reply:")
+        end
+
+      _ ->
+        error_response(51, "Invalid board path")
+    end
+  end
+
+  defp handle_board_list(board_id, page) do
+    case BulletinBoard.get_board(board_id, page: page, per_page: 20) do
+      {:ok, %{info: info, threads: threads, total: total, page: page, total_pages: total_pages}} ->
+        thread_lines = if length(threads) > 0 do
+          threads
+          |> Enum.map(fn thread ->
+            date = format_board_date(thread.created_at)
+            replies = if thread.reply_count > 0, do: " [#{thread.reply_count} replies]", else: ""
+            "=> /board/#{board_id}/thread/#{thread.id} #{thread.title}#{replies}\n  by #{thread.author} - #{date}"
+          end)
+          |> Enum.join("\n\n")
+        else
+          "No threads yet. Be the first to start a discussion!"
+        end
+
+        pagination = if total_pages > 1 do
+          pages = for p <- 1..min(total_pages, 10) do
+            if p == page do
+              "[#{p}]"
+            else
+              "=> /board/#{board_id}/page/#{p} #{p}"
+            end
+          end
+          |> Enum.join(" ")
+
+          "\n## Pages (#{page}/#{total_pages})\n#{pages}\n"
+        else
+          ""
+        end
+
+        success_response("""
+        # #{info.name}
+
+        #{info.description}
+
+        #{total} thread(s)
+
+        => /board/#{board_id}/new Start New Thread
+
+        ## Threads
+        #{thread_lines}
+        #{pagination}
+        => /board Back to Boards
+        """)
+
+      {:error, :board_not_found} ->
+        error_response(51, "Board not found: #{board_id}")
+    end
+  end
+
+  defp handle_board_thread(board_id, thread_id) do
+    case BulletinBoard.get_thread(board_id, thread_id) do
+      {:ok, %{thread: thread, replies: replies}} ->
+        reply_lines = if length(replies) > 0 do
+          replies
+          |> Enum.with_index(1)
+          |> Enum.map(fn {reply, idx} ->
+            date = format_board_date(reply.created_at)
+            """
+            ### ##{idx} - #{reply.author}
+            #{date}
+
+            #{reply.body}
+
+            ---
+            """
+          end)
+          |> Enum.join("\n")
+        else
+          "No replies yet."
+        end
+
+        success_response("""
+        # #{thread.title}
+
+        **Author:** #{thread.author}
+        **Posted:** #{format_board_date(thread.created_at)}
+
+        ---
+
+        #{thread.body}
+
+        ---
+
+        => /board/#{board_id}/reply/#{thread_id} Reply to Thread
+
+        ## Replies (#{length(replies)})
+
+        #{reply_lines}
+
+        => /board/#{board_id} Back to Board
+        """)
+
+      {:error, :board_not_found} ->
+        error_response(51, "Board not found")
+
+      {:error, :thread_not_found} ->
+        error_response(51, "Thread not found")
+    end
+  end
+
+  defp handle_board_new_thread(board_id, input) do
+    case String.split(input, "|", parts: 2) do
+      [title, body] ->
+        title = String.trim(title)
+        body = String.trim(body)
+
+        case BulletinBoard.create_thread(board_id, title, body, "Anonymous") do
+          {:ok, thread_id} ->
+            success_response("""
+            # Thread Created
+
+            Your thread has been posted!
+
+            => /board/#{board_id}/thread/#{thread_id} View Your Thread
+            => /board/#{board_id} Back to Board
+            """)
+
+          {:error, :board_not_found} ->
+            error_response(51, "Board not found")
+
+          {:error, :title_too_long} ->
+            error_response(50, "Title too long (max 100 characters)")
+
+          {:error, :body_too_long} ->
+            error_response(50, "Message too long (max 4000 characters)")
+
+          {:error, :empty_content} ->
+            error_response(50, "Title and message cannot be empty")
+        end
+
+      _ ->
+        error_response(50, "Invalid format. Use: Title | Your message")
+    end
+  end
+
+  defp handle_board_reply(board_id, thread_id, body) do
+    body = String.trim(body)
+
+    case BulletinBoard.reply(board_id, thread_id, body, "Anonymous") do
+      {:ok, _reply_id} ->
+        success_response("""
+        # Reply Posted
+
+        Your reply has been added to the thread!
+
+        => /board/#{board_id}/thread/#{thread_id} Back to Thread
+        """)
+
+      {:error, :board_not_found} ->
+        error_response(51, "Board not found")
+
+      {:error, :thread_not_found} ->
+        error_response(51, "Thread not found")
+
+      {:error, :body_too_long} ->
+        error_response(50, "Reply too long (max 4000 characters)")
+
+      {:error, :empty_content} ->
+        error_response(50, "Reply cannot be empty")
+    end
+  end
+
+  defp handle_board_recent do
+    {:ok, posts} = BulletinBoard.recent(20)
+
+    post_lines = if length(posts) > 0 do
+      posts
+      |> Enum.map(fn post ->
+        date = format_board_date(post.created_at)
+        type_label = if post.type == :thread, do: "New Thread", else: "Reply"
+        title_or_preview = if post.type == :thread do
+          post.title
+        else
+          truncate_text(post.body, 50)
+        end
+
+        "* [#{type_label}] #{title_or_preview}\n  in #{post.board_id} by #{post.author} - #{date}"
+      end)
+      |> Enum.join("\n\n")
+    else
+      "No recent posts."
+    end
+
+    success_response("""
+    # Recent Posts
+
+    Latest activity across all boards:
+
+    #{post_lines}
+
+    => /board Back to Boards
+    """)
+  end
+
+  defp format_board_date(nil), do: "Unknown"
+  defp format_board_date(date_string) when is_binary(date_string) do
+    case DateTime.from_iso8601(date_string) do
+      {:ok, dt, _} -> Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
+      _ -> date_string
+    end
+  end
+  defp format_board_date(date), do: inspect(date)
 
   defp get_session_id do
     # For Gemini, we use a simple hash since we don't have easy access to client IP in handlers

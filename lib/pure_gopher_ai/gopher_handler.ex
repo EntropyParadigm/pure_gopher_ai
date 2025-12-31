@@ -29,6 +29,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Weather
   alias PureGopherAi.Fortune
   alias PureGopherAi.LinkDirectory
+  alias PureGopherAi.BulletinBoard
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -585,6 +586,44 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/links/search " <> query, host, port, _network, _ip, _socket),
     do: handle_links_search(query, host, port)
 
+  # Bulletin Board routes
+  defp route_selector("/board", host, port, _network, _ip, _socket),
+    do: board_menu(host, port)
+
+  defp route_selector("/board/recent", host, port, _network, _ip, _socket),
+    do: handle_board_recent(host, port)
+
+  defp route_selector("/board/" <> rest, host, port, _network, ip, _socket) do
+    case String.split(rest, "/", parts: 3) do
+      [board_id] ->
+        handle_board_list(board_id, host, port)
+
+      [board_id, "new"] ->
+        board_new_thread_prompt(board_id, host, port)
+
+      [board_id, "thread", thread_id] ->
+        handle_board_thread(board_id, thread_id, host, port)
+
+      [board_id, "reply", thread_id] ->
+        board_reply_prompt(board_id, thread_id, host, port)
+
+      _ ->
+        error_response("Invalid board path")
+    end
+  end
+
+  defp route_selector("/board-new\t" <> input, host, port, _network, ip, _socket),
+    do: handle_board_new_thread(input, host, port, ip)
+
+  defp route_selector("/board-new " <> input, host, port, _network, ip, _socket),
+    do: handle_board_new_thread(input, host, port, ip)
+
+  defp route_selector("/board-reply\t" <> input, host, port, _network, ip, _socket),
+    do: handle_board_reply(input, host, port, ip)
+
+  defp route_selector("/board-reply " <> input, host, port, _network, ip, _socket),
+    do: handle_board_reply(input, host, port, ip)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -660,6 +699,7 @@ defmodule PureGopherAi.GopherHandler do
     1Text Adventure\t/adventure\t#{host}\t#{port}
     1Fortune & Quotes\t/fortune\t#{host}\t#{port}
     1Link Directory\t/links\t#{host}\t#{port}
+    1Bulletin Board\t/board\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -4176,6 +4216,243 @@ defmodule PureGopherAi.GopherHandler do
       true -> "1"
     end
   end
+
+  # === Bulletin Board Functions ===
+
+  defp board_menu(host, port) do
+    {:ok, boards} = BulletinBoard.list_boards()
+    {:ok, stats} = BulletinBoard.stats()
+
+    board_lines = boards
+      |> Enum.map(fn b ->
+        activity = if b.last_activity, do: " [#{format_date(b.last_activity)}]", else: ""
+        "1#{b.name} (#{b.thread_count} threads)#{activity}\t/board/#{b.id}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Bulletin Board ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iCommunity discussion boards.\t\t#{host}\t#{port}
+    iTotal: #{stats.total_threads} threads, #{stats.total_replies} replies\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Boards ---\t\t#{host}\t#{port}
+    #{board_lines}
+    i\t\t#{host}\t#{port}
+    0Recent Posts\t/board/recent\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_board_list(board_id, host, port) do
+    case BulletinBoard.get_board(board_id) do
+      {:ok, %{info: info, threads: threads, total: total}} ->
+        thread_lines = if threads == [] do
+          "iNo threads yet. Be the first to post!\t\t#{host}\t#{port}"
+        else
+          threads
+          |> Enum.map(fn t ->
+            date = format_date(t.created_at)
+            replies = if t.reply_count > 0, do: " (#{t.reply_count} replies)", else: ""
+            "1#{t.title} - #{t.author}#{replies}\t/board/#{board_id}/thread/#{t.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        """
+        i=== #{info.name} ===\t\t#{host}\t#{port}
+        i#{info.description}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{total} thread(s)\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{thread_lines}
+        i\t\t#{host}\t#{port}
+        7Start New Thread\t/board/#{board_id}/new\t#{host}\t#{port}
+        1Back to Boards\t/board\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :board_not_found} ->
+        error_response("Board not found: #{board_id}")
+    end
+  end
+
+  defp handle_board_thread(board_id, thread_id, host, port) do
+    case BulletinBoard.get_thread(board_id, thread_id) do
+      {:ok, %{thread: thread, replies: replies}} ->
+        reply_lines = if replies == [] do
+          "iNo replies yet.\t\t#{host}\t#{port}"
+        else
+          replies
+          |> Enum.with_index(1)
+          |> Enum.map(fn {r, i} ->
+            date = format_date(r.created_at)
+            body_lines = r.body
+              |> String.split("\n")
+              |> Enum.take(5)
+              |> Enum.map(fn line -> "i  #{line}\t\t#{host}\t#{port}" end)
+              |> Enum.join("\r\n")
+
+            """
+            i\t\t#{host}\t#{port}
+            i[#{i}] #{r.author} - #{date}\t\t#{host}\t#{port}
+            #{body_lines}
+            """
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        body_lines = thread.body
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== #{thread.title} ===\t\t#{host}\t#{port}
+        iBy #{thread.author} - #{format_date(thread.created_at)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{body_lines}
+        i\t\t#{host}\t#{port}
+        i--- Replies (#{length(replies)}) ---\t\t#{host}\t#{port}
+        #{reply_lines}
+        i\t\t#{host}\t#{port}
+        7Reply to Thread\t/board/#{board_id}/reply/#{thread_id}\t#{host}\t#{port}
+        1Back to Board\t/board/#{board_id}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :board_not_found} ->
+        error_response("Board not found")
+
+      {:error, :thread_not_found} ->
+        error_response("Thread not found")
+    end
+  end
+
+  defp board_new_thread_prompt(board_id, host, port) do
+    """
+    iStart New Thread in #{board_id}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: Author | Title | Message\t\t#{host}\t#{port}
+    i(Use Anonymous if no author name)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    iJohn | Hello World | This is my first post!\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_board_new_thread(input, host, port, ip) do
+    # Parse: board_id|author|title|body
+    case String.split(input, "|") |> Enum.map(&String.trim/1) do
+      [board_id, author, title, body] when title != "" and body != "" ->
+        case BulletinBoard.create_thread(board_id, title, body, author, ip) do
+          {:ok, thread_id} ->
+            format_text_response("""
+            === Thread Created ===
+
+            Your thread "#{title}" has been posted.
+
+            Thread ID: #{thread_id}
+            """, host, port)
+
+          {:error, :board_not_found} ->
+            error_response("Board not found")
+
+          {:error, :title_too_long} ->
+            error_response("Title too long (max 100 characters)")
+
+          {:error, :body_too_long} ->
+            error_response("Message too long (max 4000 characters)")
+
+          {:error, :empty_content} ->
+            error_response("Title and message cannot be empty")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: BoardID | Author | Title | Message")
+    end
+  end
+
+  defp board_reply_prompt(board_id, thread_id, host, port) do
+    """
+    iReply to Thread\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: Author | Your reply message\t\t#{host}\t#{port}
+    i(Use Anonymous if no author name)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_board_reply(input, host, port, ip) do
+    # Parse: board_id|thread_id|author|body
+    case String.split(input, "|") |> Enum.map(&String.trim/1) do
+      [board_id, thread_id, author, body] when body != "" ->
+        case BulletinBoard.reply(board_id, thread_id, body, author, ip) do
+          {:ok, _reply_id} ->
+            format_text_response("""
+            === Reply Posted ===
+
+            Your reply has been posted successfully.
+            """, host, port)
+
+          {:error, :board_not_found} ->
+            error_response("Board not found")
+
+          {:error, :thread_not_found} ->
+            error_response("Thread not found")
+
+          {:error, :body_too_long} ->
+            error_response("Message too long (max 4000 characters)")
+
+          {:error, :empty_content} ->
+            error_response("Message cannot be empty")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: BoardID | ThreadID | Author | Message")
+    end
+  end
+
+  defp handle_board_recent(host, port) do
+    case BulletinBoard.recent(20) do
+      {:ok, posts} ->
+        post_lines = if posts == [] do
+          "iNo posts yet.\t\t#{host}\t#{port}"
+        else
+          posts
+          |> Enum.map(fn p ->
+            date = format_date(p.created_at)
+            type_label = if p.type == :thread, do: "Thread", else: "Reply"
+            title = if p.title, do: p.title, else: String.slice(p.body, 0, 40) <> "..."
+            "i[#{type_label}] #{title} - #{p.author} (#{date})\t\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        """
+        i=== Recent Posts ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{post_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Boards\t/board\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp format_date(iso_string) when is_binary(iso_string) do
+    case DateTime.from_iso8601(iso_string) do
+      {:ok, dt, _} ->
+        Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+      _ ->
+        iso_string
+    end
+  end
+
+  defp format_date(_), do: "unknown"
 
   # === Admin Functions ===
 
