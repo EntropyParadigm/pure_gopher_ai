@@ -119,6 +119,26 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/models", host, port, _network, _ip, _socket),
     do: models_page(host, port)
 
+  # List available personas
+  defp route_selector("/personas", host, port, _network, _ip, _socket),
+    do: personas_page(host, port)
+
+  # Persona-specific queries (e.g., /ask-pirate, /ask-coder)
+  defp route_selector("/persona-" <> rest, host, port, _network, _ip, socket) do
+    case parse_model_query(rest) do
+      {persona_id, ""} -> persona_ask_prompt(persona_id, host, port)
+      {persona_id, query} -> handle_persona_ask(persona_id, query, host, port, socket)
+    end
+  end
+
+  # Persona-specific chat
+  defp route_selector("/chat-persona-" <> rest, host, port, _network, client_ip, socket) do
+    case parse_model_query(rest) do
+      {persona_id, ""} -> persona_chat_prompt(persona_id, host, port)
+      {persona_id, query} -> handle_persona_chat(persona_id, query, host, port, client_ip, socket)
+    end
+  end
+
   # Model-specific queries (e.g., /ask-gpt2, /ask-gpt2-medium)
   defp route_selector("/ask-" <> rest, host, port, _network, _ip, socket) do
     case parse_model_query(rest) do
@@ -185,6 +205,7 @@ defmodule PureGopherAi.GopherHandler do
     7Chat (with memory)\t/chat\t#{host}\t#{port}
     0Clear conversation\t/clear\t#{host}\t#{port}
     1Browse AI Models\t/models\t#{host}\t#{port}
+    1Browse AI Personas\t/personas\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     #{files_section}0About this server\t/about\t#{host}\t#{port}
@@ -433,6 +454,249 @@ defmodule PureGopherAi.GopherHandler do
 
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("Chat response (#{model_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
+
+    footer = format_gopher_lines([
+      "",
+      "---",
+      "Session: #{session_id} | Messages: #{history_count}",
+      "Generated in #{elapsed}ms (streamed)"
+    ], host, port)
+    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+
+    :streamed
+  end
+
+  # === Persona Functions ===
+
+  # Personas listing page
+  defp personas_page(host, port) do
+    personas = PureGopherAi.AiEngine.list_personas()
+
+    persona_lines =
+      personas
+      |> Enum.map(fn {id, info} ->
+        """
+        i\t\t#{host}\t#{port}
+        i#{info.name}\t\t#{host}\t#{port}
+        i  "#{String.slice(info.prompt, 0..60)}..."\t\t#{host}\t#{port}
+        7Ask as #{info.name}\t/persona-#{id}\t#{host}\t#{port}
+        7Chat as #{info.name}\t/chat-persona-#{id}\t#{host}\t#{port}
+        """
+      end)
+      |> Enum.join("")
+
+    """
+    i=== Available AI Personas ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPersonas modify AI behavior with system prompts\t\t#{host}\t#{port}
+    #{persona_lines}i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Persona ask prompt
+  defp persona_ask_prompt(persona_id, host, port) do
+    case PureGopherAi.AiEngine.get_persona(persona_id) do
+      nil ->
+        error_response("Unknown persona: #{persona_id}")
+
+      info ->
+        """
+        iAsk #{info.name}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i"#{info.prompt}"\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEnter your question below:\t\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # Persona chat prompt
+  defp persona_chat_prompt(persona_id, host, port) do
+    case PureGopherAi.AiEngine.get_persona(persona_id) do
+      nil ->
+        error_response("Unknown persona: #{persona_id}")
+
+      info ->
+        """
+        iChat with #{info.name}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i"#{info.prompt}"\t\t#{host}\t#{port}
+        iYour conversation history is preserved.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEnter your message below:\t\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # Handle persona-specific ask
+  defp handle_persona_ask(persona_id, query, host, port, socket) when byte_size(query) > 0 do
+    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
+      Logger.info("AI Query (persona: #{persona_id}): #{query}")
+      start_time = System.monotonic_time(:millisecond)
+
+      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+        stream_persona_response(socket, persona_id, query, nil, host, port, start_time)
+      else
+        case PureGopherAi.AiEngine.generate_with_persona(persona_id, query) do
+          {:ok, response} ->
+            elapsed = System.monotonic_time(:millisecond) - start_time
+            Logger.info("AI Response (persona: #{persona_id}) generated in #{elapsed}ms")
+
+            format_text_response(
+              """
+              Query: #{query}
+              Persona: #{persona_id}
+
+              Response:
+              #{response}
+
+              ---
+              Generated in #{elapsed}ms
+              """,
+              host,
+              port
+            )
+
+          {:error, _} ->
+            error_response("Unknown persona: #{persona_id}")
+        end
+      end
+    else
+      error_response("Unknown persona: #{persona_id}")
+    end
+  end
+
+  defp handle_persona_ask(persona_id, _query, _host, _port, _socket) do
+    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
+      error_response("Please provide a query after /persona-#{persona_id}")
+    else
+      error_response("Unknown persona: #{persona_id}")
+    end
+  end
+
+  # Handle persona-specific chat
+  defp handle_persona_chat(persona_id, query, host, port, client_ip, socket) when byte_size(query) > 0 do
+    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
+      session_id = ConversationStore.get_session_id(client_ip)
+      Logger.info("Chat query (persona: #{persona_id}) from session #{session_id}: #{query}")
+
+      context = ConversationStore.get_context(session_id)
+      ConversationStore.add_message(session_id, :user, query)
+
+      start_time = System.monotonic_time(:millisecond)
+
+      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+        stream_persona_chat_response(socket, persona_id, query, context, session_id, host, port, start_time)
+      else
+        case PureGopherAi.AiEngine.generate_with_persona(persona_id, query, context) do
+          {:ok, response} ->
+            elapsed = System.monotonic_time(:millisecond) - start_time
+
+            ConversationStore.add_message(session_id, :assistant, response)
+            history = ConversationStore.get_history(session_id)
+            history_count = length(history)
+
+            Logger.info("Chat response (persona: #{persona_id}) generated in #{elapsed}ms, history: #{history_count} messages")
+
+            format_text_response(
+              """
+              You: #{query}
+              Persona: #{persona_id}
+
+              AI: #{response}
+
+              ---
+              Session: #{session_id} | Messages: #{history_count}
+              Generated in #{elapsed}ms
+              """,
+              host,
+              port
+            )
+
+          {:error, _} ->
+            error_response("Unknown persona: #{persona_id}")
+        end
+      end
+    else
+      error_response("Unknown persona: #{persona_id}")
+    end
+  end
+
+  defp handle_persona_chat(persona_id, _query, _host, _port, _ip, _socket) do
+    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
+      error_response("Please provide a message after /chat-persona-#{persona_id}")
+    else
+      error_response("Unknown persona: #{persona_id}")
+    end
+  end
+
+  # Stream persona response
+  defp stream_persona_response(socket, persona_id, query, _context, host, port, start_time) do
+    header = format_gopher_lines(["Query: #{query}", "Persona: #{persona_id}", "", "Response:"], host, port)
+    ThousandIsland.Socket.send(socket, header)
+
+    case PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, nil, fn chunk ->
+           if String.length(chunk) > 0 do
+             lines = String.split(chunk, "\n", trim: false)
+             formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+             ThousandIsland.Socket.send(socket, Enum.join(formatted))
+           end
+         end) do
+      {:ok, _response} ->
+        elapsed = System.monotonic_time(:millisecond) - start_time
+        Logger.info("AI Response (persona: #{persona_id}) streamed in #{elapsed}ms")
+
+        footer = format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
+        ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+
+      {:error, _} ->
+        ThousandIsland.Socket.send(socket, "i[Error: Unknown persona]\t\t#{host}\t#{port}\r\n.\r\n")
+    end
+
+    :streamed
+  end
+
+  # Stream persona chat response
+  defp stream_persona_chat_response(socket, persona_id, query, context, session_id, host, port, start_time) do
+    header = format_gopher_lines(["You: #{query}", "Persona: #{persona_id}", "", "AI:"], host, port)
+    ThousandIsland.Socket.send(socket, header)
+
+    {:ok, response_agent} = Agent.start_link(fn -> [] end)
+
+    result = PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, context, fn chunk ->
+      Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
+      if String.length(chunk) > 0 do
+        lines = String.split(chunk, "\n", trim: false)
+        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+        ThousandIsland.Socket.send(socket, Enum.join(formatted))
+      end
+    end)
+
+    case result do
+      {:ok, _} ->
+        full_response =
+          response_agent
+          |> Agent.get(& &1)
+          |> Enum.reverse()
+          |> Enum.join("")
+
+        ConversationStore.add_message(session_id, :assistant, full_response)
+
+      {:error, _} ->
+        :ok
+    end
+
+    Agent.stop(response_agent)
+
+    history = ConversationStore.get_history(session_id)
+    history_count = length(history)
+
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    Logger.info("Chat response (persona: #{persona_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
 
     footer = format_gopher_lines([
       "",

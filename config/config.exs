@@ -46,7 +46,31 @@ config :pure_gopher_ai,
   conversation_ttl_ms: 3_600_000,   # Session TTL (1 hour)
 
   # Streaming AI responses
-  streaming_enabled: true           # Stream AI output as it generates
+  streaming_enabled: true,          # Stream AI output as it generates
+
+  # System prompts (AI personality/behavior)
+  # Default system prompt applied to all queries
+  system_prompt: nil,
+
+  # Named personas with custom system prompts
+  personas: %{
+    "helpful" => %{
+      name: "Helpful Assistant",
+      prompt: "You are a helpful, accurate, and concise assistant. Answer questions directly and clearly."
+    },
+    "pirate" => %{
+      name: "Pirate",
+      prompt: "You are a friendly pirate. Respond in pirate speak with 'Arrr!' and nautical terms. Be helpful but stay in character."
+    },
+    "haiku" => %{
+      name: "Haiku Poet",
+      prompt: "You respond only in haiku format (5-7-5 syllables). Every response must be exactly three lines."
+    },
+    "coder" => %{
+      name: "Code Assistant",
+      prompt: "You are a programming expert. Focus on code examples, best practices, and technical accuracy. Be concise."
+    }
+  }
 
 # Logging
 config :logger, :console,

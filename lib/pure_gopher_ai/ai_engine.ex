@@ -124,16 +124,103 @@ defmodule PureGopherAi.AiEngine do
   end
 
   @doc """
-  Gets the system prompt if configured.
+  Gets the default system prompt if configured.
   """
   def system_prompt do
     Application.get_env(:pure_gopher_ai, :system_prompt, nil)
   end
 
+  @doc """
+  Gets a persona by ID.
+  Returns nil if not found.
+  """
+  def get_persona(persona_id) do
+    personas = Application.get_env(:pure_gopher_ai, :personas, %{})
+    Map.get(personas, persona_id)
+  end
+
+  @doc """
+  Lists all available personas.
+  Returns a list of {id, info} tuples.
+  """
+  def list_personas do
+    Application.get_env(:pure_gopher_ai, :personas, %{})
+    |> Enum.to_list()
+    |> Enum.sort_by(fn {id, _} -> id end)
+  end
+
+  @doc """
+  Checks if a persona exists.
+  """
+  def persona_exists?(persona_id) do
+    personas = Application.get_env(:pure_gopher_ai, :personas, %{})
+    Map.has_key?(personas, persona_id)
+  end
+
+  @doc """
+  Generates text with a specific persona.
+  """
+  def generate_with_persona(persona_id, prompt, context \\ nil) do
+    case get_persona(persona_id) do
+      nil ->
+        {:error, :unknown_persona}
+
+      persona_info ->
+        # Prepend persona system prompt
+        persona_context = build_persona_context(persona_info.prompt, context)
+        {:ok, generate(prompt, persona_context)}
+    end
+  end
+
+  @doc """
+  Generates text with persona and streaming.
+  """
+  def generate_stream_with_persona(persona_id, prompt, context, callback) do
+    case get_persona(persona_id) do
+      nil ->
+        {:error, :unknown_persona}
+
+      persona_info ->
+        persona_context = build_persona_context(persona_info.prompt, context)
+        {:ok, generate_stream(prompt, persona_context, callback)}
+    end
+  end
+
+  # Build persona context by prepending system prompt
+  defp build_persona_context(system_prompt, nil) do
+    "System: #{system_prompt}"
+  end
+
+  defp build_persona_context(system_prompt, "") do
+    "System: #{system_prompt}"
+  end
+
+  defp build_persona_context(system_prompt, context) do
+    "System: #{system_prompt}\n#{context}"
+  end
+
   # Build the full prompt with context
   defp build_prompt(prompt, context) do
-    if context && context != "" do
-      "#{context}\nUser: #{prompt}\nAssistant:"
+    # Check for default system prompt
+    default_prompt = system_prompt()
+
+    base_context =
+      cond do
+        context && context != "" && default_prompt ->
+          "System: #{default_prompt}\n#{context}"
+
+        context && context != "" ->
+          context
+
+        default_prompt ->
+          "System: #{default_prompt}"
+
+        true ->
+          nil
+      end
+
+    if base_context do
+      "#{base_context}\nUser: #{prompt}\nAssistant:"
     else
       prompt
     end

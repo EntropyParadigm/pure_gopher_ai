@@ -145,6 +145,9 @@ end
 | `/models` | List available AI models |
 | `/ask-<model> <query>` | Query with specific model |
 | `/chat-<model> <msg>` | Chat with specific model |
+| `/personas` | List available AI personas |
+| `/persona-<name> <query>` | Query with specific persona |
+| `/chat-persona-<name> <msg>` | Chat with specific persona |
 | `/files` | Browse static content |
 | `/about` | Server stats |
 

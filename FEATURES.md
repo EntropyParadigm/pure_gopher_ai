@@ -142,19 +142,33 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 2.2 System Prompts
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Configurable AI personality/behavior via system prompts.
 
 **Implementation:**
-- [ ] System prompt in config
-- [ ] Prepend to user queries
-- [ ] Multiple personas via different selectors
-- [ ] `/persona` selector to list available
+- [x] Default system prompt in config (optional)
+- [x] Prepend system prompts to AI queries
+- [x] Multiple named personas with custom prompts
+- [x] `/personas` selector to list available personas
+- [x] `/persona-<name>` for persona-specific queries
+- [x] `/chat-persona-<name>` for persona-specific chat
+- [x] Streaming support for personas
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/ai_engine.ex`
-- `config/config.exs`
+**Default personas:**
+- `helpful` - Helpful, accurate assistant
+- `pirate` - Responds in pirate speak
+- `haiku` - Responds only in haiku format
+- `coder` - Programming expert
+
+**Config options:**
+- `system_prompt` - Default system prompt for all queries
+- `personas` - Map of persona_id => {name, prompt}
+
+**Files modified:**
+- `lib/pure_gopher_ai/ai_engine.ex` (persona functions)
+- `lib/pure_gopher_ai/gopher_handler.ex` (persona routes)
+- `config/config.exs` (personas config)
 
 ---
 
@@ -318,7 +332,8 @@ This document tracks the implementation status of all planned features.
 | 2025-01-01 | Rate Limiting | Complete | (pending) |
 | 2025-01-01 | Conversation Memory | Complete | c250c19 |
 | 2025-01-01 | Streaming Responses | Complete | e9fff3b |
-| 2025-01-01 | Multiple Model Support | Complete | (pending) |
+| 2025-01-01 | Multiple Model Support | Complete | 4f64be9 |
+| 2025-01-01 | System Prompts / Personas | Complete | (pending) |
 
 ---
 
