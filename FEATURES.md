@@ -1052,6 +1052,7 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Pastebin / Text Sharing | Complete | (pending) |
 | 2025-12-31 | Polls / Voting System | Complete | (pending) |
 | 2025-12-31 | Phlog Comments | Complete | (pending) |
+| 2025-12-31 | User Profiles / Homepages | Complete | (pending) |
 
 ---
 
@@ -1153,6 +1154,39 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 **Files created/modified:**
 - `lib/pure_gopher_ai/phlog_comments.ex` (new)
 - `lib/pure_gopher_ai/gopher_handler.ex` (comment routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 9.4 User Profiles / Homepages
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Personal homepage system for community members.
+
+**Implementation:**
+- [x] Create `UserProfiles` GenServer with DETS persistent storage
+- [x] `/users` - User profiles menu with stats
+- [x] `/users/create` - Create profile (Type 7 input)
+- [x] `/users/list` - Browse all profiles (paginated)
+- [x] `/users/search` - Search by username or interests
+- [x] `/users/~username` - View user's homepage
+- [x] Profile includes bio, links, interests
+- [x] Username validation (3-20 chars, alphanumeric + underscore)
+- [x] Rate limiting (1 profile per IP per day)
+- [x] View count tracking
+- [x] Admin delete functionality
+
+**Selectors:**
+- `/users` - User profiles menu
+- `/users/create` - Create profile
+- `/users/list` - Browse all users
+- `/users/list/page/<n>` - Paginated user list
+- `/users/search` - Search users
+- `/users/~<username>` - View user homepage
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/user_profiles.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (user routes)
 - `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---

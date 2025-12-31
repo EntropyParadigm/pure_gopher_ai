@@ -133,6 +133,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/pastebin.ex` | Pastebin for text sharing |
 | `lib/pure_gopher_ai/polls.ex` | Polling/voting system |
 | `lib/pure_gopher_ai/phlog_comments.ex` | Phlog comment system |
+| `lib/pure_gopher_ai/user_profiles.ex` | User profile/homepage system |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -214,6 +215,11 @@ end
 | `/phlog/comments/<path>` | View comments for phlog entry |
 | `/phlog/comments/<path>/comment` | Add comment to entry |
 | `/phlog/comments/recent` | Recent comments across all entries |
+| `/users` | User profiles menu |
+| `/users/create` | Create profile |
+| `/users/list` | Browse all users |
+| `/users/search` | Search users |
+| `/users/~<username>` | View user homepage |
 
 ### Response Format
 ```

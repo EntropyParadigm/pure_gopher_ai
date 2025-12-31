@@ -75,6 +75,9 @@ defmodule PureGopherAi.Application do
       # Phlog Comments
       PureGopherAi.PhlogComments,
 
+      # User Profiles
+      PureGopherAi.UserProfiles,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

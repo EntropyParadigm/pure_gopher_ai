@@ -37,6 +37,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Pastebin
   alias PureGopherAi.Polls
   alias PureGopherAi.PhlogComments
+  alias PureGopherAi.UserProfiles
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -279,6 +280,42 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/polls/" <> id, host, port, _network, ip, _socket),
     do: polls_view(id, ip, host, port)
+
+  # User Profiles
+  defp route_selector("/users", host, port, _network, _ip, _socket),
+    do: users_menu(host, port)
+
+  defp route_selector("/users/create", host, port, _network, _ip, _socket),
+    do: users_create_prompt(host, port)
+
+  defp route_selector("/users/create\t" <> input, host, port, _network, ip, _socket),
+    do: handle_users_create(input, ip, host, port)
+
+  defp route_selector("/users/create " <> input, host, port, _network, ip, _socket),
+    do: handle_users_create(input, ip, host, port)
+
+  defp route_selector("/users/search", host, port, _network, _ip, _socket),
+    do: users_search_prompt(host, port)
+
+  defp route_selector("/users/search\t" <> query, host, port, _network, _ip, _socket),
+    do: handle_users_search(query, host, port)
+
+  defp route_selector("/users/search " <> query, host, port, _network, _ip, _socket),
+    do: handle_users_search(query, host, port)
+
+  defp route_selector("/users/list", host, port, _network, _ip, _socket),
+    do: users_list(host, port, 1)
+
+  defp route_selector("/users/list/page/" <> page_str, host, port, _network, _ip, _socket) do
+    page = case Integer.parse(page_str) do
+      {p, ""} when p > 0 -> p
+      _ -> 1
+    end
+    users_list(host, port, page)
+  end
+
+  defp route_selector("/users/~" <> username, host, port, _network, _ip, _socket),
+    do: users_view(username, host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -4759,6 +4796,220 @@ defmodule PureGopherAi.GopherHandler do
 
       _ ->
         error_response("Invalid vote URL.")
+    end
+  end
+
+  # === User Profiles Functions ===
+
+  defp users_menu(host, port) do
+    %{total_profiles: total, total_views: views} = UserProfiles.stats()
+
+    """
+    i=== User Profiles ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iCreate your own homepage on the Gopher network!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Browse All Users\t/users/list\t#{host}\t#{port}
+    7Search Users\t/users/search\t#{host}\t#{port}
+    7Create Your Profile\t/users/create\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Stats ---\t\t#{host}\t#{port}
+    iTotal profiles: #{total}\t\t#{host}\t#{port}
+    iTotal profile views: #{views}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp users_create_prompt(host, port) do
+    """
+    i=== Create Your Profile ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your desired username:\t\t#{host}\t#{port}
+    i(3-20 characters, letters/numbers/underscores, starts with letter)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAfter creating your profile, you can visit:\t\t#{host}\t#{port}
+    i/users/~yourusername to view it\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_users_create(username, ip, host, port) do
+    username = String.trim(username)
+
+    case UserProfiles.create(username, ip) do
+      {:ok, _} ->
+        """
+        i=== Profile Created! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iWelcome, #{username}!\t\t#{host}\t#{port}
+        iYour profile has been created.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Your Profile\t/users/~#{username}\t#{host}\t#{port}
+        1Back to Users\t/users\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :rate_limited} ->
+        error_response("You can only create one profile per day.")
+
+      {:error, :invalid_username} ->
+        error_response("Invalid username. Use letters, numbers, underscores. Must start with a letter.")
+
+      {:error, :username_too_short} ->
+        error_response("Username too short. Minimum 3 characters.")
+
+      {:error, :username_too_long} ->
+        error_response("Username too long. Maximum 20 characters.")
+
+      {:error, :username_taken} ->
+        error_response("That username is already taken.")
+
+      {:error, reason} ->
+        error_response("Failed to create profile: #{inspect(reason)}")
+    end
+  end
+
+  defp users_search_prompt(host, port) do
+    """
+    i=== Search Users ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter username or interest to search:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_users_search(query, host, port) do
+    case UserProfiles.search(query) do
+      {:ok, []} ->
+        format_text_response("""
+        === Search Results ===
+
+        No users found matching "#{query}".
+        """, host, port)
+
+      {:ok, results} ->
+        user_lines = results
+          |> Enum.map(fn u ->
+            interests = Enum.take(u.interests, 3) |> Enum.join(", ")
+            interests_text = if interests == "", do: "", else: " (#{interests})"
+            "1~#{u.username}#{interests_text}\t/users/~#{u.username}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Search Results for \"#{query}\" ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{user_lines}
+        i\t\t#{host}\t#{port}
+        7Search Again\t/users/search\t#{host}\t#{port}
+        1Back to Users\t/users\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp users_list(host, port, page) do
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    case UserProfiles.list(limit: per_page, offset: offset) do
+      {:ok, users, total} ->
+        total_pages = div(total + per_page - 1, per_page)
+
+        user_lines = if Enum.empty?(users) do
+          "iNo profiles yet. Be the first to create one!\t\t#{host}\t#{port}"
+        else
+          users
+          |> Enum.map(fn u ->
+            interests = Enum.take(u.interests, 3) |> Enum.join(", ")
+            interests_text = if interests == "", do: "", else: " (#{interests})"
+            "1~#{u.username}#{interests_text}\t/users/~#{u.username}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        pagination = []
+        pagination = if page > 1, do: ["1Previous Page\t/users/list/page/#{page - 1}\t#{host}\t#{port}" | pagination], else: pagination
+        pagination = if page < total_pages, do: ["1Next Page\t/users/list/page/#{page + 1}\t#{host}\t#{port}" | pagination], else: pagination
+        pagination_text = if pagination == [], do: "", else: Enum.join(pagination, "\r\n") <> "\r\n"
+
+        """
+        i=== User Profiles (Page #{page}/#{total_pages}) ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{user_lines}
+        i\t\t#{host}\t#{port}
+        #{pagination_text}7Search Users\t/users/search\t#{host}\t#{port}
+        1Back to Users\t/users\t#{host}\t#{port}
+        .
+        """
+
+      {:error, _} ->
+        error_response("Failed to load users.")
+    end
+  end
+
+  defp users_view(username, host, port) do
+    case UserProfiles.get(username) do
+      {:ok, profile} ->
+        bio_lines = if profile.bio != "" do
+          profile.bio
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+        else
+          "iNo bio yet.\t\t#{host}\t#{port}"
+        end
+
+        links_lines = if Enum.empty?(profile.links) do
+          "iNo links yet.\t\t#{host}\t#{port}"
+        else
+          profile.links
+          |> Enum.map(fn {title, url} ->
+            if String.starts_with?(url, "gopher://") do
+              "1#{title}\t#{String.replace(url, "gopher://", "")}\t#{host}\t#{port}"
+            else
+              "h#{title}\tURL:#{url}\t#{host}\t#{port}"
+            end
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        interests_text = if Enum.empty?(profile.interests) do
+          "iNone listed.\t\t#{host}\t#{port}"
+        else
+          profile.interests
+          |> Enum.map(fn i -> "i  * #{i}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+        end
+
+        created = format_date(profile.created_at)
+
+        """
+        i=========================================\t\t#{host}\t#{port}
+        i   ~#{profile.username}'s Homepage\t\t#{host}\t#{port}
+        i=========================================\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- About Me ---\t\t#{host}\t#{port}
+        #{bio_lines}
+        i\t\t#{host}\t#{port}
+        i--- Interests ---\t\t#{host}\t#{port}
+        #{interests_text}
+        i\t\t#{host}\t#{port}
+        i--- Links ---\t\t#{host}\t#{port}
+        #{links_lines}
+        i\t\t#{host}\t#{port}
+        i--- Stats ---\t\t#{host}\t#{port}
+        iMember since: #{created}\t\t#{host}\t#{port}
+        iProfile views: #{profile.views}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Users\t/users\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("User not found: #{username}")
     end
   end
 
