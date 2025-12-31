@@ -3,6 +3,7 @@ defmodule PureGopherAi.AiEngine do
   The AI inference engine using Bumblebee for text generation.
   Loads a text generation model and provides a simple API for generating responses.
   Uses Nx.Serving for automatic request batching.
+  Supports conversation context for multi-turn interactions.
   """
 
   require Logger
@@ -49,9 +50,32 @@ defmodule PureGopherAi.AiEngine do
       "Hello, world! I am a robot..."
   """
   def generate(prompt) when is_binary(prompt) do
-    case Nx.Serving.batched_run(PureGopherAi.Serving, prompt) do
+    generate(prompt, nil)
+  end
+
+  @doc """
+  Generates text with optional conversation context.
+  The context is prepended to the prompt for continuity.
+
+  ## Examples
+
+      iex> context = "User: What is 2+2?\\nAssistant: 4"
+      iex> PureGopherAi.AiEngine.generate("Why?", context)
+      "Because..."
+  """
+  def generate(prompt, context) when is_binary(prompt) do
+    # Build full prompt with context
+    full_prompt =
+      if context && context != "" do
+        "#{context}\nUser: #{prompt}\nAssistant:"
+      else
+        prompt
+      end
+
+    case Nx.Serving.batched_run(PureGopherAi.Serving, full_prompt) do
       %{results: [%{text: generated_text} | _]} ->
-        generated_text
+        # Clean up the response - remove the prompt echo if present
+        clean_response(generated_text, full_prompt)
 
       %{results: []} ->
         "No response generated."
@@ -60,5 +84,23 @@ defmodule PureGopherAi.AiEngine do
         Logger.error("AI generation failed: #{inspect(error)}")
         "Error: Unable to generate response."
     end
+  end
+
+  # Clean up the generated text by removing prompt echo and extra whitespace
+  defp clean_response(text, prompt) do
+    text
+    |> String.replace_prefix(prompt, "")
+    |> String.trim()
+    |> case do
+      "" -> "No response generated."
+      response -> response
+    end
+  end
+
+  @doc """
+  Gets the system prompt if configured.
+  """
+  def system_prompt do
+    Application.get_env(:pure_gopher_ai, :system_prompt, nil)
   end
 end

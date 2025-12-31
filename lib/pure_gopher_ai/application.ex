@@ -19,10 +19,13 @@ defmodule PureGopherAi.Application do
     # Setup the AI serving
     serving = PureGopherAi.AiEngine.setup_serving()
 
-    # Base children: rate limiter, AI engine, clearnet listener
+    # Base children: rate limiter, conversation store, AI engine, clearnet listener
     children = [
       # Rate Limiter
       PureGopherAi.RateLimiter,
+
+      # Conversation Store
+      PureGopherAi.ConversationStore,
 
       # AI Inference Engine - Nx.Serving with batching
       {Nx.Serving,

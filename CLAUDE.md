@@ -110,8 +110,11 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | File | Purpose |
 |------|---------|
 | `lib/pure_gopher_ai/application.ex` | Supervisor - starts AI serving + dual TCP listeners |
-| `lib/pure_gopher_ai/ai_engine.ex` | Loads Bumblebee model, exposes `generate/1` |
+| `lib/pure_gopher_ai/ai_engine.ex` | Loads Bumblebee model, exposes `generate/1,2` |
 | `lib/pure_gopher_ai/gopher_handler.ex` | RFC 1436 protocol, network-aware responses |
+| `lib/pure_gopher_ai/conversation_store.ex` | Session-based chat history storage (ETS) |
+| `lib/pure_gopher_ai/rate_limiter.ex` | Per-IP rate limiting with sliding window |
+| `lib/pure_gopher_ai/gophermap.ex` | Static content serving with gophermap format |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -135,7 +138,10 @@ end
 | Selector | Action |
 |----------|--------|
 | `/` or empty | Root menu |
-| `/ask <query>` | AI text generation |
+| `/ask <query>` | AI text generation (stateless) |
+| `/chat <msg>` | Chat with conversation memory |
+| `/clear` | Clear conversation history |
+| `/files` | Browse static content |
 | `/about` | Server stats |
 
 ### Response Format
@@ -148,6 +154,7 @@ Types:
 - `0` - Text file
 - `1` - Directory/Menu
 - `3` - Error
+- `7` - Search/Query (for /ask, /chat)
 
 Terminator: `.` on its own line
 

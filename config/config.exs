@@ -39,7 +39,11 @@ config :pure_gopher_ai,
   # Rate limiting (per IP)
   rate_limit_enabled: true,
   rate_limit_requests: 60,       # Max requests per window
-  rate_limit_window_ms: 60_000   # Window size (1 minute)
+  rate_limit_window_ms: 60_000,  # Window size (1 minute)
+
+  # Conversation memory (for /chat)
+  conversation_max_messages: 10,    # Max messages per session
+  conversation_ttl_ms: 3_600_000    # Session TTL (1 hour)
 
 # Logging
 config :logger, :console,

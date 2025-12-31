@@ -12,6 +12,7 @@ defmodule PureGopherAi.GopherHandler do
 
   alias PureGopherAi.Gophermap
   alias PureGopherAi.RateLimiter
+  alias PureGopherAi.ConversationStore
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -45,7 +46,7 @@ defmodule PureGopherAi.GopherHandler do
         network_label = if network == :tor, do: "[Tor]", else: "[Clearnet]"
         Logger.info("#{network_label} Gopher request: #{inspect(selector)} from #{format_ip(client_ip)}")
 
-        response = route_selector(selector, host, port, network)
+        response = route_selector(selector, host, port, network, client_ip)
         ThousandIsland.Socket.send(socket, response)
 
       {:error, :rate_limited, retry_after} ->
@@ -79,29 +80,43 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   # Route selector to appropriate handler
-  defp route_selector("", host, port, network), do: root_menu(host, port, network)
-  defp route_selector("/", host, port, network), do: root_menu(host, port, network)
+  defp route_selector("", host, port, network, _ip), do: root_menu(host, port, network)
+  defp route_selector("/", host, port, network, _ip), do: root_menu(host, port, network)
 
-  # AI queries
-  defp route_selector("/ask\t" <> query, host, port, _network),
+  # AI queries (stateless)
+  defp route_selector("/ask\t" <> query, host, port, _network, _ip),
     do: handle_ask(query, host, port)
 
-  defp route_selector("/ask " <> query, host, port, _network),
+  defp route_selector("/ask " <> query, host, port, _network, _ip),
     do: handle_ask(query, host, port)
 
-  defp route_selector("/ask", host, port, _network),
+  defp route_selector("/ask", host, port, _network, _ip),
     do: ask_prompt(host, port)
 
+  # Chat (with conversation memory)
+  defp route_selector("/chat\t" <> query, host, port, _network, client_ip),
+    do: handle_chat(query, host, port, client_ip)
+
+  defp route_selector("/chat " <> query, host, port, _network, client_ip),
+    do: handle_chat(query, host, port, client_ip)
+
+  defp route_selector("/chat", host, port, _network, _ip),
+    do: chat_prompt(host, port)
+
+  # Clear conversation
+  defp route_selector("/clear", host, port, _network, client_ip),
+    do: handle_clear(host, port, client_ip)
+
   # Server info
-  defp route_selector("/about", host, port, network),
+  defp route_selector("/about", host, port, network, _ip),
     do: about_page(host, port, network)
 
   # Static content via gophermap
-  defp route_selector("/files" <> rest, host, port, _network),
+  defp route_selector("/files" <> rest, host, port, _network, _ip),
     do: serve_static(rest, host, port)
 
   # Catch-all: check gophermap content, then error
-  defp route_selector(selector, host, port, _network) do
+  defp route_selector(selector, host, port, _network, _ip) do
     # Try to serve from gophermap content directory
     if Gophermap.exists?(selector) do
       case Gophermap.serve(selector, host, port) do
@@ -138,12 +153,14 @@ defmodule PureGopherAi.GopherHandler do
     iNetwork: #{network_banner}\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== AI Services ===\t\t#{host}\t#{port}
-    7Ask AI a question\t/ask\t#{host}\t#{port}
+    7Ask AI (single query)\t/ask\t#{host}\t#{port}
+    7Chat (with memory)\t/chat\t#{host}\t#{port}
+    0Clear conversation\t/clear\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     #{files_section}0About this server\t/about\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iType your question after selecting 'Ask AI'\t\t#{host}\t#{port}
+    iTip: Use /chat for multi-turn conversations\t\t#{host}\t#{port}
     .
     """
   end
@@ -184,6 +201,79 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp handle_ask(_, _host, _port), do: error_response("Please provide a query after /ask")
+
+  # Prompt for chat (Type 7 search)
+  defp chat_prompt(host, port) do
+    """
+    iChat with AI (Conversation Memory)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iYour conversation history is preserved.\t\t#{host}\t#{port}
+    iEnter your message below:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Handle chat query with conversation memory
+  defp handle_chat(query, host, port, client_ip) when byte_size(query) > 0 do
+    session_id = ConversationStore.get_session_id(client_ip)
+    Logger.info("Chat query from session #{session_id}: #{query}")
+
+    # Get existing conversation context
+    context = ConversationStore.get_context(session_id)
+
+    # Add user message to history
+    ConversationStore.add_message(session_id, :user, query)
+
+    # Generate response with context
+    start_time = System.monotonic_time(:millisecond)
+    response = PureGopherAi.AiEngine.generate(query, context)
+    elapsed = System.monotonic_time(:millisecond) - start_time
+
+    # Add assistant response to history
+    ConversationStore.add_message(session_id, :assistant, response)
+
+    # Get updated history for display
+    history = ConversationStore.get_history(session_id)
+    history_count = length(history)
+
+    Logger.info("Chat response generated in #{elapsed}ms, history: #{history_count} messages")
+
+    format_text_response(
+      """
+      You: #{query}
+
+      AI: #{response}
+
+      ---
+      Session: #{session_id} | Messages: #{history_count}
+      Generated in #{elapsed}ms
+      """,
+      host,
+      port
+    )
+  end
+
+  defp handle_chat(_, _host, _port, _ip), do: error_response("Please provide a message after /chat")
+
+  # Handle conversation clear
+  defp handle_clear(host, port, client_ip) do
+    session_id = ConversationStore.get_session_id(client_ip)
+    ConversationStore.clear(session_id)
+    Logger.info("Conversation cleared for session #{session_id}")
+
+    format_text_response(
+      """
+      Conversation Cleared
+
+      Your chat history has been reset.
+      Start a new conversation with /chat.
+
+      Session: #{session_id}
+      """,
+      host,
+      port
+    )
+  end
 
   # Serve static files via gophermap
   defp serve_static(path, host, port) do

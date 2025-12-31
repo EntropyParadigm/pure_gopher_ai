@@ -59,23 +59,30 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 1.3 Conversation Memory
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** High
 **Description:** Store chat history per session to enable contextual AI responses.
 
 **Implementation:**
-- [ ] Create `ConversationStore` GenServer with ETS
-- [ ] Session ID generation (hash of IP + user-agent or random)
-- [ ] Store last N messages per session
-- [ ] TTL for session expiry
-- [ ] Pass conversation context to AI engine
-- [ ] New selector: `/chat` for conversational mode
-- [ ] `/clear` to reset conversation
+- [x] Create `ConversationStore` GenServer with ETS
+- [x] Session ID generation (SHA256 hash of client IP)
+- [x] Store last N messages per session (configurable)
+- [x] TTL for session expiry with automatic cleanup
+- [x] Pass conversation context to AI engine
+- [x] New selector: `/chat` for conversational mode
+- [x] `/clear` to reset conversation
+- [x] Updated root menu with chat options
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/conversation_store.ex`
-- `lib/pure_gopher_ai/ai_engine.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
+**Config options:**
+- `conversation_max_messages` - Max messages per session (default: 10)
+- `conversation_ttl_ms` - Session TTL in ms (default: 3600000 = 1 hour)
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/conversation_store.ex` (new)
+- `lib/pure_gopher_ai/ai_engine.ex` (added context support)
+- `lib/pure_gopher_ai/gopher_handler.ex` (added /chat, /clear routes)
+- `lib/pure_gopher_ai/application.ex` (added ConversationStore to supervisor)
+- `config/config.exs` (added conversation options)
 
 ---
 
@@ -299,6 +306,7 @@ This document tracks the implementation status of all planned features.
 |------|---------|--------|--------|
 | 2025-01-01 | gophermap Support | Complete | 4d9a795 |
 | 2025-01-01 | Rate Limiting | Complete | (pending) |
+| 2025-01-01 | Conversation Memory | Complete | (pending) |
 
 ---
 
