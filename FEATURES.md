@@ -800,24 +800,41 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 ---
 
 ### 7.8 Bulletin Board
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Medium
 **Description:** Simple message board for discussions.
 
-**Planned Implementation:**
-- [ ] Create `Board` GenServer with persistent storage
-- [ ] `/board` - List threads
-- [ ] `/board/new` - Create thread
-- [ ] `/board/<id>` - View thread
-- [ ] `/board/<id>/reply` - Reply to thread
-- [ ] Rate limiting and moderation
-- [ ] Optional AI moderation/filtering
+**Implementation:**
+- [x] Create `BulletinBoard` GenServer with DETS persistent storage
+- [x] `/board` - List all boards with thread counts
+- [x] `/board/<id>` - View threads in a board
+- [x] `/board/<id>/new` - Create new thread
+- [x] `/board/<id>/thread/<tid>` - View thread with replies
+- [x] `/board/<id>/reply/<tid>` - Reply to thread
+- [x] `/board/recent` - Recent posts across all boards
+- [x] Rate limiting per IP
+- [x] Input sanitization (HTML stripping)
+- [x] Post pruning (max 500 posts per board)
+- [x] Basic moderation (admin delete)
+
+**Default Boards:**
+- General Discussion, Tech Talk, Gopher Protocol
+- Gemini Protocol, Retro Computing, Creative Corner, Help & Support
 
 **Selectors:**
 - `/board` - Board index
-- `/board/new` - New thread
-- `/board/<id>` - View thread
-- `/board/<id>/reply` - Reply
+- `/board/<id>` - View board threads
+- `/board/<id>/page/<n>` - Paginated threads
+- `/board/<id>/new` - New thread prompt
+- `/board/<id>/thread/<tid>` - View thread
+- `/board/<id>/reply/<tid>` - Reply prompt
+- `/board/recent` - Recent activity
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/bulletin_board.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (board routes)
+- `lib/pure_gopher_ai/gemini_handler.ex` (board routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
 
 ---
 
@@ -892,6 +909,7 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | Weather Service | Complete | 7269e06 |
 | 2025-12-31 | Fortune/Quote Service | Complete | 60aa632 |
 | 2025-12-31 | Link Directory | Complete | 39e1f85 |
+| 2025-12-31 | Bulletin Board | Complete | 0a8c90b |
 
 ---
 
