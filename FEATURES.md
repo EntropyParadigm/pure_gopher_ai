@@ -366,39 +366,86 @@ This document tracks the implementation status of all planned features.
 ## Phase 5: Advanced Features
 
 ### 5.1 RAG (Retrieval Augmented Generation)
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Low
 **Description:** Query your own documents for AI-enhanced answers.
 
 **Implementation:**
-- [ ] Document ingestion (txt, md, pdf)
-- [ ] Vector embeddings with Bumblebee
-- [ ] Vector store (ETS or external)
-- [ ] Semantic search
-- [ ] Context injection into prompts
-- [ ] `/docs` selector
+- [x] Document store with chunking (ETS)
+- [x] Text extraction (txt, md, pdf)
+- [x] Vector embeddings with Bumblebee (sentence-transformers)
+- [x] Semantic search with cosine similarity
+- [x] Keyword search fallback
+- [x] Context injection into AI prompts
+- [x] File watcher for auto-ingestion
+- [x] Admin ingest commands
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/rag/document_store.ex`
-- `lib/pure_gopher_ai/rag/embeddings.ex`
-- `lib/pure_gopher_ai/rag/retriever.ex`
+**Selectors:**
+- `/docs` - Document knowledge base menu
+- `/docs/list` - List all ingested documents
+- `/docs/ask <query>` - Query documents with AI
+- `/docs/search <query>` - Search documents
+- `/docs/view/<id>` - View document details
+- `/admin/<token>/docs` - Admin document management
+- `/admin/<token>/ingest <path>` - Ingest local file
+- `/admin/<token>/ingest-url <url>` - Ingest from URL
+
+**Config options:**
+- `rag_enabled` - Enable RAG system (default: true)
+- `rag_docs_dir` - Document directory (default: ~/.gopher/docs)
+- `rag_chunk_size` - Words per chunk (default: 512)
+- `rag_chunk_overlap` - Overlap between chunks (default: 50)
+- `rag_embeddings_enabled` - Enable vector embeddings (default: true)
+- `rag_embedding_model` - Bumblebee embedding model
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/rag.ex` (new)
+- `lib/pure_gopher_ai/rag/document_store.ex` (new)
+- `lib/pure_gopher_ai/rag/embeddings.ex` (new)
+- `lib/pure_gopher_ai/rag/file_watcher.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (docs routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `config/config.exs` (RAG options)
 
 ---
 
 ### 5.2 Gemini Protocol Support
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** Low
 **Description:** Dual Gopher + Gemini server.
 
 **Implementation:**
-- [ ] Gemini protocol handler (TLS, gemini://)
-- [ ] Shared content between protocols
-- [ ] Gemini-specific formatting
-- [ ] Certificate management
+- [x] Gemini protocol handler (TLS on port 1965)
+- [x] Standard Gemini response codes (10, 20, 30, etc.)
+- [x] Shared content with Gopher (AI, RAG, phlog)
+- [x] Input prompts for queries
+- [x] TLS certificate configuration
+- [x] Rate limiting and blocklist integration
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/gemini_handler.ex`
-- `lib/pure_gopher_ai/application.ex`
+**Selectors:**
+- `/` - Home page
+- `/ask` - AI query (input prompt)
+- `/docs` - Document knowledge base
+- `/docs/ask` - Query documents
+- `/phlog` - Blog entries
+- `/about` - Server info
+- `/stats` - Statistics
+
+**Config options:**
+- `gemini_enabled` - Enable Gemini server (default: false)
+- `gemini_port` - Port number (default: 1965)
+- `gemini_cert_file` - TLS certificate path
+- `gemini_key_file` - TLS private key path
+
+**Certificate generation:**
+```bash
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+```
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/gemini_handler.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (Gemini listener)
+- `config/config.exs` (Gemini options)
 
 ---
 
@@ -445,6 +492,8 @@ This document tracks the implementation status of all planned features.
 | 2025-12-31 | Admin Gopherhole | Complete | 1217bca |
 | 2025-12-31 | External Blocklist (basic) | Complete | c024a95 |
 | 2025-12-31 | Blocklist + Floodgap + CIDR | Complete | a08f73f |
+| 2025-12-31 | RAG (Retrieval Augmented Generation) | Complete | a4ac1b4 |
+| 2025-12-31 | Gemini Protocol Support | Complete | 22c09ed |
 
 ---
 
