@@ -130,6 +130,9 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/rag/file_watcher.ex` | Auto-ingestion from watch directory |
 | `lib/pure_gopher_ai/summarizer.ex` | AI summarization, translation, digests |
 | `lib/pure_gopher_ai/gopher_proxy.ex` | Fetch external Gopher content |
+| `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
+| `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
+| `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
@@ -381,3 +384,61 @@ Supported: en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, s
 - macOS allows port 70 without root; Linux requires setcap
 - Gemini requires TLS certificates (self-signed OK)
 - RAG auto-ingests documents from watch directory every 30s
+
+## Security
+
+### Prompt Injection Defense
+All AI queries are protected against prompt injection:
+
+```elixir
+# InputSanitizer detects and blocks injection patterns:
+# - "ignore previous instructions"
+# - "you are now", "pretend to be"
+# - "[SYSTEM]", "<<SYS>>"
+# - Jailbreak attempts
+
+# Use safe generation functions:
+AiEngine.generate_safe(user_input)           # Blocks if injection detected
+AiEngine.generate_stream_safe(input, ctx, cb) # Streaming with protection
+```
+
+### Request Validation
+```elixir
+# RequestValidator limits:
+# - Max selector length: 1024 chars
+# - Max query length: 4000 chars
+# - Blocks: path traversal, command injection, null bytes
+# - Limits special character ratio
+```
+
+### Output Sanitization
+```elixir
+# OutputSanitizer redacts:
+# - API keys (OpenAI, Anthropic, AWS, GitHub)
+# - Passwords and secrets
+# - Private IP addresses
+# - System prompt leakage
+```
+
+### Abuse Detection
+```elixir
+# RateLimiter includes:
+# - Sliding window rate limiting (default: 60 req/min)
+# - Burst detection (>20 req in 5 seconds)
+# - Automatic violation tracking
+# - Auto-ban after 5 violations (configurable)
+
+# Config options:
+config :pure_gopher_ai,
+  rate_limit_enabled: true,
+  rate_limit_requests: 60,
+  rate_limit_window_ms: 60_000,
+  rate_limit_auto_ban: true,
+  rate_limit_ban_threshold: 5
+```
+
+### Protocol-Level Protections
+- Gopher output escaping (lone dots, tabs, CRLF normalization)
+- Gemini output escaping
+- Path traversal prevention in file serving
+- Admin token authentication
