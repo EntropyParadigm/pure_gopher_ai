@@ -26,6 +26,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.CodeAssistant
   alias PureGopherAi.Adventure
   alias PureGopherAi.FeedAggregator
+  alias PureGopherAi.Weather
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -487,6 +488,23 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/feeds/" <> rest, host, port, _network, _ip, _socket),
     do: handle_feed_route(rest, host, port)
 
+  # === Weather Service ===
+
+  defp route_selector("/weather", host, port, _network, _ip, _socket),
+    do: weather_prompt(host, port)
+
+  defp route_selector("/weather\t" <> location, host, port, _network, _ip, socket),
+    do: handle_weather(location, host, port, socket)
+
+  defp route_selector("/weather " <> location, host, port, _network, _ip, socket),
+    do: handle_weather(location, host, port, socket)
+
+  defp route_selector("/weather/forecast\t" <> location, host, port, _network, _ip, socket),
+    do: handle_weather_forecast(location, host, port, socket)
+
+  defp route_selector("/weather/forecast " <> location, host, port, _network, _ip, socket),
+    do: handle_weather_forecast(location, host, port, socket)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -542,6 +560,7 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     i=== AI Tools ===\t\t#{host}\t#{port}
     1Code Assistant\t/code\t#{host}\t#{port}
+    7Weather\t/weather\t#{host}\t#{port}
     0Daily Digest\t/digest\t#{host}\t#{port}
     0Topic Discovery\t/topics\t#{host}\t#{port}
     7Content Recommendations\t/discover\t#{host}\t#{port}
@@ -3585,6 +3604,108 @@ defmodule PureGopherAi.GopherHandler do
     1Back to Feeds\t/feeds\t#{host}\t#{port}
     .
     """
+  end
+
+  # === Weather Functions ===
+
+  defp weather_prompt(host, port) do
+    """
+    i=== Weather Service ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGet current weather and forecasts for any location.\t\t#{host}\t#{port}
+    iPowered by Open-Meteo (free, no API key needed)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Current Weather\t/weather\t#{host}\t#{port}
+    75-Day Forecast\t/weather/forecast\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  Tokyo\t\t#{host}\t#{port}
+    i  New York, US\t\t#{host}\t#{port}
+    i  London, UK\t\t#{host}\t#{port}
+    i  Paris, France\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_weather(location, host, port, _socket) do
+    location = String.trim(location)
+    start_time = System.monotonic_time(:millisecond)
+
+    case Weather.get_current(location) do
+      {:ok, weather} ->
+        elapsed = System.monotonic_time(:millisecond) - start_time
+
+        ascii_lines = weather.ascii
+          |> String.split("\n")
+          |> Enum.map(&"i#{&1}\t\t#{host}\t#{port}")
+          |> Enum.join("\r\n")
+
+        """
+        i=== Weather: #{weather.location} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{ascii_lines}
+        i\t\t#{host}\t#{port}
+        i#{weather.emoji} #{weather.description}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTemperature: #{weather.temperature}#{weather.temperature_unit}\t\t#{host}\t#{port}
+        iFeels like:  #{weather.feels_like}#{weather.temperature_unit}\t\t#{host}\t#{port}
+        iHumidity:    #{weather.humidity}%\t\t#{host}\t#{port}
+        iWind:        #{weather.wind_speed} #{weather.wind_speed_unit} #{weather.wind_direction}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i---\t\t#{host}\t#{port}
+        iUpdated in #{elapsed}ms\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Check Another Location\t/weather\t#{host}\t#{port}
+        7Get Forecast\t/weather/forecast\t#{host}\t#{port}
+        1Back to Home\t/\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :location_not_found} ->
+        error_response("Location not found: #{location}")
+
+      {:error, reason} ->
+        error_response("Weather error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_weather_forecast(location, host, port, _socket) do
+    location = String.trim(location)
+    start_time = System.monotonic_time(:millisecond)
+
+    case Weather.get_forecast(location, 5) do
+      {:ok, forecast} ->
+        elapsed = System.monotonic_time(:millisecond) - start_time
+
+        day_lines = forecast.days
+          |> Enum.map(fn day ->
+            precip = if day.precipitation_probability, do: " (#{day.precipitation_probability}% rain)", else: ""
+            "i#{day.date}: #{day.emoji} #{day.description}\t\t#{host}\t#{port}\r\n" <>
+            "i  High: #{day.high}#{forecast.temperature_unit} / Low: #{day.low}#{forecast.temperature_unit}#{precip}\t\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== 5-Day Forecast: #{forecast.location} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{day_lines}
+        i\t\t#{host}\t#{port}
+        i---\t\t#{host}\t#{port}
+        iGenerated in #{elapsed}ms\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Check Another Location\t/weather\t#{host}\t#{port}
+        1Back to Home\t/\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :location_not_found} ->
+        error_response("Location not found: #{location}")
+
+      {:error, reason} ->
+        error_response("Forecast error: #{inspect(reason)}")
+    end
   end
 
   # === Admin Functions ===

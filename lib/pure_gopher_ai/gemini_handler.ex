@@ -27,6 +27,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.CodeAssistant
   alias PureGopherAi.Adventure
   alias PureGopherAi.FeedAggregator
+  alias PureGopherAi.Weather
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -179,6 +180,12 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/feeds/stats"), do: feeds_stats()
   defp route_path("/feeds/" <> rest), do: handle_feed_route(rest)
 
+  # Weather Service
+  defp route_path("/weather"), do: input_response("Enter location (e.g., Tokyo, New York):")
+  defp route_path("/weather?" <> location), do: handle_weather(URI.decode(location))
+  defp route_path("/weather/forecast"), do: input_response("Enter location for 5-day forecast:")
+  defp route_path("/weather/forecast?" <> location), do: handle_weather_forecast(URI.decode(location))
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -206,6 +213,7 @@ defmodule PureGopherAi.GeminiHandler do
 
     ## AI Tools
     => /code Code Assistant
+    => /weather Weather
     => /digest Daily Digest
     => /topics Topic Discovery
     => /discover Content Recommendations
@@ -1330,6 +1338,69 @@ defmodule PureGopherAi.GeminiHandler do
 
     => /feeds Back to Feeds
     """)
+  end
+
+  # === Weather Service ===
+
+  defp handle_weather(location) do
+    location = String.trim(location)
+
+    case Weather.get_current(location) do
+      {:ok, weather} ->
+        success_response("""
+        # Weather: #{weather.location}
+
+        ```
+        #{weather.ascii}
+        ```
+
+        #{weather.emoji} **#{weather.description}**
+
+        * Temperature: #{weather.temperature}#{weather.temperature_unit}
+        * Feels like: #{weather.feels_like}#{weather.temperature_unit}
+        * Humidity: #{weather.humidity}%
+        * Wind: #{weather.wind_speed} #{weather.wind_speed_unit} #{weather.wind_direction}
+
+        => /weather Check Another Location
+        => /weather/forecast Get 5-Day Forecast
+        => / Back to Home
+        """)
+
+      {:error, :location_not_found} ->
+        error_response(51, "Location not found: #{location}")
+
+      {:error, reason} ->
+        error_response(42, "Weather error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_weather_forecast(location) do
+    location = String.trim(location)
+
+    case Weather.get_forecast(location, 5) do
+      {:ok, forecast} ->
+        day_lines = forecast.days
+          |> Enum.map(fn day ->
+            precip = if day.precipitation_probability, do: " (#{day.precipitation_probability}% rain)", else: ""
+            "* **#{day.date}**: #{day.emoji} #{day.description}\n  High: #{day.high}#{forecast.temperature_unit} / Low: #{day.low}#{forecast.temperature_unit}#{precip}"
+          end)
+          |> Enum.join("\n")
+
+        success_response("""
+        # 5-Day Forecast: #{forecast.location}
+
+        #{day_lines}
+
+        => /weather Check Another Location
+        => / Back to Home
+        """)
+
+      {:error, :location_not_found} ->
+        error_response(51, "Location not found: #{location}")
+
+      {:error, reason} ->
+        error_response(42, "Forecast error: #{inspect(reason)}")
+    end
   end
 
   defp get_session_id do
