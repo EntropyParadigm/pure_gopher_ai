@@ -46,6 +46,9 @@ defmodule PureGopherAi.Application do
       # Guestbook
       PureGopherAi.Guestbook,
 
+      # Text Adventure
+      PureGopherAi.Adventure,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

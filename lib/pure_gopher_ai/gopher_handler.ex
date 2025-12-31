@@ -24,6 +24,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.GopherProxy
   alias PureGopherAi.Guestbook
   alias PureGopherAi.CodeAssistant
+  alias PureGopherAi.Adventure
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -427,6 +428,47 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/code/review " <> input, host, port, _network, _ip, socket),
     do: handle_code_review(input, host, port, socket)
 
+  # === Text Adventure ===
+
+  defp route_selector("/adventure", host, port, _network, ip, _socket),
+    do: adventure_menu(host, port, ip)
+
+  defp route_selector("/adventure/new", host, port, _network, _ip, _socket),
+    do: adventure_genres(host, port)
+
+  defp route_selector("/adventure/new/" <> genre, host, port, _network, ip, socket),
+    do: handle_adventure_new(genre, host, port, ip, socket)
+
+  defp route_selector("/adventure/action", host, port, _network, _ip, _socket),
+    do: adventure_action_prompt(host, port)
+
+  defp route_selector("/adventure/action\t" <> action, host, port, _network, ip, socket),
+    do: handle_adventure_action(action, host, port, ip, socket)
+
+  defp route_selector("/adventure/action " <> action, host, port, _network, ip, socket),
+    do: handle_adventure_action(action, host, port, ip, socket)
+
+  defp route_selector("/adventure/look", host, port, _network, ip, _socket),
+    do: adventure_look(host, port, ip)
+
+  defp route_selector("/adventure/inventory", host, port, _network, ip, _socket),
+    do: adventure_inventory(host, port, ip)
+
+  defp route_selector("/adventure/stats", host, port, _network, ip, _socket),
+    do: adventure_stats(host, port, ip)
+
+  defp route_selector("/adventure/save", host, port, _network, ip, _socket),
+    do: adventure_save(host, port, ip)
+
+  defp route_selector("/adventure/load", host, port, _network, _ip, _socket),
+    do: adventure_load_prompt(host, port)
+
+  defp route_selector("/adventure/load\t" <> code, host, port, _network, ip, _socket),
+    do: handle_adventure_load(code, host, port, ip)
+
+  defp route_selector("/adventure/load " <> code, host, port, _network, ip, _socket),
+    do: handle_adventure_load(code, host, port, ip)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -497,6 +539,7 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     i=== Community ===\t\t#{host}\t#{port}
     1Guestbook\t/guestbook\t#{host}\t#{port}
+    1Text Adventure\t/adventure\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -2883,6 +2926,447 @@ defmodule PureGopherAi.GopherHandler do
         {:error, reason} ->
           error_response("Code review failed: #{inspect(reason)}")
       end
+    end
+  end
+
+  # === Adventure Functions ===
+
+  defp adventure_menu(host, port, ip) do
+    session_id = session_id_from_ip(ip)
+
+    case Adventure.get_session(session_id) do
+      {:ok, state} ->
+        # Has an active game
+        """
+        i=== Text Adventure ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCurrent Game: #{state.genre_name}\t\t#{host}\t#{port}
+        iTurn: #{state.turn}\t\t#{host}\t#{port}
+        iHealth: #{state.stats.health}/100\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Continue Adventure\t/adventure/look\t#{host}\t#{port}
+        7Take Action\t/adventure/action\t#{host}\t#{port}
+        1View Inventory\t/adventure/inventory\t#{host}\t#{port}
+        1View Stats\t/adventure/stats\t#{host}\t#{port}
+        0Save Game\t/adventure/save\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        7Load Saved Game\t/adventure/load\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Home\t/\t#{host}\t#{port}
+        .
+        """
+      {:error, :not_found} ->
+        # No active game
+        """
+        i=== Text Adventure ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEmbark on an AI-powered adventure!\t\t#{host}\t#{port}
+        iChoose your genre and let the story unfold.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        7Load Saved Game\t/adventure/load\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Home\t/\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp adventure_genres(host, port) do
+    genres = Adventure.genres()
+
+    header = """
+    i=== Choose Your Adventure ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSelect a genre to begin your journey:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    """
+
+    genre_lines = genres
+      |> Enum.map(fn {key, %{name: name, description: desc}} ->
+        "1#{name} - #{desc}\t/adventure/new/#{key}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    footer = """
+    i\t\t#{host}\t#{port}
+    1Back\t/adventure\t#{host}\t#{port}
+    .
+    """
+
+    header <> genre_lines <> "\r\n" <> footer
+  end
+
+  defp handle_adventure_new(genre, host, port, ip, socket) do
+    session_id = session_id_from_ip(ip)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      genre_info = Adventure.genres()[genre] || Adventure.genres()["fantasy"]
+
+      header = format_gopher_lines([
+        "=== New Adventure: #{genre_info.name} ===",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      Adventure.new_game_stream(session_id, genre, fn chunk ->
+        if String.length(chunk) > 0 do
+          lines = String.split(chunk, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+        end
+      end)
+
+      elapsed = System.monotonic_time(:millisecond) - start_time
+      footer = format_gopher_lines([
+        "",
+        "---",
+        "Adventure started in #{elapsed}ms"
+      ], host, port) <>
+        "i\t\t#{host}\t#{port}\r\n" <>
+        "7Take Action\t/adventure/action\t#{host}\t#{port}\r\n" <>
+        "1View Inventory\t/adventure/inventory\t#{host}\t#{port}\r\n" <>
+        "1Adventure Menu\t/adventure\t#{host}\t#{port}\r\n"
+
+      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+      :streamed
+    else
+      case Adventure.new_game(session_id, genre) do
+        {:ok, state, intro} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+
+          format_text_response("""
+          === New Adventure: #{state.genre_name} ===
+
+          #{intro}
+
+          ---
+          Adventure started in #{elapsed}ms
+          """, host, port) <>
+            "i\t\t#{host}\t#{port}\r\n" <>
+            "7Take Action\t/adventure/action\t#{host}\t#{port}\r\n" <>
+            "1View Inventory\t/adventure/inventory\t#{host}\t#{port}\r\n" <>
+            "1Adventure Menu\t/adventure\t#{host}\t#{port}\r\n" <>
+            ".\r\n"
+
+        {:error, reason} ->
+          error_response("Failed to start adventure: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp adventure_action_prompt(host, port) do
+    """
+    i=== Take Action ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iWhat do you do?\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i- Look around the room\t\t#{host}\t#{port}
+    i- Attack the goblin\t\t#{host}\t#{port}
+    i- Pick up the key\t\t#{host}\t#{port}
+    i- Talk to the merchant\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter your action:\t/adventure/action\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_adventure_action(action, host, port, ip, socket) do
+    session_id = session_id_from_ip(ip)
+    action = String.trim(action)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Adventure ===",
+        "",
+        "> #{action}",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      case Adventure.take_action_stream(session_id, action, fn chunk ->
+        if String.length(chunk) > 0 do
+          lines = String.split(chunk, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+        end
+      end) do
+        {:ok, state, _response} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+
+          status = if state.alive do
+            "Health: #{state.stats.health}/100 | Turn #{state.turn}"
+          else
+            "*** GAME OVER ***"
+          end
+
+          footer = format_gopher_lines([
+            "",
+            "---",
+            status,
+            "#{elapsed}ms"
+          ], host, port) <>
+            "i\t\t#{host}\t#{port}\r\n" <>
+            "7Take Action\t/adventure/action\t#{host}\t#{port}\r\n" <>
+            "1View Inventory\t/adventure/inventory\t#{host}\t#{port}\r\n" <>
+            "1Adventure Menu\t/adventure\t#{host}\t#{port}\r\n"
+
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+
+        {:error, :no_game} ->
+          ThousandIsland.Socket.send(socket,
+            "i\t\t#{host}\t#{port}\r\n" <>
+            "iNo active game. Start a new adventure!\t\t#{host}\t#{port}\r\n" <>
+            "1Start New Game\t/adventure/new\t#{host}\t#{port}\r\n" <>
+            ".\r\n"
+          )
+
+        {:error, :game_over} ->
+          ThousandIsland.Socket.send(socket,
+            "i\t\t#{host}\t#{port}\r\n" <>
+            "i*** GAME OVER ***\t\t#{host}\t#{port}\r\n" <>
+            "1Start New Game\t/adventure/new\t#{host}\t#{port}\r\n" <>
+            ".\r\n"
+          )
+
+        {:error, reason} ->
+          ThousandIsland.Socket.send(socket,
+            "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n.\r\n"
+          )
+      end
+
+      :streamed
+    else
+      case Adventure.take_action(session_id, action) do
+        {:ok, state, response} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+
+          status = if state.alive do
+            "Health: #{state.stats.health}/100 | Turn #{state.turn}"
+          else
+            "*** GAME OVER ***"
+          end
+
+          format_text_response("""
+          === Adventure ===
+
+          > #{action}
+
+          #{response}
+
+          ---
+          #{status}
+          #{elapsed}ms
+          """, host, port) <>
+            "i\t\t#{host}\t#{port}\r\n" <>
+            "7Take Action\t/adventure/action\t#{host}\t#{port}\r\n" <>
+            "1View Inventory\t/adventure/inventory\t#{host}\t#{port}\r\n" <>
+            "1Adventure Menu\t/adventure\t#{host}\t#{port}\r\n" <>
+            ".\r\n"
+
+        {:error, :no_game} ->
+          """
+          i=== No Active Game ===\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          iStart a new adventure to play!\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          1Start New Game\t/adventure/new\t#{host}\t#{port}
+          .
+          """
+
+        {:error, :game_over} ->
+          """
+          i=== Game Over ===\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          iYour adventure has ended.\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          1Start New Game\t/adventure/new\t#{host}\t#{port}
+          .
+          """
+
+        {:error, reason} ->
+          error_response("Adventure action failed: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp adventure_look(host, port, ip) do
+    session_id = session_id_from_ip(ip)
+
+    case Adventure.look(session_id) do
+      {:ok, description} ->
+        format_text_response("""
+        === Current Scene ===
+
+        #{description}
+        """, host, port) <>
+          "i\t\t#{host}\t#{port}\r\n" <>
+          "7Take Action\t/adventure/action\t#{host}\t#{port}\r\n" <>
+          "1Adventure Menu\t/adventure\t#{host}\t#{port}\r\n" <>
+          ".\r\n"
+
+      {:error, :not_found} ->
+        """
+        i=== No Active Game ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_context} ->
+        """
+        i=== No Scene Available ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTake an action to continue the story.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Take Action\t/adventure/action\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp adventure_inventory(host, port, ip) do
+    session_id = session_id_from_ip(ip)
+
+    case Adventure.inventory(session_id) do
+      {:ok, items} ->
+        items_list = if length(items) > 0 do
+          items
+          |> Enum.with_index(1)
+          |> Enum.map(fn {item, i} -> "i#{i}. #{item}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+        else
+          "iYour inventory is empty.\t\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Inventory ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{items_list}
+        i\t\t#{host}\t#{port}
+        7Take Action\t/adventure/action\t#{host}\t#{port}
+        1Adventure Menu\t/adventure\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        """
+        i=== No Active Game ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp adventure_stats(host, port, ip) do
+    session_id = session_id_from_ip(ip)
+
+    case Adventure.stats(session_id) do
+      {:ok, stats} ->
+        """
+        i=== Character Stats ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iHealth:       #{stats.health}/100\t\t#{host}\t#{port}
+        iStrength:     #{stats.strength}\t\t#{host}\t#{port}
+        iIntelligence: #{stats.intelligence}\t\t#{host}\t#{port}
+        iLuck:         #{stats.luck}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Take Action\t/adventure/action\t#{host}\t#{port}
+        1Adventure Menu\t/adventure\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        """
+        i=== No Active Game ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp adventure_save(host, port, ip) do
+    session_id = session_id_from_ip(ip)
+
+    case Adventure.save_game(session_id) do
+      {:ok, save_code} ->
+        # Split save code into manageable lines
+        code_lines = save_code
+          |> String.graphemes()
+          |> Enum.chunk_every(60)
+          |> Enum.map(&Enum.join/1)
+          |> Enum.map(&"i#{&1}\t\t#{host}\t#{port}")
+          |> Enum.join("\r\n")
+
+        """
+        i=== Save Game ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCopy this save code to restore your game later:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{code_lines}
+        i\t\t#{host}\t#{port}
+        1Adventure Menu\t/adventure\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        """
+        i=== No Active Game ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo game to save!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp adventure_load_prompt(host, port) do
+    """
+    i=== Load Game ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your save code to restore your adventure:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter save code:\t/adventure/load\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_adventure_load(code, host, port, ip) do
+    session_id = session_id_from_ip(ip)
+    code = String.trim(code)
+
+    case Adventure.load_game(session_id, code) do
+      {:ok, state} ->
+        """
+        i=== Game Loaded ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iWelcome back to your #{state.genre_name} adventure!\t\t#{host}\t#{port}
+        iTurn: #{state.turn} | Health: #{state.stats.health}/100\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Continue Adventure\t/adventure/look\t#{host}\t#{port}
+        7Take Action\t/adventure/action\t#{host}\t#{port}
+        1Adventure Menu\t/adventure\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_save} ->
+        """
+        i=== Invalid Save Code ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iThe save code appears to be corrupted or invalid.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Again\t/adventure/load\t#{host}\t#{port}
+        1Start New Game\t/adventure/new\t#{host}\t#{port}
+        .
+        """
     end
   end
 

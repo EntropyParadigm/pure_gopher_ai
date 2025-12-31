@@ -25,6 +25,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.GopherProxy
   alias PureGopherAi.Guestbook
   alias PureGopherAi.CodeAssistant
+  alias PureGopherAi.Adventure
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -157,6 +158,19 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/code/review"), do: input_response("Paste code to review:")
   defp route_path("/code/review?" <> input), do: handle_code_review(URI.decode(input))
 
+  # Text Adventure
+  defp route_path("/adventure"), do: adventure_menu()
+  defp route_path("/adventure/new"), do: adventure_genres()
+  defp route_path("/adventure/new/" <> genre), do: handle_adventure_new(genre)
+  defp route_path("/adventure/action"), do: input_response("What do you do?")
+  defp route_path("/adventure/action?" <> action), do: handle_adventure_action(URI.decode(action))
+  defp route_path("/adventure/look"), do: adventure_look()
+  defp route_path("/adventure/inventory"), do: adventure_inventory()
+  defp route_path("/adventure/stats"), do: adventure_stats()
+  defp route_path("/adventure/save"), do: adventure_save()
+  defp route_path("/adventure/load"), do: input_response("Enter save code:")
+  defp route_path("/adventure/load?" <> code), do: handle_adventure_load(URI.decode(code))
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -200,6 +214,7 @@ defmodule PureGopherAi.GeminiHandler do
 
     ## Community
     => /guestbook Guestbook
+    => /adventure Text Adventure
 
     ## Server
     => /about About this server
@@ -869,6 +884,292 @@ defmodule PureGopherAi.GeminiHandler do
       {:error, reason} ->
         error_response(42, "Code review failed: #{inspect(reason)}")
     end
+  end
+
+  # === Text Adventure ===
+
+  defp adventure_menu do
+    session_id = get_session_id()
+
+    case Adventure.get_session(session_id) do
+      {:ok, state} ->
+        success_response("""
+        # Text Adventure
+
+        Current Game: #{state.genre_name}
+        Turn: #{state.turn} | Health: #{state.stats.health}/100
+
+        ## Actions
+        => /adventure/look Continue Adventure
+        => /adventure/action Take Action
+        => /adventure/inventory View Inventory
+        => /adventure/stats View Stats
+        => /adventure/save Save Game
+
+        ## New Game
+        => /adventure/new Start New Game
+        => /adventure/load Load Saved Game
+
+        => / Back to Home
+        """)
+
+      {:error, :not_found} ->
+        success_response("""
+        # Text Adventure
+
+        Embark on an AI-powered adventure!
+        Choose your genre and let the story unfold.
+
+        => /adventure/new Start New Game
+        => /adventure/load Load Saved Game
+
+        => / Back to Home
+        """)
+    end
+  end
+
+  defp adventure_genres do
+    genres = Adventure.genres()
+      |> Enum.map(fn {key, %{name: name, description: desc}} ->
+        "=> /adventure/new/#{key} #{name} - #{desc}"
+      end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Choose Your Adventure
+
+    Select a genre to begin your journey:
+
+    #{genres}
+
+    => /adventure Back
+    """)
+  end
+
+  defp handle_adventure_new(genre) do
+    session_id = get_session_id()
+
+    case Adventure.new_game(session_id, genre) do
+      {:ok, state, intro} ->
+        success_response("""
+        # New Adventure: #{state.genre_name}
+
+        #{intro}
+
+        ---
+        Health: #{state.stats.health}/100 | Turn #{state.turn}
+
+        => /adventure/action Take Action
+        => /adventure/inventory View Inventory
+        => /adventure Menu
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Failed to start adventure: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_adventure_action(action) do
+    session_id = get_session_id()
+    action = String.trim(action)
+
+    case Adventure.take_action(session_id, action) do
+      {:ok, state, response} ->
+        status = if state.alive do
+          "Health: #{state.stats.health}/100 | Turn #{state.turn}"
+        else
+          "*** GAME OVER ***"
+        end
+
+        success_response("""
+        # Adventure
+
+        > #{action}
+
+        #{response}
+
+        ---
+        #{status}
+
+        => /adventure/action Take Action
+        => /adventure/inventory View Inventory
+        => /adventure Menu
+        """)
+
+      {:error, :no_game} ->
+        success_response("""
+        # No Active Game
+
+        Start a new adventure to play!
+
+        => /adventure/new Start New Game
+        """)
+
+      {:error, :game_over} ->
+        success_response("""
+        # Game Over
+
+        Your adventure has ended.
+
+        => /adventure/new Start New Game
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Adventure action failed: #{inspect(reason)}")
+    end
+  end
+
+  defp adventure_look do
+    session_id = get_session_id()
+
+    case Adventure.look(session_id) do
+      {:ok, description} ->
+        success_response("""
+        # Current Scene
+
+        #{description}
+
+        => /adventure/action Take Action
+        => /adventure Menu
+        """)
+
+      {:error, :not_found} ->
+        success_response("""
+        # No Active Game
+
+        => /adventure/new Start New Game
+        """)
+
+      {:error, :no_context} ->
+        success_response("""
+        # No Scene Available
+
+        Take an action to continue the story.
+
+        => /adventure/action Take Action
+        """)
+    end
+  end
+
+  defp adventure_inventory do
+    session_id = get_session_id()
+
+    case Adventure.inventory(session_id) do
+      {:ok, items} ->
+        items_list = if length(items) > 0 do
+          items
+          |> Enum.with_index(1)
+          |> Enum.map(fn {item, i} -> "#{i}. #{item}" end)
+          |> Enum.join("\n")
+        else
+          "Your inventory is empty."
+        end
+
+        success_response("""
+        # Inventory
+
+        #{items_list}
+
+        => /adventure/action Take Action
+        => /adventure Menu
+        """)
+
+      {:error, :not_found} ->
+        success_response("""
+        # No Active Game
+
+        => /adventure/new Start New Game
+        """)
+    end
+  end
+
+  defp adventure_stats do
+    session_id = get_session_id()
+
+    case Adventure.stats(session_id) do
+      {:ok, stats} ->
+        success_response("""
+        # Character Stats
+
+        * Health: #{stats.health}/100
+        * Strength: #{stats.strength}
+        * Intelligence: #{stats.intelligence}
+        * Luck: #{stats.luck}
+
+        => /adventure/action Take Action
+        => /adventure Menu
+        """)
+
+      {:error, :not_found} ->
+        success_response("""
+        # No Active Game
+
+        => /adventure/new Start New Game
+        """)
+    end
+  end
+
+  defp adventure_save do
+    session_id = get_session_id()
+
+    case Adventure.save_game(session_id) do
+      {:ok, save_code} ->
+        success_response("""
+        # Save Game
+
+        Copy this save code to restore your game later:
+
+        ```
+        #{save_code}
+        ```
+
+        => /adventure Menu
+        """)
+
+      {:error, :not_found} ->
+        success_response("""
+        # No Active Game
+
+        No game to save!
+
+        => /adventure/new Start New Game
+        """)
+    end
+  end
+
+  defp handle_adventure_load(code) do
+    session_id = get_session_id()
+    code = String.trim(code)
+
+    case Adventure.load_game(session_id, code) do
+      {:ok, state} ->
+        success_response("""
+        # Game Loaded
+
+        Welcome back to your #{state.genre_name} adventure!
+        Turn: #{state.turn} | Health: #{state.stats.health}/100
+
+        => /adventure/look Continue Adventure
+        => /adventure/action Take Action
+        => /adventure Menu
+        """)
+
+      {:error, :invalid_save} ->
+        success_response("""
+        # Invalid Save Code
+
+        The save code appears to be corrupted or invalid.
+
+        => /adventure/load Try Again
+        => /adventure/new Start New Game
+        """)
+    end
+  end
+
+  defp get_session_id do
+    # For Gemini, we use a simple hash since we don't have easy access to client IP in handlers
+    # In production, this should use proper session management
+    :crypto.hash(:sha256, "gemini-adventure-session") |> Base.encode16(case: :lower)
   end
 
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
