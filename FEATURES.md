@@ -559,46 +559,70 @@ en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, sv, da, fi, 
 ## Phase 7: Community & Utility Features
 
 ### 7.1 Guestbook
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** High
 **Description:** Classic Gopher guestbook for visitor messages.
 
-**Planned Implementation:**
-- [ ] Create `Guestbook` GenServer with persistent storage
-- [ ] `/guestbook` - View all entries
-- [ ] `/guestbook/sign` - Sign the guestbook (input prompt)
-- [ ] Rate limiting per IP
-- [ ] Admin moderation queue
-- [ ] Optional AI sentiment analysis
-- [ ] Configurable max entries
+**Implementation:**
+- [x] Create `Guestbook` GenServer with DETS persistent storage
+- [x] `/guestbook` - View all entries (newest first)
+- [x] `/guestbook/sign` - Sign the guestbook (Type 7 input)
+- [x] Rate limiting per IP (5 minute cooldown)
+- [x] Configurable max entries with auto-pruning
+- [x] Entry format: Name | Message
+- [x] Timestamps with human-readable dates
+- [x] Admin moderation via `/admin/<token>/guestbook`
 
 **Selectors:**
 - `/guestbook` - View guestbook entries
 - `/guestbook/sign` - Leave a message
 - `/guestbook/page/<n>` - Paginated view
 
+**Files created/modified:**
+- `lib/pure_gopher_ai/guestbook.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes)
+- `lib/pure_gopher_ai/gemini_handler.ex` (routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `config/config.exs` (guestbook options)
+
 ---
 
 ### 7.2 Code Assistant
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** High
 **Description:** AI-powered code generation and explanation.
 
-**Planned Implementation:**
-- [ ] Create `CodeAssistant` module
-- [ ] `/code` - Code assistant menu
-- [ ] `/code/generate <lang> <description>` - Generate code
-- [ ] `/code/explain` - Explain code (input)
-- [ ] `/code/review` - Review code (input)
-- [ ] `/code/convert <from> <to>` - Convert between languages
-- [ ] Syntax highlighting for Gemini (preformatted blocks)
+**Implementation:**
+- [x] Create `CodeAssistant` module with 24 programming languages
+- [x] `/code` - Code assistant menu
+- [x] `/code/generate` - Generate code (input: lang | description)
+- [x] `/code/explain` - Explain code (input: code)
+- [x] `/code/review` - Review code for issues (input: code)
+- [x] `/code/convert` - Convert between languages (input: from | to | code)
+- [x] `/code/fix` - Fix code based on error (input: error | code)
+- [x] `/code/optimize` - Optimize for performance (input: code)
+- [x] `/code/regex` - Generate regex from description
+- [x] Streaming output for all AI operations
+- [x] Preformatted blocks for Gemini output
+
+**Supported Languages:**
+Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Swift, PHP, Shell/Bash, SQL, HTML, CSS, Lua, Perl, R, Scala, Haskell, Clojure, Erlang
 
 **Selectors:**
 - `/code` - Code assistant menu
-- `/code/generate <lang> <desc>` - Generate code snippet
+- `/code/generate` - Generate code snippet
 - `/code/explain` - Explain code
 - `/code/review` - Code review
+- `/code/convert` - Convert between languages
+- `/code/fix` - Fix code with error
+- `/code/optimize` - Optimize code
+- `/code/regex` - Generate regex
 - `/code/languages` - List supported languages
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/code_assistant.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes)
+- `lib/pure_gopher_ai/gemini_handler.ex` (routes)
 
 ---
 
@@ -803,6 +827,8 @@ en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, sv, da, fi, 
 | 2025-12-31 | Summarizer + GopherProxy modules | Complete | 1a1c530 |
 | 2025-12-31 | AI Tools routes (Gopher) | Complete | a91a814 |
 | 2025-12-31 | AI Tools routes (Gemini) | Complete | 8bed5e0 |
+| 2025-12-31 | Guestbook | Complete | c884591 |
+| 2025-12-31 | Code Assistant | Complete | e1f7309 |
 
 ---
 
