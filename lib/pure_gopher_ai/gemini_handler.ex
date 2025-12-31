@@ -29,6 +29,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.FeedAggregator
   alias PureGopherAi.Weather
   alias PureGopherAi.Fortune
+  alias PureGopherAi.LinkDirectory
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -198,6 +199,14 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/fortune/search"), do: input_response("Enter keyword to search quotes:")
   defp route_path("/fortune/search?" <> keyword), do: handle_fortune_search(URI.decode(keyword))
 
+  # Link Directory
+  defp route_path("/links"), do: links_menu()
+  defp route_path("/links/category/" <> category), do: handle_links_category(category)
+  defp route_path("/links/submit"), do: input_response("Enter: URL | Title | Category")
+  defp route_path("/links/submit?" <> input), do: handle_links_submit(URI.decode(input))
+  defp route_path("/links/search"), do: input_response("Enter keyword to search links:")
+  defp route_path("/links/search?" <> query), do: handle_links_search(URI.decode(query))
+
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
   # Response helpers
@@ -245,6 +254,7 @@ defmodule PureGopherAi.GeminiHandler do
     => /guestbook Guestbook
     => /adventure Text Adventure
     => /fortune Fortune & Quotes
+    => /links Link Directory
 
     ## Server
     => /about About this server
@@ -1638,6 +1648,129 @@ defmodule PureGopherAi.GeminiHandler do
       String.slice(text, 0, max_len - 3) <> "..."
     else
       text
+    end
+  end
+
+  # Link Directory handlers
+
+  defp links_menu do
+    {:ok, categories} = LinkDirectory.list_categories()
+    {:ok, stats} = LinkDirectory.stats()
+
+    category_links = categories
+      |> Enum.map(fn cat ->
+        "=> /links/category/#{cat.id} #{cat.name} (#{cat.count})"
+      end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Link Directory
+
+    Curated links to Gopher and Gemini sites.
+
+    Total links: #{stats.total}
+
+    ## Categories
+    #{category_links}
+
+    ## Actions
+    => /links/search Search Links
+    => /links/submit Submit a Link
+
+    => / Back to Home
+    """)
+  end
+
+  defp handle_links_category(category) do
+    case LinkDirectory.get_category(category) do
+      {:ok, %{info: info, links: links}} ->
+        link_lines = links
+          |> Enum.map(fn link ->
+            desc = if link.description, do: "\n#{truncate_text(link.description, 70)}", else: ""
+            "=> #{link.url} #{link.title}#{desc}"
+          end)
+          |> Enum.join("\n\n")
+
+        success_response("""
+        # #{info.name}
+
+        #{info.description}
+
+        #{length(links)} link(s) in this category:
+
+        #{link_lines}
+
+        => /links Back to Directory
+        """)
+
+      {:error, :category_not_found} ->
+        error_response(51, "Category not found: #{category}")
+    end
+  end
+
+  defp handle_links_submit(input) do
+    case String.split(input, "|") |> Enum.map(&String.trim/1) do
+      [url, title, category] when url != "" and title != "" and category != "" ->
+        case LinkDirectory.submit_link(url, title, category) do
+          {:ok, _id} ->
+            success_response("""
+            # Link Submitted
+
+            Thank you for your submission!
+
+            * URL: #{url}
+            * Title: #{title}
+            * Category: #{category}
+
+            Your link will be reviewed and approved soon.
+
+            => /links Back to Directory
+            """)
+
+          {:error, :invalid_category} ->
+            error_response(50, "Invalid category. Valid: gopher, gemini, tech, retro, programming, art, writing, games, misc")
+        end
+
+      _ ->
+        error_response(50, "Invalid format. Use: URL | Title | Category")
+    end
+  end
+
+  defp handle_links_search(query) do
+    query = String.trim(query)
+
+    case LinkDirectory.search(query) do
+      {:ok, []} ->
+        success_response("""
+        # Search Results for "#{query}"
+
+        No links found matching "#{query}".
+
+        Try a different search term.
+
+        => /links/search Search Again
+        => /links Back to Directory
+        """)
+
+      {:ok, results} ->
+        result_lines = results
+          |> Enum.take(20)
+          |> Enum.map(fn link ->
+            desc = if link.description, do: "\n#{truncate_text(link.description, 60)}", else: ""
+            "> [#{link.category}] #{link.title}#{desc}\n=> #{link.url}"
+          end)
+          |> Enum.join("\n\n")
+
+        success_response("""
+        # Search Results for "#{query}"
+
+        Found #{length(results)} link(s):
+
+        #{result_lines}
+
+        => /links/search Search Again
+        => /links Back to Directory
+        """)
     end
   end
 

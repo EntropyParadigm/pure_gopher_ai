@@ -28,6 +28,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.FeedAggregator
   alias PureGopherAi.Weather
   alias PureGopherAi.Fortune
+  alias PureGopherAi.LinkDirectory
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -559,6 +560,31 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/fortune/search " <> keyword, host, port, _network, _ip, _socket),
     do: handle_fortune_search(keyword, host, port)
 
+  # Link Directory routes
+  defp route_selector("/links", host, port, _network, _ip, _socket),
+    do: links_menu(host, port)
+
+  defp route_selector("/links/category/" <> category, host, port, _network, _ip, _socket),
+    do: handle_links_category(category, host, port)
+
+  defp route_selector("/links/submit", host, port, _network, _ip, _socket),
+    do: links_submit_prompt(host, port)
+
+  defp route_selector("/links/submit\t" <> input, host, port, _network, ip, _socket),
+    do: handle_links_submit(input, host, port, ip)
+
+  defp route_selector("/links/submit " <> input, host, port, _network, ip, _socket),
+    do: handle_links_submit(input, host, port, ip)
+
+  defp route_selector("/links/search", host, port, _network, _ip, _socket),
+    do: links_search_prompt(host, port)
+
+  defp route_selector("/links/search\t" <> query, host, port, _network, _ip, _socket),
+    do: handle_links_search(query, host, port)
+
+  defp route_selector("/links/search " <> query, host, port, _network, _ip, _socket),
+    do: handle_links_search(query, host, port)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -633,6 +659,7 @@ defmodule PureGopherAi.GopherHandler do
     1Guestbook\t/guestbook\t#{host}\t#{port}
     1Text Adventure\t/adventure\t#{host}\t#{port}
     1Fortune & Quotes\t/fortune\t#{host}\t#{port}
+    1Link Directory\t/links\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -3996,6 +4023,157 @@ defmodule PureGopherAi.GopherHandler do
       String.slice(text, 0, max_len - 3) <> "..."
     else
       text
+    end
+  end
+
+  # === Link Directory Functions ===
+
+  defp links_menu(host, port) do
+    {:ok, categories} = LinkDirectory.list_categories()
+    {:ok, stats} = LinkDirectory.stats()
+
+    category_lines = categories
+      |> Enum.map(fn cat ->
+        "1#{cat.name} (#{cat.count})\t/links/category/#{cat.id}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Link Directory ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iCurated links to Gopher and Gemini sites.\t\t#{host}\t#{port}
+    iTotal links: #{stats.total}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Categories ---\t\t#{host}\t#{port}
+    #{category_lines}
+    i\t\t#{host}\t#{port}
+    i--- Actions ---\t\t#{host}\t#{port}
+    7Search Links\t/links/search\t#{host}\t#{port}
+    7Submit a Link\t/links/submit\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_links_category(category, host, port) do
+    case LinkDirectory.get_category(category) do
+      {:ok, %{info: info, links: links}} ->
+        link_lines = links
+          |> Enum.map(fn link ->
+            type = gopher_type_for_url(link.url)
+            desc = if link.description, do: " - #{truncate(link.description, 50)}", else: ""
+            "#{type}#{link.title}#{desc}\t#{link.url}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== #{info.name} ===\t\t#{host}\t#{port}
+        i#{info.description}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{length(links)} link(s) in this category:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{link_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Directory\t/links\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :category_not_found} ->
+        error_response("Category not found: #{category}")
+    end
+  end
+
+  defp links_submit_prompt(host, port) do
+    """
+    iSubmit a Link\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFormat: URL | Title | Category\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iCategories:\t\t#{host}\t#{port}
+    igopher, gemini, tech, retro, programming, art, writing, games, misc\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    igopher://example.com | My Cool Server | gopher\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSubmitted links are reviewed before appearing.\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_links_submit(input, host, port, ip) do
+    case String.split(input, "|") |> Enum.map(&String.trim/1) do
+      [url, title, category] when url != "" and title != "" and category != "" ->
+        case LinkDirectory.submit_link(url, title, category, nil, ip) do
+          {:ok, _id} ->
+            format_text_response("""
+            === Link Submitted ===
+
+            Thank you for your submission!
+
+            URL: #{url}
+            Title: #{title}
+            Category: #{category}
+
+            Your link will be reviewed and approved soon.
+            """, host, port)
+
+          {:error, :invalid_category} ->
+            error_response("Invalid category. Valid: gopher, gemini, tech, retro, programming, art, writing, games, misc")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: URL | Title | Category")
+    end
+  end
+
+  defp links_search_prompt(host, port) do
+    """
+    iSearch Links\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a keyword to search:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_links_search(query, host, port) do
+    query = String.trim(query)
+
+    case LinkDirectory.search(query) do
+      {:ok, []} ->
+        format_text_response("""
+        === Search Results for "#{query}" ===
+
+        No links found matching "#{query}".
+
+        Try a different search term.
+        """, host, port)
+
+      {:ok, results} ->
+        result_lines = results
+          |> Enum.take(20)
+          |> Enum.map(fn link ->
+            desc = if link.description, do: "\n  #{truncate(link.description, 60)}", else: ""
+            "[#{link.category}] #{link.title}#{desc}\n  #{link.url}"
+          end)
+          |> Enum.join("\n\n")
+
+        format_text_response("""
+        === Search Results for "#{query}" ===
+
+        Found #{length(results)} link(s):
+
+        #{result_lines}
+        """, host, port)
+    end
+  end
+
+  defp gopher_type_for_url(url) do
+    cond do
+      String.starts_with?(url, "gopher://") -> "1"
+      String.starts_with?(url, "gemini://") -> "h"
+      String.starts_with?(url, "http") -> "h"
+      true -> "1"
     end
   end
 
