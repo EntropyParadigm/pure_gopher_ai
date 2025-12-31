@@ -4,39 +4,62 @@ defmodule PureGopherAi.GopherHandler do
   Uses ThousandIsland for TCP connection handling.
   Supports both clearnet and Tor hidden service connections.
   Serves static content via gophermap.
+  Implements rate limiting per IP.
   """
 
   use ThousandIsland.Handler
   require Logger
 
   alias PureGopherAi.Gophermap
+  alias PureGopherAi.RateLimiter
 
   @impl ThousandIsland.Handler
-  def handle_connection(_socket, state) do
-    # Extract network type from handler options
+  def handle_connection(socket, state) do
+    # Extract network type and client IP
     network = Keyword.get(state, :network, :clearnet)
-    {:continue, Map.put(%{}, :network, network)}
+
+    client_ip =
+      case ThousandIsland.Socket.peername(socket) do
+        {:ok, {ip, _port}} -> ip
+        _ -> {0, 0, 0, 0}
+      end
+
+    {:continue, %{network: network, client_ip: client_ip}}
   end
 
   @impl ThousandIsland.Handler
   def handle_data(data, socket, state) do
     network = Map.get(state, :network, :clearnet)
+    client_ip = Map.get(state, :client_ip, {0, 0, 0, 0})
     {host, port} = get_host_port(network)
 
-    # Gopher selectors are CRLF terminated
-    selector =
-      data
-      |> String.trim()
-      |> String.trim_trailing("\r\n")
+    # Check rate limit
+    case RateLimiter.check(client_ip) do
+      {:ok, _remaining} ->
+        # Gopher selectors are CRLF terminated
+        selector =
+          data
+          |> String.trim()
+          |> String.trim_trailing("\r\n")
 
-    network_label = if network == :tor, do: "[Tor]", else: "[Clearnet]"
-    Logger.info("#{network_label} Gopher request: #{inspect(selector)}")
+        network_label = if network == :tor, do: "[Tor]", else: "[Clearnet]"
+        Logger.info("#{network_label} Gopher request: #{inspect(selector)} from #{format_ip(client_ip)}")
 
-    response = route_selector(selector, host, port, network)
-    ThousandIsland.Socket.send(socket, response)
+        response = route_selector(selector, host, port, network)
+        ThousandIsland.Socket.send(socket, response)
+
+      {:error, :rate_limited, retry_after} ->
+        Logger.warning("Rate limited: #{format_ip(client_ip)}, retry after #{retry_after}ms")
+        response = rate_limit_response(retry_after)
+        ThousandIsland.Socket.send(socket, response)
+    end
 
     {:close, state}
   end
+
+  defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
+  defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
+  defp format_ip(ip), do: inspect(ip)
 
   # Get appropriate host/port based on network type
   defp get_host_port(:tor) do
@@ -244,6 +267,16 @@ defmodule PureGopherAi.GopherHandler do
   defp error_response(message) do
     """
     3#{message}\t\terror.host\t1
+    .
+    """
+  end
+
+  # Rate limit response
+  defp rate_limit_response(retry_after_ms) do
+    retry_seconds = div(retry_after_ms, 1000) + 1
+
+    """
+    3Rate limit exceeded. Please wait #{retry_seconds} seconds.\t\terror.host\t1
     .
     """
   end

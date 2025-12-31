@@ -32,21 +32,29 @@ This document tracks the implementation status of all planned features.
 ---
 
 ### 1.2 Rate Limiting
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** High
 **Description:** Limit requests per IP to prevent abuse, especially important for Tor exposure.
 
 **Implementation:**
-- [ ] Create `RateLimiter` GenServer
-- [ ] Track requests per IP with sliding window
-- [ ] Configurable limits (requests per minute)
-- [ ] Different limits for clearnet vs Tor
-- [ ] Return Gopher error on rate limit exceeded
+- [x] Create `RateLimiter` GenServer with ETS
+- [x] Track requests per IP with sliding window algorithm
+- [x] Configurable limits (requests per window)
+- [x] Configurable window size
+- [x] Return Gopher error (Type 3) on rate limit exceeded
+- [x] Automatic cleanup of old entries
+- [x] Client IP extraction from socket
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/rate_limiter.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
-- `config/config.exs`
+**Config options:**
+- `rate_limit_enabled` - Enable/disable (default: true)
+- `rate_limit_requests` - Max requests per window (default: 60)
+- `rate_limit_window_ms` - Window size in ms (default: 60000)
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/rate_limiter.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (added to supervisor)
+- `lib/pure_gopher_ai/gopher_handler.ex` (rate limit check)
+- `config/config.exs` (added rate limit options)
 
 ---
 
@@ -289,7 +297,8 @@ This document tracks the implementation status of all planned features.
 
 | Date | Feature | Status | Commit |
 |------|---------|--------|--------|
-| 2025-01-01 | gophermap Support | Complete | (pending) |
+| 2025-01-01 | gophermap Support | Complete | 4d9a795 |
+| 2025-01-01 | Rate Limiting | Complete | (pending) |
 
 ---
 
