@@ -189,7 +189,10 @@ defmodule PureGopherAi.GopherHandler do
     do: phlog_index(host, port, network, 1)
 
   defp route_selector("/phlog/page/" <> page_str, host, port, network, _ip, _socket) do
-    page = String.to_integer(page_str) rescue 1
+    page = case Integer.parse(page_str) do
+      {p, ""} -> p
+      _ -> 1
+    end
     phlog_index(host, port, network, page)
   end
 
@@ -197,16 +200,21 @@ defmodule PureGopherAi.GopherHandler do
     do: phlog_feed(host, port, network)
 
   defp route_selector("/phlog/year/" <> year_str, host, port, _network, _ip, _socket) do
-    year = String.to_integer(year_str) rescue nil
-    if year, do: phlog_year(host, port, year), else: error_response("Invalid year")
+    case Integer.parse(year_str) do
+      {year, ""} -> phlog_year(host, port, year)
+      _ -> error_response("Invalid year")
+    end
   end
 
   defp route_selector("/phlog/month/" <> rest, host, port, _network, _ip, _socket) do
     case String.split(rest, "/", parts: 2) do
       [year_str, month_str] ->
-        year = String.to_integer(year_str) rescue nil
-        month = String.to_integer(month_str) rescue nil
-        if year && month, do: phlog_month(host, port, year, month), else: error_response("Invalid date")
+        with {year, ""} <- Integer.parse(year_str),
+             {month, ""} <- Integer.parse(month_str) do
+          phlog_month(host, port, year, month)
+        else
+          _ -> error_response("Invalid date")
+        end
       _ ->
         error_response("Invalid date format")
     end

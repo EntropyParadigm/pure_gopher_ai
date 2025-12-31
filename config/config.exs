@@ -86,11 +86,17 @@ config :pure_gopher_ai,
   admin_token: nil,             # Set to a secure token to enable admin
 
   # External blocklist integration
-  blocklist_enabled: false,     # Enable external blocklist fetching
+  # Blocks known bad actors from accessing the server
+  blocklist_enabled: true,      # Enable external blocklist fetching
   blocklist_refresh_ms: 3_600_000,  # Refresh interval (1 hour)
-  blocklist_file: "~/.gopher/blocklist.txt",  # Local blocklist file
-  blocklist_sources: [          # Remote blocklist sources
-    {"floodgap", "https://gopher.floodgap.com/gopher/blocklist.txt"}
+  blocklist_file: "~/.gopher/blocklist.txt",  # Local blocklist file (custom entries)
+  blocklist_sources: [
+    # Floodgap's official Gopher bot blocklist (fetched via Gopher protocol)
+    {"floodgap", "gopher://gopher.floodgap.com/0/responsible-bot"},
+    # FireHOL curated blocklists (fetched via HTTPS)
+    {"firehol_level1", "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"},
+    {"firehol_abusers_1d", "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_abusers_1d.netset"},
+    {"stopforumspam_7d", "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/stopforumspam_7d.netset"}
   ]
 
 # Logging
