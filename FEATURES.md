@@ -556,6 +556,230 @@ en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, sv, da, fi, 
 
 ---
 
+## Phase 7: Community & Utility Features
+
+### 7.1 Guestbook
+**Status:** 🔴 Not Started
+**Priority:** High
+**Description:** Classic Gopher guestbook for visitor messages.
+
+**Planned Implementation:**
+- [ ] Create `Guestbook` GenServer with persistent storage
+- [ ] `/guestbook` - View all entries
+- [ ] `/guestbook/sign` - Sign the guestbook (input prompt)
+- [ ] Rate limiting per IP
+- [ ] Admin moderation queue
+- [ ] Optional AI sentiment analysis
+- [ ] Configurable max entries
+
+**Selectors:**
+- `/guestbook` - View guestbook entries
+- `/guestbook/sign` - Leave a message
+- `/guestbook/page/<n>` - Paginated view
+
+---
+
+### 7.2 Code Assistant
+**Status:** 🔴 Not Started
+**Priority:** High
+**Description:** AI-powered code generation and explanation.
+
+**Planned Implementation:**
+- [ ] Create `CodeAssistant` module
+- [ ] `/code` - Code assistant menu
+- [ ] `/code/generate <lang> <description>` - Generate code
+- [ ] `/code/explain` - Explain code (input)
+- [ ] `/code/review` - Review code (input)
+- [ ] `/code/convert <from> <to>` - Convert between languages
+- [ ] Syntax highlighting for Gemini (preformatted blocks)
+
+**Selectors:**
+- `/code` - Code assistant menu
+- `/code/generate <lang> <desc>` - Generate code snippet
+- `/code/explain` - Explain code
+- `/code/review` - Code review
+- `/code/languages` - List supported languages
+
+---
+
+### 7.3 Interactive Text Adventure
+**Status:** 🔴 Not Started
+**Priority:** Medium
+**Description:** AI-powered text adventure game with persistent state.
+
+**Planned Implementation:**
+- [ ] Create `Adventure` GenServer
+- [ ] Session-based game state (ETS)
+- [ ] AI-generated story and choices
+- [ ] `/adventure` - Start/continue game
+- [ ] `/adventure/new` - Start new game
+- [ ] `/adventure/save` - Save game state
+- [ ] Genre selection (fantasy, sci-fi, mystery, etc.)
+- [ ] Inventory and stats system
+
+**Selectors:**
+- `/adventure` - Continue or start adventure
+- `/adventure/new` - New game
+- `/adventure/new/<genre>` - New game with genre
+- `/adventure/action <choice>` - Make a choice
+- `/adventure/look` - Examine surroundings
+- `/adventure/inventory` - Check inventory
+
+---
+
+### 7.4 RSS/Atom Feed Aggregator
+**Status:** 🔴 Not Started
+**Priority:** Medium
+**Description:** Subscribe to and read external RSS/Atom feeds.
+
+**Planned Implementation:**
+- [ ] Create `FeedAggregator` GenServer
+- [ ] Feed parsing (RSS 2.0, Atom)
+- [ ] Configurable feed list in config
+- [ ] Auto-refresh on interval
+- [ ] `/feeds` - List subscribed feeds
+- [ ] `/feeds/<id>` - View feed entries
+- [ ] `/feeds/digest` - AI-summarized digest of all feeds
+- [ ] Admin commands for feed management
+
+**Selectors:**
+- `/feeds` - Feed list
+- `/feeds/<id>` - View feed
+- `/feeds/<id>/entry/<n>` - View entry
+- `/feeds/digest` - AI digest of all feeds
+- `/feeds/opml` - Export as OPML
+
+---
+
+### 7.5 Weather Service
+**Status:** 🔴 Not Started
+**Priority:** Low
+**Description:** Weather information formatted for Gopher/Gemini.
+
+**Planned Implementation:**
+- [ ] Create `Weather` module
+- [ ] Integration with free weather API (Open-Meteo)
+- [ ] `/weather` - Weather prompt
+- [ ] `/weather/<location>` - Get weather
+- [ ] AI-enhanced weather descriptions
+- [ ] Multi-day forecast
+- [ ] ASCII weather icons
+
+**Selectors:**
+- `/weather` - Weather input prompt
+- `/weather/<location>` - Current weather
+- `/weather/<location>/forecast` - Multi-day forecast
+
+---
+
+### 7.6 Fortune/Quote Service
+**Status:** 🔴 Not Started
+**Priority:** Low
+**Description:** Random fortunes and quotes, optionally AI-generated.
+
+**Planned Implementation:**
+- [ ] Create `Fortune` module
+- [ ] Built-in fortune database
+- [ ] `/fortune` - Random fortune
+- [ ] `/fortune/ai` - AI-generated fortune
+- [ ] `/fortune/<category>` - Category-specific
+- [ ] Categories: tech, wisdom, humor, programming
+- [ ] Daily fortune (cached per day)
+
+**Selectors:**
+- `/fortune` - Random fortune
+- `/fortune/ai` - AI-generated fortune
+- `/fortune/<category>` - By category
+- `/fortune/categories` - List categories
+
+---
+
+### 7.7 Link Directory
+**Status:** 🔴 Not Started
+**Priority:** Medium
+**Description:** Curated directory of Gopher/Gemini links.
+
+**Planned Implementation:**
+- [ ] Create `LinkDirectory` module with persistent storage
+- [ ] `/links` - Browse categories
+- [ ] `/links/<category>` - Links in category
+- [ ] `/links/suggest` - Suggest a link
+- [ ] Admin approval workflow
+- [ ] AI-generated descriptions
+- [ ] Link health checking
+
+**Selectors:**
+- `/links` - Link directory home
+- `/links/<category>` - Category view
+- `/links/search <query>` - Search links
+- `/links/suggest` - Suggest a link
+- `/links/random` - Random link
+
+---
+
+### 7.8 Bulletin Board
+**Status:** 🔴 Not Started
+**Priority:** Medium
+**Description:** Simple message board for discussions.
+
+**Planned Implementation:**
+- [ ] Create `Board` GenServer with persistent storage
+- [ ] `/board` - List threads
+- [ ] `/board/new` - Create thread
+- [ ] `/board/<id>` - View thread
+- [ ] `/board/<id>/reply` - Reply to thread
+- [ ] Rate limiting and moderation
+- [ ] Optional AI moderation/filtering
+
+**Selectors:**
+- `/board` - Board index
+- `/board/new` - New thread
+- `/board/<id>` - View thread
+- `/board/<id>/reply` - Reply
+
+---
+
+### 7.9 Finger Protocol Support
+**Status:** 🔴 Not Started
+**Priority:** Low
+**Description:** Classic finger protocol (RFC 1288) support.
+
+**Planned Implementation:**
+- [ ] Create `FingerHandler` for ThousandIsland
+- [ ] Port 79 listener
+- [ ] `.plan` file serving from user directories
+- [ ] User info display
+- [ ] Integration with existing user/session data
+
+**Config:**
+- `finger_enabled` - Enable finger protocol
+- `finger_port` - Port (default: 79)
+- `finger_users_dir` - User .plan directory
+
+---
+
+### 7.10 Health/Status API
+**Status:** 🔴 Not Started
+**Priority:** High
+**Description:** Health checks and metrics endpoints.
+
+**Planned Implementation:**
+- [ ] Create `HealthCheck` module
+- [ ] `/health` - JSON health status
+- [ ] `/health/live` - Liveness probe
+- [ ] `/health/ready` - Readiness probe
+- [ ] `/metrics` - Prometheus-compatible metrics
+- [ ] Uptime, memory, request counts
+- [ ] Model loading status
+
+**Selectors:**
+- `/health` - Health status (JSON for monitoring)
+- `/health/live` - Simple liveness check
+- `/health/ready` - Readiness check
+- `/metrics` - Prometheus metrics
+
+---
+
 ## Implementation Log
 
 | Date | Feature | Status | Commit |
