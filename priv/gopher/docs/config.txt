@@ -1,0 +1,33 @@
+PureGopherAI Configuration
+===========================
+
+Environment Variables
+---------------------
+GOPHER_PORT     - Clearnet listening port (default: 70 prod, 7070 dev)
+TOR_ENABLED     - Enable Tor listener (default: true)
+TOR_PORT        - Tor internal port (default: 7071)
+ONION_ADDRESS   - Your .onion address for responses
+CONTENT_DIR     - Static content directory (default: ~/.gopher)
+
+Config Files
+------------
+config/config.exs - Base configuration
+config/dev.exs    - Development overrides
+config/prod.exs   - Production settings
+config/test.exs   - Test environment
+
+Example
+-------
+# Run with custom settings:
+GOPHER_PORT=7070 CONTENT_DIR=/var/gopher iex -S mix
+
+Hardware Detection
+------------------
+The server auto-detects your platform:
+- macOS (Apple Silicon): Torchx with Metal MPS
+- Linux/Other: EXLA CPU backend
+
+AI Model
+--------
+Default model: GPT-2 (openai-community/gpt2)
+First run will download ~500MB from Hugging Face.

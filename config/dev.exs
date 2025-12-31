@@ -11,4 +11,7 @@ config :pure_gopher_ai,
   # Tor: enabled by default for dev testing
   tor_enabled: System.get_env("TOR_ENABLED") != "false",
   tor_port: String.to_integer(System.get_env("TOR_PORT") || "7071"),
-  onion_address: System.get_env("ONION_ADDRESS")
+  onion_address: System.get_env("ONION_ADDRESS"),
+
+  # Use sample content from priv/gopher in dev
+  content_dir: System.get_env("CONTENT_DIR") || "priv/gopher"

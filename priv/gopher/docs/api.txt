@@ -1,0 +1,45 @@
+PureGopherAI API Reference
+===========================
+
+Gopher Selectors
+----------------
+
+/               Root menu
+/ask            AI query (Type 7 search)
+/ask <query>    Direct AI query
+/about          Server statistics
+/files          Browse static content
+/files/<path>   Access specific file
+
+AI Query Format
+---------------
+The /ask selector accepts natural language queries:
+
+  echo "/ask What is Elixir?" | nc localhost 7070
+
+Response includes:
+- Original query
+- AI-generated response
+- Processing time
+
+Gophermap Integration
+---------------------
+Static content is served from the content_dir (default: ~/.gopher).
+
+Supported file types:
+- .txt, .md     -> Type 0 (text)
+- .gif          -> Type g (GIF)
+- .jpg, .png    -> Type I (image)
+- .mp3, .wav    -> Type s (sound)
+- .html         -> Type h (HTML)
+- directories   -> Type 1 (menu)
+
+Custom gophermaps control directory listings.
+
+Network Detection
+-----------------
+The handler detects clearnet vs Tor connections and adjusts
+host/port in responses accordingly.
+
+Clearnet: Uses configured clearnet_host and clearnet_port
+Tor: Uses onion_address and port 70

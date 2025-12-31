@@ -1,0 +1,13 @@
+# PureGopherAI Content Directory
+# This is a sample gophermap file
+
+iWelcome to the PureGopherAI File Archive
+i
+i=== Documentation ===
+1Documentation	/docs
+0README	/README.txt
+
+i
+i=== About ===
+iThis content is served via the gophermap module.
+iEdit ~/.gopher/gophermap to customize this menu.

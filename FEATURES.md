@@ -8,21 +8,26 @@ This document tracks the implementation status of all planned features.
 ## Phase 1: Core Server Features
 
 ### 1.1 gophermap Support
-**Status:** 🔴 Not Started
+**Status:** 🟢 Complete
 **Priority:** High
 **Description:** Serve static content from configurable directory using standard gophermap format.
 
 **Implementation:**
-- [ ] Create `GophermapParser` module
-- [ ] Support standard gophermap format (type, display, selector, host, port)
-- [ ] Configurable content directory (`~/.gopher/` or custom)
-- [ ] Auto-generate directory listings
-- [ ] Support for info lines, links, files, subdirectories
+- [x] Create `Gophermap` module
+- [x] Support standard gophermap format (type, display, selector, host, port)
+- [x] Configurable content directory (`~/.gopher/` or custom via `content_dir`)
+- [x] Auto-generate directory listings when no gophermap exists
+- [x] Support for info lines, links, files, subdirectories
+- [x] File type detection by extension
+- [x] Directory traversal protection
+- [x] Sample content in `priv/gopher/`
 
-**Files to create/modify:**
-- `lib/pure_gopher_ai/gophermap.ex`
-- `lib/pure_gopher_ai/gopher_handler.ex`
-- `config/config.exs`
+**Files created/modified:**
+- `lib/pure_gopher_ai/gophermap.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (updated)
+- `config/config.exs` (added content_dir)
+- `config/dev.exs` (uses priv/gopher)
+- `priv/gopher/*` (sample content)
 
 ---
 
@@ -284,7 +289,7 @@ This document tracks the implementation status of all planned features.
 
 | Date | Feature | Status | Commit |
 |------|---------|--------|--------|
-| - | - | - | - |
+| 2025-01-01 | gophermap Support | Complete | (pending) |
 
 ---
 

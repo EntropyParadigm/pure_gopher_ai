@@ -1,0 +1,39 @@
+PureGopherAI Installation Guide
+================================
+
+Prerequisites
+-------------
+- Elixir 1.14+
+- Erlang/OTP 25+
+- For Apple Silicon: Xcode Command Line Tools
+
+Quick Start
+-----------
+1. Clone the repository:
+   git clone https://github.com/EntropyParadigm/pure_gopher_ai.git
+
+2. Install dependencies:
+   cd pure_gopher_ai
+   mix deps.get
+
+3. Run the server:
+   iex -S mix
+
+4. Test the connection:
+   echo "" | nc localhost 7070
+
+Tor Setup
+---------
+Run the setup script:
+   sudo ./scripts/setup-tor.sh
+
+Or manually configure /etc/tor/torrc:
+   HiddenServiceDir /var/lib/tor/pure_gopher_ai/
+   HiddenServicePort 70 127.0.0.1:7071
+
+Production
+----------
+For production deployment on macOS:
+   MIX_ENV=prod mix run --no-halt
+
+The server will bind to port 70 (standard Gopher port).

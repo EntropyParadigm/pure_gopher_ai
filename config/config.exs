@@ -30,7 +30,11 @@ config :pure_gopher_ai,
   tor_port: 7071,
   tor_host: "127.0.0.1",
   # Set this after running: sudo cat /var/lib/tor/pure_gopher_ai/hostname
-  onion_address: nil
+  onion_address: nil,
+
+  # Static content directory for gophermap
+  # Supports standard gophermap format
+  content_dir: "~/.gopher"
 
 # Logging
 config :logger, :console,
