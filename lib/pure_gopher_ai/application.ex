@@ -52,6 +52,9 @@ defmodule PureGopherAi.Application do
       # Feed Aggregator
       PureGopherAi.FeedAggregator,
 
+      # Fortune/Quote Service
+      PureGopherAi.Fortune,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

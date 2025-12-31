@@ -27,6 +27,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Adventure
   alias PureGopherAi.FeedAggregator
   alias PureGopherAi.Weather
+  alias PureGopherAi.Fortune
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -95,6 +96,25 @@ defmodule PureGopherAi.GopherHandler do
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
   defp format_ip(ip), do: inspect(ip)
+
+  defp parse_int(str, default) do
+    case Integer.parse(str) do
+      {num, _} -> num
+      :error -> default
+    end
+  end
+
+  defp session_id_from_ip({a, b, c, d}) do
+    :crypto.hash(:sha256, "adventure-#{a}.#{b}.#{c}.#{d}") |> Base.encode16(case: :lower)
+  end
+
+  defp session_id_from_ip({a, b, c, d, e, f, g, h}) do
+    :crypto.hash(:sha256, "adventure-#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}") |> Base.encode16(case: :lower)
+  end
+
+  defp session_id_from_ip(_) do
+    :crypto.hash(:sha256, "adventure-default") |> Base.encode16(case: :lower)
+  end
 
   # Get appropriate host/port based on network type
   defp get_host_port(:tor) do
@@ -382,7 +402,7 @@ defmodule PureGopherAi.GopherHandler do
     do: guestbook_page(host, port, 1)
 
   defp route_selector("/guestbook/page/" <> page_str, host, port, _network, _ip, _socket) do
-    page = String.to_integer(page_str) rescue 1
+    page = parse_int(page_str, 1)
     guestbook_page(host, port, page)
   end
 
@@ -505,6 +525,40 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/weather/forecast " <> location, host, port, _network, _ip, socket),
     do: handle_weather_forecast(location, host, port, socket)
 
+  # Fortune/Quote routes
+  defp route_selector("/fortune", host, port, _network, _ip, _socket),
+    do: fortune_menu(host, port)
+
+  defp route_selector("/fortune/random", host, port, _network, _ip, _socket),
+    do: handle_fortune_random(host, port)
+
+  defp route_selector("/fortune/today", host, port, _network, _ip, _socket),
+    do: handle_fortune_of_day(host, port)
+
+  defp route_selector("/fortune/cookie", host, port, _network, _ip, _socket),
+    do: handle_fortune_cookie(host, port)
+
+  defp route_selector("/fortune/category/" <> category, host, port, _network, _ip, _socket),
+    do: handle_fortune_category(category, host, port)
+
+  defp route_selector("/fortune/interpret", host, port, _network, _ip, _socket),
+    do: fortune_interpret_prompt(host, port)
+
+  defp route_selector("/fortune/interpret\t" <> quote, host, port, _network, _ip, socket),
+    do: handle_fortune_interpret(quote, host, port, socket)
+
+  defp route_selector("/fortune/interpret " <> quote, host, port, _network, _ip, socket),
+    do: handle_fortune_interpret(quote, host, port, socket)
+
+  defp route_selector("/fortune/search", host, port, _network, _ip, _socket),
+    do: fortune_search_prompt(host, port)
+
+  defp route_selector("/fortune/search\t" <> keyword, host, port, _network, _ip, _socket),
+    do: handle_fortune_search(keyword, host, port)
+
+  defp route_selector("/fortune/search " <> keyword, host, port, _network, _ip, _socket),
+    do: handle_fortune_search(keyword, host, port)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -578,6 +632,7 @@ defmodule PureGopherAi.GopherHandler do
     i=== Community ===\t\t#{host}\t#{port}
     1Guestbook\t/guestbook\t#{host}\t#{port}
     1Text Adventure\t/adventure\t#{host}\t#{port}
+    1Fortune & Quotes\t/fortune\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -3705,6 +3760,242 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, reason} ->
         error_response("Forecast error: #{inspect(reason)}")
+    end
+  end
+
+  # === Fortune/Quote Functions ===
+
+  defp fortune_menu(host, port) do
+    {:ok, categories} = Fortune.list_categories()
+
+    category_lines = categories
+      |> Enum.map(fn cat ->
+        "1#{cat.name} (#{cat.count} quotes)\t/fortune/category/#{cat.id}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Fortune & Quotes ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i"The future is not something we enter. The future is\t\t#{host}\t#{port}
+    i something we create." - Leonard Sweet\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Quick Actions ---\t\t#{host}\t#{port}
+    0Random Quote\t/fortune/random\t#{host}\t#{port}
+    0Quote of the Day\t/fortune/today\t#{host}\t#{port}
+    0Fortune Cookie\t/fortune/cookie\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Categories ---\t\t#{host}\t#{port}
+    #{category_lines}
+    i\t\t#{host}\t#{port}
+    i--- AI Features ---\t\t#{host}\t#{port}
+    7AI Interpretation\t/fortune/interpret\t#{host}\t#{port}
+    7Search Quotes\t/fortune/search\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_fortune_random(host, port) do
+    case Fortune.random() do
+      {:ok, {quote, author, category}} ->
+        formatted = Fortune.format_cookie_style({quote, author, category})
+        format_text_response("""
+        === Random Quote ===
+
+        Category: #{String.capitalize(category)}
+
+        #{formatted}
+        """, host, port)
+
+      {:error, reason} ->
+        error_response("Fortune error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_of_day(host, port) do
+    case Fortune.fortune_of_the_day() do
+      {:ok, {quote, author, category}} ->
+        formatted = Fortune.format_cookie_style({quote, author, category})
+        today = Date.utc_today() |> Date.to_string()
+        format_text_response("""
+        === Quote of the Day ===
+        #{today}
+
+        Category: #{String.capitalize(category)}
+
+        #{formatted}
+
+        Come back tomorrow for a new quote!
+        """, host, port)
+
+      {:error, reason} ->
+        error_response("Fortune error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_cookie(host, port) do
+    case Fortune.fortune_cookie() do
+      {:ok, {message, numbers}} ->
+        formatted = Fortune.format_fortune_cookie({message, numbers})
+        format_text_response("""
+        === Fortune Cookie ===
+
+        *crack*
+
+        You open the fortune cookie and find...
+
+        #{formatted}
+        """, host, port)
+
+      {:error, reason} ->
+        error_response("Fortune error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_category(category, host, port) do
+    case Fortune.get_category(category) do
+      {:ok, %{name: name, description: desc, quotes: quotes}} ->
+        quote_lines = quotes
+          |> Enum.take(20)
+          |> Enum.map(fn {quote, author} ->
+            truncated = if String.length(quote) > 60 do
+              String.slice(quote, 0, 57) <> "..."
+            else
+              quote
+            end
+            "\"#{truncated}\" - #{author}"
+          end)
+          |> Enum.join("\n")
+
+        format_text_response("""
+        === #{name} ===
+
+        #{desc}
+
+        #{length(quotes)} quotes in this category:
+
+        #{quote_lines}
+        """, host, port)
+
+      {:error, :category_not_found} ->
+        error_response("Category not found: #{category}")
+    end
+  end
+
+  defp fortune_interpret_prompt(host, port) do
+    """
+    iAI Fortune Interpretation\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a quote or select "Random" for AI interpretation:\t\t#{host}\t#{port}
+    iTip: You can paste any quote for mystical interpretation.\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_fortune_interpret(input, host, port, socket) do
+    input = String.trim(input)
+
+    # If input is "random" or empty, get a random quote first
+    {quote, author} = if input == "" or String.downcase(input) == "random" do
+      case Fortune.random() do
+        {:ok, {q, a, _cat}} -> {q, a}
+        _ -> {"The journey is the reward.", "Chinese Proverb"}
+      end
+    else
+      # User provided their own quote
+      {input, "Unknown"}
+    end
+
+    header = """
+    i=== AI Fortune Interpretation ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iQuote: "#{truncate(quote, 50)}"\t\t#{host}\t#{port}
+    i- #{author}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThe Oracle speaks...\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    """
+
+    ThousandIsland.Socket.send(socket, header)
+
+    case Fortune.interpret({quote, author}) do
+      {:ok, interpretation} ->
+        interpretation
+        |> String.split("\n")
+        |> Enum.each(fn line ->
+          ThousandIsland.Socket.send(socket, "i#{line}\t\t#{host}\t#{port}\r\n")
+        end)
+
+      {:error, reason} ->
+        ThousandIsland.Socket.send(socket, "iInterpretation failed: #{inspect(reason)}\t\t#{host}\t#{port}\r\n")
+    end
+
+    footer = """
+    i\t\t#{host}\t#{port}
+    7Interpret Another\t/fortune/interpret\t#{host}\t#{port}
+    1Back to Fortune\t/fortune\t#{host}\t#{port}
+    .
+    """
+    ThousandIsland.Socket.send(socket, footer)
+
+    :streamed
+  end
+
+  defp fortune_search_prompt(host, port) do
+    """
+    iSearch Quotes\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a keyword to search for quotes:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_fortune_search(keyword, host, port) do
+    keyword = String.trim(keyword)
+
+    case Fortune.search(keyword) do
+      {:ok, []} ->
+        format_text_response("""
+        === Search Results for "#{keyword}" ===
+
+        No quotes found matching "#{keyword}".
+
+        Try a different search term.
+        """, host, port)
+
+      {:ok, results} ->
+        result_lines = results
+          |> Enum.take(15)
+          |> Enum.map(fn {quote, author, category} ->
+            truncated = if String.length(quote) > 70 do
+              String.slice(quote, 0, 67) <> "..."
+            else
+              quote
+            end
+            "[#{category}] \"#{truncated}\" - #{author}"
+          end)
+          |> Enum.join("\n\n")
+
+        format_text_response("""
+        === Search Results for "#{keyword}" ===
+
+        Found #{length(results)} quote(s):
+
+        #{result_lines}
+        """, host, port)
+
+      {:error, reason} ->
+        error_response("Search error: #{inspect(reason)}")
+    end
+  end
+
+  defp truncate(text, max_len) do
+    if String.length(text) > max_len do
+      String.slice(text, 0, max_len - 3) <> "..."
+    else
+      text
     end
   end
 

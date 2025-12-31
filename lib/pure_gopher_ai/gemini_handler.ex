@@ -28,6 +28,7 @@ defmodule PureGopherAi.GeminiHandler do
   alias PureGopherAi.Adventure
   alias PureGopherAi.FeedAggregator
   alias PureGopherAi.Weather
+  alias PureGopherAi.Fortune
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, _state) do
@@ -146,7 +147,7 @@ defmodule PureGopherAi.GeminiHandler do
 
   # Guestbook
   defp route_path("/guestbook"), do: guestbook_page(1)
-  defp route_path("/guestbook/page/" <> page), do: guestbook_page(String.to_integer(page) rescue 1)
+  defp route_path("/guestbook/page/" <> page), do: guestbook_page(parse_int(page, 1))
   defp route_path("/guestbook/sign"), do: input_response("Enter: Name | Your message")
   defp route_path("/guestbook/sign?" <> input), do: handle_guestbook_sign(URI.decode(input))
 
@@ -185,6 +186,17 @@ defmodule PureGopherAi.GeminiHandler do
   defp route_path("/weather?" <> location), do: handle_weather(URI.decode(location))
   defp route_path("/weather/forecast"), do: input_response("Enter location for 5-day forecast:")
   defp route_path("/weather/forecast?" <> location), do: handle_weather_forecast(URI.decode(location))
+
+  # Fortune/Quote Service
+  defp route_path("/fortune"), do: fortune_menu()
+  defp route_path("/fortune/random"), do: handle_fortune_random()
+  defp route_path("/fortune/today"), do: handle_fortune_of_day()
+  defp route_path("/fortune/cookie"), do: handle_fortune_cookie()
+  defp route_path("/fortune/category/" <> category), do: handle_fortune_category(category)
+  defp route_path("/fortune/interpret"), do: input_response("Enter a quote for AI interpretation (or 'random'):")
+  defp route_path("/fortune/interpret?" <> input), do: handle_fortune_interpret(URI.decode(input))
+  defp route_path("/fortune/search"), do: input_response("Enter keyword to search quotes:")
+  defp route_path("/fortune/search?" <> keyword), do: handle_fortune_search(URI.decode(keyword))
 
   defp route_path(path), do: error_response(51, "Not found: #{path}")
 
@@ -232,6 +244,7 @@ defmodule PureGopherAi.GeminiHandler do
     ## Community
     => /guestbook Guestbook
     => /adventure Text Adventure
+    => /fortune Fortune & Quotes
 
     ## Server
     => /about About this server
@@ -1403,10 +1416,242 @@ defmodule PureGopherAi.GeminiHandler do
     end
   end
 
+  # Fortune/Quote handlers
+
+  defp fortune_menu do
+    {:ok, categories} = Fortune.list_categories()
+
+    category_links = categories
+      |> Enum.map(fn cat ->
+        "=> /fortune/category/#{cat.id} #{cat.name} (#{cat.count} quotes)"
+      end)
+      |> Enum.join("\n")
+
+    success_response("""
+    # Fortune & Quotes
+
+    > "The future is not something we enter. The future is something we create."
+    > - Leonard Sweet
+
+    ## Quick Actions
+    => /fortune/random Random Quote
+    => /fortune/today Quote of the Day
+    => /fortune/cookie Fortune Cookie
+
+    ## Categories
+    #{category_links}
+
+    ## AI Features
+    => /fortune/interpret AI Interpretation
+    => /fortune/search Search Quotes
+
+    => / Back to Home
+    """)
+  end
+
+  defp handle_fortune_random do
+    case Fortune.random() do
+      {:ok, {quote, author, category}} ->
+        formatted = Fortune.format_cookie_style({quote, author, category})
+
+        success_response("""
+        # Random Quote
+
+        Category: #{String.capitalize(category)}
+
+        ```
+        #{formatted}
+        ```
+
+        => /fortune/random Another Random Quote
+        => /fortune Back to Fortune
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Fortune error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_of_day do
+    case Fortune.fortune_of_the_day() do
+      {:ok, {quote, author, category}} ->
+        formatted = Fortune.format_cookie_style({quote, author, category})
+        today = Date.utc_today() |> Date.to_string()
+
+        success_response("""
+        # Quote of the Day
+        #{today}
+
+        Category: #{String.capitalize(category)}
+
+        ```
+        #{formatted}
+        ```
+
+        Come back tomorrow for a new quote!
+
+        => /fortune Back to Fortune
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Fortune error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_cookie do
+    case Fortune.fortune_cookie() do
+      {:ok, {message, numbers}} ->
+        formatted = Fortune.format_fortune_cookie({message, numbers})
+
+        success_response("""
+        # Fortune Cookie
+
+        *crack*
+
+        You open the fortune cookie and find...
+
+        ```
+        #{formatted}
+        ```
+
+        => /fortune/cookie Another Cookie
+        => /fortune Back to Fortune
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Fortune error: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_category(category) do
+    case Fortune.get_category(category) do
+      {:ok, %{name: name, description: desc, quotes: quotes}} ->
+        quote_lines = quotes
+          |> Enum.take(20)
+          |> Enum.map(fn {quote, author} ->
+            truncated = if String.length(quote) > 70 do
+              String.slice(quote, 0, 67) <> "..."
+            else
+              quote
+            end
+            "> \"#{truncated}\"\n> - #{author}"
+          end)
+          |> Enum.join("\n\n")
+
+        success_response("""
+        # #{name}
+
+        #{desc}
+
+        #{length(quotes)} quotes in this category:
+
+        #{quote_lines}
+
+        => /fortune Back to Fortune
+        """)
+
+      {:error, :category_not_found} ->
+        error_response(51, "Category not found: #{category}")
+    end
+  end
+
+  defp handle_fortune_interpret(input) do
+    input = String.trim(input)
+
+    {quote, author} = if input == "" or String.downcase(input) == "random" do
+      case Fortune.random() do
+        {:ok, {q, a, _cat}} -> {q, a}
+        _ -> {"The journey is the reward.", "Chinese Proverb"}
+      end
+    else
+      {input, "Unknown"}
+    end
+
+    case Fortune.interpret({quote, author}) do
+      {:ok, interpretation} ->
+        success_response("""
+        # AI Fortune Interpretation
+
+        > "#{truncate_text(quote, 70)}"
+        > - #{author}
+
+        ## The Oracle Speaks...
+
+        #{interpretation}
+
+        => /fortune/interpret Interpret Another
+        => /fortune Back to Fortune
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Interpretation failed: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fortune_search(keyword) do
+    keyword = String.trim(keyword)
+
+    case Fortune.search(keyword) do
+      {:ok, []} ->
+        success_response("""
+        # Search Results for "#{keyword}"
+
+        No quotes found matching "#{keyword}".
+
+        Try a different search term.
+
+        => /fortune/search Search Again
+        => /fortune Back to Fortune
+        """)
+
+      {:ok, results} ->
+        result_lines = results
+          |> Enum.take(15)
+          |> Enum.map(fn {quote, author, category} ->
+            truncated = if String.length(quote) > 70 do
+              String.slice(quote, 0, 67) <> "..."
+            else
+              quote
+            end
+            "> [#{category}] \"#{truncated}\"\n> - #{author}"
+          end)
+          |> Enum.join("\n\n")
+
+        success_response("""
+        # Search Results for "#{keyword}"
+
+        Found #{length(results)} quote(s):
+
+        #{result_lines}
+
+        => /fortune/search Search Again
+        => /fortune Back to Fortune
+        """)
+
+      {:error, reason} ->
+        error_response(42, "Search error: #{inspect(reason)}")
+    end
+  end
+
+  defp truncate_text(text, max_len) do
+    if String.length(text) > max_len do
+      String.slice(text, 0, max_len - 3) <> "..."
+    else
+      text
+    end
+  end
+
   defp get_session_id do
     # For Gemini, we use a simple hash since we don't have easy access to client IP in handlers
     # In production, this should use proper session management
     :crypto.hash(:sha256, "gemini-adventure-session") |> Base.encode16(case: :lower)
+  end
+
+  defp parse_int(str, default) do
+    case Integer.parse(str) do
+      {num, _} -> num
+      :error -> default
+    end
   end
 
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
