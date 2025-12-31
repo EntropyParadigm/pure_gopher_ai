@@ -20,6 +20,8 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.AsciiArt
   alias PureGopherAi.Admin
   alias PureGopherAi.Rag
+  alias PureGopherAi.Summarizer
+  alias PureGopherAi.GopherProxy
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -299,6 +301,76 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/docs/view/" <> doc_id, host, port, _network, _ip, _socket),
     do: docs_view(doc_id, host, port)
 
+  # === AI Services: Summarization ===
+
+  # Phlog summarization
+  defp route_selector("/summary/phlog/" <> path, host, port, _network, _ip, socket),
+    do: handle_phlog_summary(path, host, port, socket)
+
+  # Document summarization
+  defp route_selector("/summary/doc/" <> doc_id, host, port, _network, _ip, socket),
+    do: handle_doc_summary(doc_id, host, port, socket)
+
+  # === AI Services: Translation ===
+
+  # Translation menu
+  defp route_selector("/translate", host, port, _network, _ip, _socket),
+    do: translate_menu(host, port)
+
+  # Translate phlog: /translate/<lang>/phlog/<path>
+  defp route_selector("/translate/" <> rest, host, port, _network, _ip, socket) do
+    handle_translate_route(rest, host, port, socket)
+  end
+
+  # === AI Services: Dynamic Content ===
+
+  # Daily digest
+  defp route_selector("/digest", host, port, _network, _ip, socket),
+    do: handle_digest(host, port, socket)
+
+  # Topic discovery
+  defp route_selector("/topics", host, port, _network, _ip, socket),
+    do: handle_topics(host, port, socket)
+
+  # Content discovery/recommendations
+  defp route_selector("/discover", host, port, _network, _ip, _socket),
+    do: discover_prompt(host, port)
+
+  defp route_selector("/discover\t" <> interest, host, port, _network, _ip, socket),
+    do: handle_discover(interest, host, port, socket)
+
+  defp route_selector("/discover " <> interest, host, port, _network, _ip, socket),
+    do: handle_discover(interest, host, port, socket)
+
+  # Explain terms
+  defp route_selector("/explain", host, port, _network, _ip, _socket),
+    do: explain_prompt(host, port)
+
+  defp route_selector("/explain\t" <> term, host, port, _network, _ip, socket),
+    do: handle_explain(term, host, port, socket)
+
+  defp route_selector("/explain " <> term, host, port, _network, _ip, socket),
+    do: handle_explain(term, host, port, socket)
+
+  # === Gopher Proxy ===
+
+  # Fetch external gopher content
+  defp route_selector("/fetch", host, port, _network, _ip, _socket),
+    do: fetch_prompt(host, port)
+
+  defp route_selector("/fetch\t" <> url, host, port, _network, _ip, _socket),
+    do: handle_fetch(url, host, port)
+
+  defp route_selector("/fetch " <> url, host, port, _network, _ip, _socket),
+    do: handle_fetch(url, host, port)
+
+  # Fetch and summarize
+  defp route_selector("/fetch-summary\t" <> url, host, port, _network, _ip, socket),
+    do: handle_fetch_summary(url, host, port, socket)
+
+  defp route_selector("/fetch-summary " <> url, host, port, _network, _ip, socket),
+    do: handle_fetch_summary(url, host, port, socket)
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
     handle_admin(rest, host, port)
@@ -352,6 +424,14 @@ defmodule PureGopherAi.GopherHandler do
     1Browse AI Models\t/models\t#{host}\t#{port}
     1Browse AI Personas\t/personas\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
+    i=== AI Tools ===\t\t#{host}\t#{port}
+    0Daily Digest\t/digest\t#{host}\t#{port}
+    0Topic Discovery\t/topics\t#{host}\t#{port}
+    7Content Recommendations\t/discover\t#{host}\t#{port}
+    7Explain a Term\t/explain\t#{host}\t#{port}
+    1Translation Service\t/translate\t#{host}\t#{port}
+    1Gopher Proxy\t/fetch\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
     i=== Content ===\t\t#{host}\t#{port}
     7Search Content\t/search\t#{host}\t#{port}
     1Document Knowledge Base\t/docs\t#{host}\t#{port}
@@ -362,7 +442,7 @@ defmodule PureGopherAi.GopherHandler do
     0About this server\t/about\t#{host}\t#{port}
     0Server statistics\t/stats\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iTip: /ask-<model> or /chat-<model> for specific models\t\t#{host}\t#{port}
+    iTip: /summary/phlog/<path> for TL;DR summaries\t\t#{host}\t#{port}
     .
     """
   end
@@ -1755,6 +1835,622 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :not_found} ->
         error_response("Document not found: #{doc_id}")
+    end
+  end
+
+  # === AI Services: Summarization Functions ===
+
+  defp handle_phlog_summary(path, host, port, socket) do
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      case Phlog.get_entry(path) do
+        {:ok, entry} ->
+          header = format_gopher_lines([
+            "=== TL;DR: #{entry.title} ===",
+            "Date: #{entry.date}",
+            "",
+            "Summary:"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, header)
+
+          Summarizer.summarize_phlog_stream(path, fn chunk ->
+            if String.length(chunk) > 0 do
+              lines = String.split(chunk, "\n", trim: false)
+              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+              ThousandIsland.Socket.send(socket, Enum.join(formatted))
+            end
+          end)
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Generated in #{elapsed}ms",
+            "",
+            "=> Full entry: /phlog/entry/#{path}"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, _} ->
+          error_response("Phlog entry not found: #{path}")
+      end
+    else
+      case Summarizer.summarize_phlog(path) do
+        {:ok, result} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === TL;DR: #{result.title} ===
+          Date: #{result.date}
+
+          Summary:
+          #{result.summary}
+
+          ---
+          Generated in #{elapsed}ms
+          Full entry: /phlog/entry/#{path}
+          """, host, port)
+
+        {:error, _} ->
+          error_response("Failed to summarize phlog entry: #{path}")
+      end
+    end
+  end
+
+  defp handle_doc_summary(doc_id, host, port, socket) do
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      case Rag.get_document(doc_id) do
+        {:ok, doc} ->
+          header = format_gopher_lines([
+            "=== Document Summary: #{doc.filename} ===",
+            "",
+            "Summary:"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, header)
+
+          Summarizer.summarize_document_stream(doc_id, fn chunk ->
+            if String.length(chunk) > 0 do
+              lines = String.split(chunk, "\n", trim: false)
+              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+              ThousandIsland.Socket.send(socket, Enum.join(formatted))
+            end
+          end)
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Generated in #{elapsed}ms",
+            "",
+            "=> Full document: /docs/view/#{doc_id}"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, _} ->
+          error_response("Document not found: #{doc_id}")
+      end
+    else
+      case Summarizer.summarize_document(doc_id) do
+        {:ok, result} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Document Summary: #{result.filename} ===
+
+          Summary:
+          #{result.summary}
+
+          ---
+          Generated in #{elapsed}ms
+          Full document: /docs/view/#{doc_id}
+          """, host, port)
+
+        {:error, _} ->
+          error_response("Failed to summarize document: #{doc_id}")
+      end
+    end
+  end
+
+  # === AI Services: Translation Functions ===
+
+  defp translate_menu(host, port) do
+    languages = Summarizer.supported_languages()
+
+    lang_lines = languages
+      |> Enum.map(fn {code, name} ->
+        "i  #{code} - #{name}\t\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Translation Service ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTranslate content using AI.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Supported Languages ---\t\t#{host}\t#{port}
+    #{lang_lines}
+    i\t\t#{host}\t#{port}
+    i--- Usage ---\t\t#{host}\t#{port}
+    iTranslate phlog:\t\t#{host}\t#{port}
+    i  /translate/<lang>/phlog/<path>\t\t#{host}\t#{port}
+    iTranslate document:\t\t#{host}\t#{port}
+    i  /translate/<lang>/doc/<id>\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Examples ---\t\t#{host}\t#{port}
+    0Translate to Spanish\t/translate/es/phlog/2025/01/01-hello\t#{host}\t#{port}
+    0Translate to Japanese\t/translate/ja/doc/abc123\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_translate_route(rest, host, port, socket) do
+    # Parse: <lang>/phlog/<path> or <lang>/doc/<id>
+    case String.split(rest, "/", parts: 3) do
+      [lang, "phlog", path] ->
+        handle_translate_phlog(lang, path, host, port, socket)
+
+      [lang, "doc", doc_id] ->
+        handle_translate_doc(lang, doc_id, host, port, socket)
+
+      _ ->
+        error_response("Invalid translation path. Use /translate/<lang>/phlog/<path> or /translate/<lang>/doc/<id>")
+    end
+  end
+
+  defp handle_translate_phlog(lang, path, host, port, socket) do
+    lang_name = Summarizer.language_name(lang)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      case Phlog.get_entry(path) do
+        {:ok, entry} ->
+          header = format_gopher_lines([
+            "=== Translation: #{entry.title} ===",
+            "Original: English -> #{lang_name}",
+            "",
+            "Translated Content:"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, header)
+
+          Summarizer.translate_phlog_stream(path, lang, fn chunk ->
+            if String.length(chunk) > 0 do
+              lines = String.split(chunk, "\n", trim: false)
+              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+              ThousandIsland.Socket.send(socket, Enum.join(formatted))
+            end
+          end)
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Translated to #{lang_name} in #{elapsed}ms",
+            "",
+            "=> Original: /phlog/entry/#{path}"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, _} ->
+          error_response("Phlog entry not found: #{path}")
+      end
+    else
+      case Summarizer.translate_phlog(path, lang) do
+        {:ok, result} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Translation: #{result.title} ===
+          Original: English -> #{lang_name}
+
+          Translated Content:
+          #{result.translated_content}
+
+          ---
+          Translated in #{elapsed}ms
+          Original: /phlog/entry/#{path}
+          """, host, port)
+
+        {:error, _} ->
+          error_response("Failed to translate phlog entry: #{path}")
+      end
+    end
+  end
+
+  defp handle_translate_doc(lang, doc_id, host, port, socket) do
+    lang_name = Summarizer.language_name(lang)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      case Rag.get_document(doc_id) do
+        {:ok, doc} ->
+          header = format_gopher_lines([
+            "=== Translation: #{doc.filename} ===",
+            "Original: English -> #{lang_name}",
+            "",
+            "Translated Content:"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, header)
+
+          chunks = PureGopherAi.Rag.DocumentStore.get_chunks(doc_id)
+          content = chunks
+            |> Enum.map(& &1.content)
+            |> Enum.join("\n\n")
+            |> String.slice(0, 6000)
+
+          Summarizer.translate_stream(content, lang, fn chunk ->
+            if String.length(chunk) > 0 do
+              lines = String.split(chunk, "\n", trim: false)
+              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+              ThousandIsland.Socket.send(socket, Enum.join(formatted))
+            end
+          end)
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Translated to #{lang_name} in #{elapsed}ms",
+            "",
+            "=> Original: /docs/view/#{doc_id}"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, _} ->
+          error_response("Document not found: #{doc_id}")
+      end
+    else
+      case Summarizer.translate_document(doc_id, lang) do
+        {:ok, result} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Translation: #{result.filename} ===
+          Original: English -> #{lang_name}
+
+          Translated Content:
+          #{result.translated_content}
+
+          ---
+          Translated in #{elapsed}ms
+          Original: /docs/view/#{doc_id}
+          """, host, port)
+
+        {:error, _} ->
+          error_response("Failed to translate document: #{doc_id}")
+      end
+    end
+  end
+
+  # === AI Services: Dynamic Content Functions ===
+
+  defp handle_digest(host, port, socket) do
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Daily Digest ===",
+        "AI-generated summary of recent activity",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      Summarizer.daily_digest_stream(fn chunk ->
+        if String.length(chunk) > 0 do
+          lines = String.split(chunk, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+        end
+      end)
+
+      elapsed = System.monotonic_time(:millisecond) - start_time
+      footer = format_gopher_lines([
+        "",
+        "---",
+        "Generated in #{elapsed}ms"
+      ], host, port)
+      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+      :streamed
+    else
+      case Summarizer.daily_digest() do
+        {:ok, digest} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Daily Digest ===
+          AI-generated summary of recent activity
+
+          #{digest}
+
+          ---
+          Generated in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Failed to generate digest: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp handle_topics(host, port, socket) do
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Topic Discovery ===",
+        "AI-identified themes from your content",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      case Summarizer.discover_topics() do
+        {:ok, topics} ->
+          lines = String.split(topics, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Generated in #{elapsed}ms"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, reason} ->
+          ThousandIsland.Socket.send(socket, "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
+          :streamed
+      end
+    else
+      case Summarizer.discover_topics() do
+        {:ok, topics} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Topic Discovery ===
+          AI-identified themes from your content
+
+          #{topics}
+
+          ---
+          Generated in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Failed to discover topics: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp discover_prompt(host, port) do
+    """
+    i=== Content Discovery ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGet AI-powered content recommendations\t\t#{host}\t#{port}
+    ibased on your interests.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic or interest:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_discover(interest, host, port, socket) do
+    interest = String.trim(interest)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Content Recommendations ===",
+        "Based on your interest: \"#{interest}\"",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      case Summarizer.recommend(interest) do
+        {:ok, recommendations} ->
+          lines = String.split(recommendations, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Generated in #{elapsed}ms"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, reason} ->
+          ThousandIsland.Socket.send(socket, "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
+          :streamed
+      end
+    else
+      case Summarizer.recommend(interest) do
+        {:ok, recommendations} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Content Recommendations ===
+          Based on your interest: "#{interest}"
+
+          #{recommendations}
+
+          ---
+          Generated in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Failed to get recommendations: #{inspect(reason)}")
+      end
+    end
+  end
+
+  defp explain_prompt(host, port) do
+    """
+    i=== Explain Mode ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGet AI-powered explanations for\t\t#{host}\t#{port}
+    itechnical terms and concepts.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a term to explain:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_explain(term, host, port, socket) do
+    term = String.trim(term)
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      header = format_gopher_lines([
+        "=== Explanation: #{term} ===",
+        "",
+        ""
+      ], host, port)
+      ThousandIsland.Socket.send(socket, header)
+
+      Summarizer.explain_stream(term, fn chunk ->
+        if String.length(chunk) > 0 do
+          lines = String.split(chunk, "\n", trim: false)
+          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, Enum.join(formatted))
+        end
+      end)
+
+      elapsed = System.monotonic_time(:millisecond) - start_time
+      footer = format_gopher_lines([
+        "",
+        "---",
+        "Generated in #{elapsed}ms"
+      ], host, port)
+      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+      :streamed
+    else
+      case Summarizer.explain(term) do
+        {:ok, explanation} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Explanation: #{term} ===
+
+          #{explanation}
+
+          ---
+          Generated in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Failed to explain: #{inspect(reason)}")
+      end
+    end
+  end
+
+  # === Gopher Proxy Functions ===
+
+  defp fetch_prompt(host, port) do
+    """
+    i=== Gopher Proxy ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFetch content from external Gopher servers.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Usage ---\t\t#{host}\t#{port}
+    iFetch: /fetch gopher://server/selector\t\t#{host}\t#{port}
+    iFetch + Summarize: /fetch-summary gopher://server/selector\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Examples ---\t\t#{host}\t#{port}
+    7Fetch Floodgap\t/fetch gopher://gopher.floodgap.com/\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a Gopher URL:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_fetch(url, host, port) do
+    url = String.trim(url)
+    Logger.info("[GopherProxy] Fetching: #{url}")
+
+    case GopherProxy.fetch(url) do
+      {:ok, result} ->
+        format_text_response("""
+        === Fetched: #{result.host} ===
+        URL: #{result.url}
+        Selector: #{result.selector}
+        Size: #{result.size} bytes
+
+        --- Content ---
+        #{result.content}
+
+        ---
+        Fetched successfully
+        """, host, port)
+
+      {:error, reason} ->
+        error_response("Fetch failed: #{inspect(reason)}")
+    end
+  end
+
+  defp handle_fetch_summary(url, host, port, socket) do
+    url = String.trim(url)
+    Logger.info("[GopherProxy] Fetching with summary: #{url}")
+    start_time = System.monotonic_time(:millisecond)
+
+    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
+      case GopherProxy.fetch(url) do
+        {:ok, result} ->
+          header = format_gopher_lines([
+            "=== Fetched: #{result.host} ===",
+            "URL: #{result.url}",
+            "Size: #{result.size} bytes",
+            "",
+            "--- AI Summary ---",
+            ""
+          ], host, port)
+          ThousandIsland.Socket.send(socket, header)
+
+          Summarizer.summarize_text_stream(result.content, fn chunk ->
+            if String.length(chunk) > 0 do
+              lines = String.split(chunk, "\n", trim: false)
+              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
+              ThousandIsland.Socket.send(socket, Enum.join(formatted))
+            end
+          end, type: "gopher content")
+
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          footer = format_gopher_lines([
+            "",
+            "---",
+            "Summarized in #{elapsed}ms"
+          ], host, port)
+          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
+          :streamed
+
+        {:error, reason} ->
+          error_response("Fetch failed: #{inspect(reason)}")
+      end
+    else
+      case GopherProxy.fetch_and_summarize(url) do
+        {:ok, result} ->
+          elapsed = System.monotonic_time(:millisecond) - start_time
+          format_text_response("""
+          === Fetched: #{result.host} ===
+          URL: #{result.url}
+          Size: #{result.size} bytes
+
+          --- AI Summary ---
+          #{result.summary}
+
+          ---
+          Summarized in #{elapsed}ms
+          """, host, port)
+
+        {:error, reason} ->
+          error_response("Fetch failed: #{inspect(reason)}")
+      end
     end
   end
 
