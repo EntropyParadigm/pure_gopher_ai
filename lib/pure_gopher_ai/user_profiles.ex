@@ -4,6 +4,7 @@ defmodule PureGopherAi.UserProfiles do
 
   Features:
   - Create and manage personal profiles
+  - Passphrase-based authentication (works over Tor/VPN/NAT)
   - Bio, links, interests
   - Rate limiting on creation
   - Admin moderation
@@ -19,7 +20,11 @@ defmodule PureGopherAi.UserProfiles do
   @max_interests 10
   @username_min_length 3
   @username_max_length 20
+  @passphrase_min_length 8
   @cooldown_ms 86400_000  # 1 day between profile creations per IP
+  @pbkdf2_iterations 100_000
+  @max_auth_failures_per_ip 5
+  @auth_failure_window_ms 60_000  # 1 minute
 
   # Client API
 
@@ -28,15 +33,23 @@ defmodule PureGopherAi.UserProfiles do
   end
 
   @doc """
-  Creates a new user profile.
+  Creates a new user profile with passphrase authentication.
 
   Options:
   - `:bio` - Short biography (max 500 chars)
   - `:links` - List of {title, url} tuples (max 10)
   - `:interests` - List of interest strings (max 10)
   """
-  def create(username, ip, opts \\ []) do
-    GenServer.call(__MODULE__, {:create, username, ip, opts})
+  def create(username, passphrase, ip, opts \\ []) do
+    GenServer.call(__MODULE__, {:create, username, passphrase, ip, opts})
+  end
+
+  @doc """
+  Authenticates a user with username and passphrase.
+  Returns {:ok, profile} or {:error, reason}.
+  """
+  def authenticate(username, passphrase, ip \\ nil) do
+    GenServer.call(__MODULE__, {:authenticate, username, passphrase, ip})
   end
 
   @doc """
@@ -47,10 +60,10 @@ defmodule PureGopherAi.UserProfiles do
   end
 
   @doc """
-  Updates a user profile. Only the creator IP can update.
+  Updates a user profile. Requires passphrase authentication.
   """
-  def update(username, ip, updates) do
-    GenServer.call(__MODULE__, {:update, username, ip, updates})
+  def update(username, passphrase, updates) do
+    GenServer.call(__MODULE__, {:update, username, passphrase, updates})
   end
 
   @doc """
@@ -91,18 +104,21 @@ defmodule PureGopherAi.UserProfiles do
     dets_file = Path.join(data_dir, "user_profiles.dets") |> String.to_charlist()
     {:ok, _} = :dets.open_file(@table_name, file: dets_file, type: :set)
 
-    # Track cooldowns in ETS
+    # Track cooldowns in ETS (for profile creation rate limiting)
     :ets.new(:profile_cooldowns, [:named_table, :public, :set])
 
-    Logger.info("[UserProfiles] Started")
+    # Track auth failures in ETS (for brute force protection)
+    :ets.new(:profile_auth_failures, [:named_table, :public, :set])
+
+    Logger.info("[UserProfiles] Started with passphrase authentication")
     {:ok, %{}}
   end
 
   @impl true
-  def handle_call({:create, username, ip, opts}, _from, state) do
+  def handle_call({:create, username, passphrase, ip, opts}, _from, state) do
     ip_hash = hash_ip(ip)
     now = System.system_time(:millisecond)
-    username_lower = String.downcase(username)
+    username_lower = String.downcase(String.trim(username))
 
     cond do
       # Rate limit check
@@ -119,11 +135,19 @@ defmodule PureGopherAi.UserProfiles do
       String.length(username) > @username_max_length ->
         {:reply, {:error, :username_too_long}, state}
 
+      # Validate passphrase
+      String.length(passphrase) < @passphrase_min_length ->
+        {:reply, {:error, :passphrase_too_short}, state}
+
       # Check if username already exists
       username_exists?(username_lower) ->
         {:reply, {:error, :username_taken}, state}
 
       true ->
+        # Generate salt and hash passphrase
+        salt = :crypto.strong_rand_bytes(16)
+        passphrase_hash = hash_passphrase(passphrase, salt)
+
         bio = opts
           |> Keyword.get(:bio, "")
           |> String.slice(0, @max_bio_length)
@@ -144,10 +168,11 @@ defmodule PureGopherAi.UserProfiles do
         profile = %{
           username: username,
           username_lower: username_lower,
+          passphrase_hash: passphrase_hash,
+          salt: salt,
           bio: bio,
           links: links,
           interests: interests,
-          ip_hash: ip_hash,
           created_at: DateTime.utc_now() |> DateTime.to_iso8601(),
           updated_at: DateTime.utc_now() |> DateTime.to_iso8601(),
           views: 0
@@ -165,15 +190,47 @@ defmodule PureGopherAi.UserProfiles do
   end
 
   @impl true
+  def handle_call({:authenticate, username, passphrase, ip}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+    ip_hash = if ip, do: hash_ip(ip), else: nil
+
+    # Check brute force protection
+    if ip_hash && auth_rate_limited?(ip_hash) do
+      {:reply, {:error, :too_many_attempts}, state}
+    else
+      case :dets.lookup(@table_name, username_lower) do
+        [{^username_lower, profile}] ->
+          expected_hash = hash_passphrase(passphrase, profile.salt)
+
+          if secure_compare(expected_hash, profile.passphrase_hash) do
+            # Clear auth failures on success
+            if ip_hash, do: :ets.delete(:profile_auth_failures, ip_hash)
+            {:reply, {:ok, Map.drop(profile, [:passphrase_hash, :salt])}, state}
+          else
+            # Record auth failure
+            if ip_hash, do: record_auth_failure(ip_hash)
+            {:reply, {:error, :invalid_credentials}, state}
+          end
+
+        [] ->
+          # Record auth failure even for non-existent users (prevent enumeration)
+          if ip_hash, do: record_auth_failure(ip_hash)
+          {:reply, {:error, :invalid_credentials}, state}
+      end
+    end
+  end
+
+  @impl true
   def handle_call({:get, username}, _from, state) do
-    username_lower = String.downcase(username)
+    username_lower = String.downcase(String.trim(username))
 
     case :dets.lookup(@table_name, username_lower) do
       [{^username_lower, profile}] ->
         # Increment view count
         updated = %{profile | views: profile.views + 1}
         :dets.insert(@table_name, {username_lower, updated})
-        {:reply, {:ok, updated}, state}
+        # Don't expose sensitive fields
+        {:reply, {:ok, Map.drop(updated, [:passphrase_hash, :salt])}, state}
 
       [] ->
         {:reply, {:error, :not_found}, state}
@@ -181,13 +238,15 @@ defmodule PureGopherAi.UserProfiles do
   end
 
   @impl true
-  def handle_call({:update, username, ip, updates}, _from, state) do
-    username_lower = String.downcase(username)
-    ip_hash = hash_ip(ip)
+  def handle_call({:update, username, passphrase, updates}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
 
     case :dets.lookup(@table_name, username_lower) do
       [{^username_lower, profile}] ->
-        if profile.ip_hash == ip_hash do
+        # Verify passphrase
+        expected_hash = hash_passphrase(passphrase, profile.salt)
+
+        if secure_compare(expected_hash, profile.passphrase_hash) do
           updated = profile
             |> maybe_update(:bio, updates, @max_bio_length)
             |> maybe_update_links(updates)
@@ -198,9 +257,9 @@ defmodule PureGopherAi.UserProfiles do
           :dets.sync(@table_name)
 
           Logger.info("[UserProfiles] Updated profile: #{username}")
-          {:reply, {:ok, updated}, state}
+          {:reply, {:ok, Map.drop(updated, [:passphrase_hash, :salt])}, state}
         else
-          {:reply, {:error, :unauthorized}, state}
+          {:reply, {:error, :invalid_credentials}, state}
         end
 
       [] ->
@@ -221,7 +280,7 @@ defmodule PureGopherAi.UserProfiles do
       |> Enum.sort_by(& &1.created_at, :desc)
       |> Enum.drop(offset)
       |> Enum.take(limit)
-      |> Enum.map(fn p -> Map.drop(p, [:ip_hash]) end)
+      |> Enum.map(fn p -> Map.drop(p, [:passphrase_hash, :salt]) end)
 
     {:reply, {:ok, sorted, length(profiles)}, state}
   end
@@ -237,7 +296,7 @@ defmodule PureGopherAi.UserProfiles do
       end)
 
       if matches_username or matches_interests do
-        [Map.drop(profile, [:ip_hash]) | acc]
+        [Map.drop(profile, [:passphrase_hash, :salt]) | acc]
       else
         acc
       end
@@ -352,6 +411,58 @@ defmodule PureGopherAi.UserProfiles do
           |> Enum.take(@max_interests)
           |> Enum.map(&sanitize_text/1)
         Map.put(profile, :interests, sanitized)
+    end
+  end
+
+  # Passphrase hashing using PBKDF2
+  defp hash_passphrase(passphrase, salt) do
+    :crypto.pbkdf2_hmac(:sha256, passphrase, salt, @pbkdf2_iterations, 32)
+    |> Base.encode64()
+  end
+
+  # Timing-safe comparison to prevent timing attacks
+  defp secure_compare(a, b) when is_binary(a) and is_binary(b) do
+    byte_size(a) == byte_size(b) and :crypto.hash_equals(a, b)
+  end
+
+  defp secure_compare(_, _), do: false
+
+  # Auth failure rate limiting
+  defp auth_rate_limited?(ip_hash) do
+    now = System.system_time(:millisecond)
+
+    case :ets.lookup(:profile_auth_failures, ip_hash) do
+      [{^ip_hash, failures, first_failure}] ->
+        # Check if within window and over limit
+        if now - first_failure < @auth_failure_window_ms do
+          failures >= @max_auth_failures_per_ip
+        else
+          # Window expired, reset
+          :ets.delete(:profile_auth_failures, ip_hash)
+          false
+        end
+
+      [] ->
+        false
+    end
+  end
+
+  defp record_auth_failure(ip_hash) do
+    now = System.system_time(:millisecond)
+
+    case :ets.lookup(:profile_auth_failures, ip_hash) do
+      [{^ip_hash, failures, first_failure}] ->
+        if now - first_failure < @auth_failure_window_ms do
+          # Within window, increment
+          :ets.insert(:profile_auth_failures, {ip_hash, failures + 1, first_failure})
+        else
+          # Window expired, start new
+          :ets.insert(:profile_auth_failures, {ip_hash, 1, now})
+        end
+
+      [] ->
+        # First failure
+        :ets.insert(:profile_auth_failures, {ip_hash, 1, now})
     end
   end
 end

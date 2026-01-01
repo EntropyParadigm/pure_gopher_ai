@@ -1161,35 +1161,91 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 ---
 
 ### 9.4 User Profiles / Homepages
-**Status:** 🟢 Complete
+**Status:** 🟢 Complete (Updated: Passphrase Auth)
 **Priority:** Medium
-**Description:** Personal homepage system for community members.
+**Description:** Personal homepage system for community members with passphrase-based authentication.
 
 **Implementation:**
 - [x] Create `UserProfiles` GenServer with DETS persistent storage
 - [x] `/users` - User profiles menu with stats
-- [x] `/users/create` - Create profile (Type 7 input)
+- [x] `/users/create` - Create profile with passphrase (format: username:passphrase)
 - [x] `/users/list` - Browse all profiles (paginated)
 - [x] `/users/search` - Search by username or interests
 - [x] `/users/~username` - View user's homepage
 - [x] Profile includes bio, links, interests
 - [x] Username validation (3-20 chars, alphanumeric + underscore)
+- [x] **Passphrase-based authentication** (PBKDF2 with 100k iterations)
+- [x] Passphrase minimum 8 characters
+- [x] Timing-safe comparison for password verification
+- [x] Brute force protection (5 attempts per minute per IP)
 - [x] Rate limiting (1 profile per IP per day)
 - [x] View count tracking
 - [x] Admin delete functionality
 
+**Authentication:**
+- Passphrase is required when creating profile
+- Passphrase is required for editing profile, writing phlogs, sending messages, managing bookmarks
+- Works correctly over Tor, VPN, and NAT (no IP-based ownership)
+- Never stored in plaintext - only salted hash
+
 **Selectors:**
 - `/users` - User profiles menu
-- `/users/create` - Create profile
+- `/users/create` - Create profile (input: username:passphrase)
 - `/users/list` - Browse all users
 - `/users/list/page/<n>` - Paginated user list
 - `/users/search` - Search users
 - `/users/~<username>` - View user homepage
 
 **Files created/modified:**
-- `lib/pure_gopher_ai/user_profiles.ex` (new)
+- `lib/pure_gopher_ai/user_profiles.ex` (passphrase auth)
 - `lib/pure_gopher_ai/gopher_handler.ex` (user routes)
 - `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 9.4.1 User Phlog (User Blog Posts)
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Allow registered users to write their own blog posts.
+
+**Implementation:**
+- [x] Create `UserPhlog` GenServer with DETS persistent storage
+- [x] Create `ContentModerator` module for AI safety checks
+- [x] `/phlog/users` - List all users with phlogs
+- [x] `/phlog/recent` - Recent posts across all users
+- [x] `/phlog/user/<username>` - List user's posts
+- [x] `/phlog/user/<username>/<post_id>` - View single post
+- [x] `/phlog/user/<username>/write` - Write new post (requires passphrase)
+- [x] `/phlog/user/<username>/edit/<post_id>` - Edit post (requires passphrase)
+- [x] `/phlog/user/<username>/delete/<post_id>` - Delete post (requires passphrase)
+- [x] Passphrase authentication required for all write operations
+- [x] AI content moderation (blocks only highly illegal content)
+- [x] Rate limiting (1 post per hour)
+- [x] Content limits: title 100 chars, body 10,000 chars
+- [x] Maximum 100 posts per user
+- [x] View count tracking
+
+**Content Moderation:**
+- AI-powered check for highly illegal content (CSAM, terrorism, violence instructions)
+- "Fail open" approach - allows content if AI check fails
+- Does NOT moderate opinions, politics, legal adult content
+- Quick pattern check + AI classification
+
+**Selectors:**
+- `/phlog/users` - List phlog authors
+- `/phlog/recent` - Recent user posts
+- `/phlog/user/<username>` - User's phlog
+- `/phlog/user/<username>/<post_id>` - View post
+- `/phlog/user/<username>/write` - Write post (input: passphrase|title|body)
+- `/phlog/user/<username>/edit/<post_id>` - Edit post
+- `/phlog/user/<username>/delete/<post_id>` - Delete post
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/user_phlog.ex` (new)
+- `lib/pure_gopher_ai/content_moderator.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (phlog routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `lib/pure_gopher_ai/sitemap.ex` (new selectors)
 
 ---
 

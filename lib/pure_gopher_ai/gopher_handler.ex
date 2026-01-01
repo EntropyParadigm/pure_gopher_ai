@@ -48,6 +48,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.UnitConverter
   alias PureGopherAi.Calculator
   alias PureGopherAi.Games
+  alias PureGopherAi.UserPhlog
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -534,10 +535,10 @@ defmodule PureGopherAi.GopherHandler do
     do: mail_inbox(username, host, port)
 
   defp route_selector("/mail/inbox/" <> username, host, port, _network, _ip, _socket),
-    do: mail_inbox(username, host, port)
+    do: mail_inbox_prompt(username, host, port)
 
   defp route_selector("/mail/sent/" <> username, host, port, _network, _ip, _socket),
-    do: mail_sent(username, host, port)
+    do: mail_sent_prompt(username, host, port)
 
   defp route_selector("/mail/read/" <> rest, host, port, _network, _ip, _socket) do
     case String.split(rest, "/", parts: 2) do
@@ -613,48 +614,60 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/bookmarks/login", host, port, _network, _ip, _socket),
     do: bookmarks_login_prompt(host, port)
 
-  defp route_selector("/bookmarks/login\t" <> username, host, port, _network, _ip, _socket),
-    do: bookmarks_user(username, nil, host, port)
+  defp route_selector("/bookmarks/login\t" <> input, host, port, _network, ip, _socket),
+    do: handle_bookmarks_login(input, host, port, ip)
 
-  defp route_selector("/bookmarks/login " <> username, host, port, _network, _ip, _socket),
-    do: bookmarks_user(username, nil, host, port)
+  defp route_selector("/bookmarks/login " <> input, host, port, _network, ip, _socket),
+    do: handle_bookmarks_login(input, host, port, ip)
 
-  defp route_selector("/bookmarks/user/" <> rest, host, port, _network, _ip, _socket) do
-    case String.split(rest, "/", parts: 2) do
-      [username, folder] -> bookmarks_user(username, folder, host, port)
-      [username] -> bookmarks_user(username, nil, host, port)
+  # Authenticated bookmark routes (include passphrase in path)
+  defp route_selector("/bookmarks/user/" <> rest, host, port, _network, ip, _socket) do
+    case String.split(rest, "/", parts: 3) do
+      [username, passphrase, folder] -> bookmarks_user(username, passphrase, folder, host, port, ip)
+      [username, passphrase] -> bookmarks_user(username, passphrase, nil, host, port, ip)
+      [_username] -> bookmarks_login_redirect(host, port)
     end
   end
 
-  defp route_selector("/bookmarks/add/" <> rest, host, port, _network, _ip, _socket) do
+  defp route_selector("/bookmarks/add/" <> rest, host, port, _network, ip, _socket) do
+    rest = String.replace(rest, "\t", "/")
+    case String.split(rest, "/", parts: 4) do
+      [username, passphrase, selector, title] -> bookmarks_add(username, passphrase, selector, title, host, port, ip)
+      [username, passphrase, selector] -> bookmarks_add_title_prompt(username, passphrase, selector, host, port)
+      [username, passphrase] when passphrase != "" -> bookmarks_add_prompt(username, passphrase, host, port)
+      _ -> bookmarks_login_redirect(host, port)
+    end
+  end
+
+  defp route_selector("/bookmarks/remove/" <> rest, host, port, _network, ip, _socket) do
+    case String.split(rest, "/", parts: 3) do
+      [username, passphrase, bookmark_id] -> bookmarks_remove(username, passphrase, bookmark_id, host, port, ip)
+      _ -> bookmarks_login_redirect(host, port)
+    end
+  end
+
+  defp route_selector("/bookmarks/folders/" <> rest, host, port, _network, ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [username, passphrase] -> bookmarks_folders(username, passphrase, host, port, ip)
+      _ -> bookmarks_login_redirect(host, port)
+    end
+  end
+
+  defp route_selector("/bookmarks/newfolder/" <> rest, host, port, _network, ip, _socket) do
     rest = String.replace(rest, "\t", "/")
     case String.split(rest, "/", parts: 3) do
-      [username, selector, title] -> bookmarks_add(username, selector, title, host, port)
-      [username, selector] -> bookmarks_add_title_prompt(username, selector, host, port)
-      [username] -> bookmarks_add_prompt(username, host, port)
+      [username, passphrase, folder_name] -> bookmarks_create_folder(username, passphrase, folder_name, host, port, ip)
+      [username, passphrase] when passphrase != "" -> bookmarks_newfolder_prompt(username, passphrase, host, port)
+      _ -> bookmarks_login_redirect(host, port)
     end
   end
 
-  defp route_selector("/bookmarks/remove/" <> rest, host, port, _network, _ip, _socket) do
+  defp route_selector("/bookmarks/export/" <> rest, host, port, _network, ip, _socket) do
     case String.split(rest, "/", parts: 2) do
-      [username, bookmark_id] -> bookmarks_remove(username, bookmark_id, host, port)
-      _ -> error_response("Invalid request")
+      [username, passphrase] -> bookmarks_export(username, passphrase, host, port, ip)
+      _ -> bookmarks_login_redirect(host, port)
     end
   end
-
-  defp route_selector("/bookmarks/folders/" <> username, host, port, _network, _ip, _socket),
-    do: bookmarks_folders(username, host, port)
-
-  defp route_selector("/bookmarks/newfolder/" <> rest, host, port, _network, _ip, _socket) do
-    rest = String.replace(rest, "\t", "/")
-    case String.split(rest, "/", parts: 2) do
-      [username, folder_name] -> bookmarks_create_folder(username, folder_name, host, port)
-      [username] -> bookmarks_newfolder_prompt(username, host, port)
-    end
-  end
-
-  defp route_selector("/bookmarks/export/" <> username, host, port, _network, _ip, _socket),
-    do: bookmarks_export(username, host, port)
 
   # Unit Converter routes
   defp route_selector("/convert", host, port, _network, _ip, _socket),
@@ -793,6 +806,73 @@ defmodule PureGopherAi.GopherHandler do
 
       _ ->
         error_response("Invalid comment path")
+    end
+  end
+
+  # User Phlog (user-submitted blog posts)
+  defp route_selector("/phlog/users", host, port, _network, _ip, _socket),
+    do: user_phlog_authors(host, port)
+
+  defp route_selector("/phlog/recent", host, port, _network, _ip, _socket),
+    do: user_phlog_recent(host, port)
+
+  defp route_selector("/phlog/user/" <> rest, host, port, _network, ip, _socket) do
+    case String.split(rest, "/", parts: 3) do
+      [username] ->
+        user_phlog_list(username, host, port)
+
+      [username, action] ->
+        cond do
+          action == "write" ->
+            user_phlog_write_prompt(username, host, port)
+
+          String.starts_with?(action, "write\t") ->
+            input = String.replace_prefix(action, "write\t", "")
+            handle_user_phlog_write(username, input, host, port, ip)
+
+          String.starts_with?(action, "write ") ->
+            input = String.replace_prefix(action, "write ", "")
+            handle_user_phlog_write(username, input, host, port, ip)
+
+          true ->
+            # This is a post_id
+            user_phlog_view(username, action, host, port)
+        end
+
+      [username, action, third] ->
+        cond do
+          action == "edit" && not String.contains?(third, "\t") && not String.contains?(third, " ") ->
+            user_phlog_edit_prompt(username, third, host, port)
+
+          action == "edit" && String.contains?(third, "\t") ->
+            [post_id | rest_parts] = String.split(third, "\t", parts: 2)
+            input = Enum.at(rest_parts, 0) || ""
+            handle_user_phlog_edit(username, post_id, input, host, port, ip)
+
+          action == "edit" && String.contains?(third, " ") ->
+            [post_id | rest_parts] = String.split(third, " ", parts: 2)
+            input = Enum.at(rest_parts, 0) || ""
+            handle_user_phlog_edit(username, post_id, input, host, port, ip)
+
+          action == "delete" && not String.contains?(third, "\t") && not String.contains?(third, " ") ->
+            user_phlog_delete_prompt(username, third, host, port)
+
+          action == "delete" && String.contains?(third, "\t") ->
+            [post_id | rest_parts] = String.split(third, "\t", parts: 2)
+            passphrase = Enum.at(rest_parts, 0) || ""
+            handle_user_phlog_delete(username, post_id, passphrase, host, port)
+
+          action == "delete" && String.contains?(third, " ") ->
+            [post_id | rest_parts] = String.split(third, " ", parts: 2)
+            passphrase = Enum.at(rest_parts, 0) || ""
+            handle_user_phlog_delete(username, post_id, passphrase, host, port)
+
+          true ->
+            error_response("Invalid user phlog path")
+        end
+
+      _ ->
+        error_response("Invalid user phlog path")
     end
   end
 
@@ -5253,48 +5333,68 @@ defmodule PureGopherAi.GopherHandler do
     """
     i=== Create Your Profile ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iEnter your desired username:\t\t#{host}\t#{port}
-    i(3-20 characters, letters/numbers/underscores, starts with letter)\t\t#{host}\t#{port}
+    iEnter: username:passphrase\t\t#{host}\t#{port}
+    i(e.g., myname:mysecretpassword123)\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iAfter creating your profile, you can visit:\t\t#{host}\t#{port}
-    i/users/~yourusername to view it\t\t#{host}\t#{port}
+    iUsername: 3-20 chars, letters/numbers/underscores\t\t#{host}\t#{port}
+    iPassphrase: 8+ characters (keep this secret!)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iYou'll need your passphrase to:\t\t#{host}\t#{port}
+    i- Edit your profile\t\t#{host}\t#{port}
+    i- Write phlog posts\t\t#{host}\t#{port}
+    i- Send messages\t\t#{host}\t#{port}
+    i- Manage bookmarks\t\t#{host}\t#{port}
     .
     """
   end
 
-  defp handle_users_create(username, ip, host, port) do
-    username = String.trim(username)
+  defp handle_users_create(input, ip, host, port) do
+    case String.split(String.trim(input), ":", parts: 2) do
+      [username, passphrase] when byte_size(passphrase) > 0 ->
+        username = String.trim(username)
+        passphrase = String.trim(passphrase)
 
-    case UserProfiles.create(username, ip) do
-      {:ok, _} ->
-        """
-        i=== Profile Created! ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iWelcome, #{username}!\t\t#{host}\t#{port}
-        iYour profile has been created.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1View Your Profile\t/users/~#{username}\t#{host}\t#{port}
-        1Back to Users\t/users\t#{host}\t#{port}
-        .
-        """
+        case UserProfiles.create(username, passphrase, ip) do
+          {:ok, _} ->
+            """
+            i=== Profile Created! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iWelcome, #{username}!\t\t#{host}\t#{port}
+            iYour profile has been created.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iIMPORTANT: Remember your passphrase!\t\t#{host}\t#{port}
+            iYou'll need it to edit your profile and post.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1View Your Profile\t/users/~#{username}\t#{host}\t#{port}
+            1Write Your First Phlog Post\t/phlog/user/#{username}/write\t#{host}\t#{port}
+            1Back to Users\t/users\t#{host}\t#{port}
+            .
+            """
 
-      {:error, :rate_limited} ->
-        error_response("You can only create one profile per day.")
+          {:error, :rate_limited} ->
+            error_response("You can only create one profile per day from this connection.")
 
-      {:error, :invalid_username} ->
-        error_response("Invalid username. Use letters, numbers, underscores. Must start with a letter.")
+          {:error, :invalid_username} ->
+            error_response("Invalid username. Use letters, numbers, underscores. Must start with a letter.")
 
-      {:error, :username_too_short} ->
-        error_response("Username too short. Minimum 3 characters.")
+          {:error, :username_too_short} ->
+            error_response("Username too short. Minimum 3 characters.")
 
-      {:error, :username_too_long} ->
-        error_response("Username too long. Maximum 20 characters.")
+          {:error, :username_too_long} ->
+            error_response("Username too long. Maximum 20 characters.")
 
-      {:error, :username_taken} ->
-        error_response("That username is already taken.")
+          {:error, :passphrase_too_short} ->
+            error_response("Passphrase too short. Minimum 8 characters.")
 
-      {:error, reason} ->
-        error_response("Failed to create profile: #{inspect(reason)}")
+          {:error, :username_taken} ->
+            error_response("That username is already taken.")
+
+          {:error, reason} ->
+            error_response("Failed to create profile: #{inspect(reason)}")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: username:passphrase")
     end
   end
 
@@ -6422,58 +6522,104 @@ defmodule PureGopherAi.GopherHandler do
     """
     i=== Mailbox Login ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iEnter your username to access your mailbox:\t\t#{host}\t#{port}
+    iEnter: username:passphrase\t\t#{host}\t#{port}
+    i(e.g., myname:mysecretpassword)\t\t#{host}\t#{port}
     .
     """
   end
 
-  defp mail_inbox(username, host, port) do
-    username = String.trim(username)
+  defp mail_inbox(input, host, port) do
+    case String.split(String.trim(input), ":", parts: 2) do
+      [username, passphrase] when byte_size(passphrase) > 0 ->
+        case Mailbox.get_inbox(username, passphrase, limit: 20) do
+          {:ok, []} ->
+            case Mailbox.unread_count(username, passphrase) do
+              {:ok, _} ->
+                """
+                i=== Inbox: #{username} ===\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                iNo messages yet.\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
+                1Back to Mailbox\t/mail\t#{host}\t#{port}
+                .
+                """
+              {:error, _} ->
+                error_response("Invalid credentials.")
+            end
 
-    case Mailbox.get_inbox(username, limit: 20) do
-      {:ok, []} ->
-        unread = Mailbox.unread_count(username)
+          {:ok, messages} ->
+            message_lines = messages
+              |> Enum.map(fn msg ->
+                status = if msg.read, do: "   ", else: "[*]"
+                date = format_date(msg.created_at)
+                "0#{status} #{truncate(msg.subject, 30)} - from #{msg.from} (#{date})\t/mail/read/#{username}/#{msg.id}\t#{host}\t#{port}"
+              end)
+              |> Enum.join("\r\n")
 
-        """
-        i=== Inbox: #{username} ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iNo messages yet.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
-        1View Sent Messages\t/mail/sent/#{username}\t#{host}\t#{port}
-        1Back to Mailbox\t/mail\t#{host}\t#{port}
-        .
-        """
+            """
+            i=== Inbox: #{username} ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            i[*] = unread\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{message_lines}
+            i\t\t#{host}\t#{port}
+            7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
+            1Back to Mailbox\t/mail\t#{host}\t#{port}
+            .
+            """
 
-      {:ok, messages} ->
-        unread = Mailbox.unread_count(username)
+          {:error, :invalid_credentials} ->
+            error_response("Invalid credentials.")
 
-        message_lines = messages
-          |> Enum.map(fn msg ->
-            status = if msg.read, do: "   ", else: "[*]"
-            date = format_date(msg.created_at)
-            "1#{status} #{truncate(msg.subject, 30)} - from #{msg.from} (#{date})\t/mail/read/#{username}/#{msg.id}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
+          {:error, reason} ->
+            error_response("Failed to load inbox: #{inspect(reason)}")
+        end
 
-        """
-        i=== Inbox: #{username} ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iUnread: #{unread} | Total: #{length(messages)}\t\t#{host}\t#{port}
-        i[*] = unread\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{message_lines}
-        i\t\t#{host}\t#{port}
-        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
-        1View Sent Messages\t/mail/sent/#{username}\t#{host}\t#{port}
-        1Back to Mailbox\t/mail\t#{host}\t#{port}
-        .
-        """
+      _ ->
+        error_response("Invalid format. Use: username:passphrase")
     end
   end
 
-  defp mail_sent(username, host, port) do
-    case Mailbox.get_sent(username, limit: 20) do
+  defp mail_inbox_prompt(username, host, port) do
+    """
+    i=== Access Inbox: #{username} ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease log in via the main mailbox menu.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Login to Mailbox\t/mail/login\t#{host}\t#{port}
+    1Back to Mailbox\t/mail\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp mail_sent_prompt(username, host, port) do
+    """
+    i=== Sent Messages: #{username} ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease log in via the main mailbox menu.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Login to Mailbox\t/mail/login\t#{host}\t#{port}
+    1Back to Mailbox\t/mail\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp mail_sent(_username, host, port) do
+    # Sent messages now require login first
+    """
+    i=== Sent Messages ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease use the login to access sent messages.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Login to Mailbox\t/mail/login\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp _mail_sent_old(username, host, port) do
+    # This function is deprecated - kept for reference
+    case Mailbox.get_sent(username, "deprecated", limit: 20) do
       {:ok, []} ->
         """
         i=== Sent Messages: #{username} ===\t\t#{host}\t#{port}
@@ -6507,37 +6653,18 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp mail_read(username, message_id, host, port) do
-    case Mailbox.read_message(username, message_id) do
-      {:ok, msg} ->
-        date = format_date(msg.created_at)
-        direction = if msg.to == username, do: "From: #{msg.from}", else: "To: #{msg.to}"
-
-        body_lines = msg.body
-          |> String.split("\n")
-          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
-          |> Enum.join("\r\n")
-
-        """
-        i=== Message ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iSubject: #{msg.subject}\t\t#{host}\t#{port}
-        i#{direction}\t\t#{host}\t#{port}
-        iDate: #{date}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i--- Message ---\t\t#{host}\t#{port}
-        #{body_lines}
-        i\t\t#{host}\t#{port}
-        i--- Actions ---\t\t#{host}\t#{port}
-        7Reply to #{msg.from}\t/mail/send/#{username}/#{msg.from}\t#{host}\t#{port}
-        1Delete Message\t/mail/delete/#{username}/#{message_id}\t#{host}\t#{port}
-        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
-        .
-        """
-
-      {:error, :not_found} ->
-        error_response("Message not found.")
-    end
+  defp mail_read(_username, _message_id, host, port) do
+    # Reading messages now requires passphrase authentication
+    # Please log in via the main mailbox menu
+    """
+    i=== Read Message ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease log in to access your messages.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Login to Mailbox\t/mail/login\t#{host}\t#{port}
+    1Back to Mailbox\t/mail\t#{host}\t#{port}
+    .
+    """
   end
 
   defp mail_compose_prompt(username, host, port) do
@@ -6619,21 +6746,17 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp handle_mail_delete(username, message_id, host, port) do
-    case Mailbox.delete_message(username, message_id) do
-      :ok ->
-        """
-        i=== Message Deleted ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iThe message has been deleted.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
-        .
-        """
-
-      {:error, :not_found} ->
-        error_response("Message not found.")
-    end
+  defp handle_mail_delete(_username, _message_id, host, port) do
+    # Deleting messages now requires passphrase authentication
+    """
+    i=== Delete Message ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease log in to manage your messages.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Login to Mailbox\t/mail/login\t#{host}\t#{port}
+    1Back to Mailbox\t/mail\t#{host}\t#{port}
+    .
+    """
   end
 
   # === Trivia Functions ===
@@ -6909,74 +7032,144 @@ defmodule PureGopherAi.GopherHandler do
     """
     i=== Bookmarks Login ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iEnter your username to access bookmarks:\t\t#{host}\t#{port}
+    iEnter username:passphrase to access bookmarks:\t\t#{host}\t#{port}
+    i(e.g., myname:mysecretpassword123)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTip: Register at /users first if you don't have an account.\t\t#{host}\t#{port}
     .
     """
   end
 
-  defp bookmarks_user(username, folder, host, port) do
-    username = String.trim(username)
+  defp bookmarks_login_redirect(host, port) do
+    """
+    i=== Authentication Required ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease log in to access your bookmarks.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Log In\t/bookmarks/login\t#{host}\t#{port}
+    1Back to Bookmarks Menu\t/bookmarks\t#{host}\t#{port}
+    .
+    """
+  end
 
-    case Bookmarks.list(username, folder) do
-      {:ok, bookmarks} ->
-        {:ok, folders} = Bookmarks.folders(username)
-        count = Bookmarks.count(username)
-        current_folder = folder || "default"
+  defp handle_bookmarks_login(input, host, port, ip) do
+    input = String.trim(input)
 
-        folder_lines = folders
-          |> Enum.map(fn f ->
-            indicator = if f == current_folder, do: "[*] ", else: "    "
-            "1#{indicator}#{f}\t/bookmarks/user/#{username}/#{f}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
+    case String.split(input, ":", parts: 2) do
+      [username, passphrase] when username != "" and passphrase != "" ->
+        username = String.trim(username)
+        passphrase = String.trim(passphrase)
 
-        bookmark_lines = if Enum.empty?(bookmarks) do
-          "iNo bookmarks in this folder yet.\t\t#{host}\t#{port}"
-        else
-          bookmarks
-          |> Enum.map(fn b ->
-            # Determine the type from the selector
-            type = cond do
-              String.starts_with?(b.selector, "/ask") -> "7"
-              String.starts_with?(b.selector, "/chat") -> "7"
-              String.starts_with?(b.selector, "/search") -> "7"
-              String.ends_with?(b.selector, "/") -> "1"
-              true -> "1"
-            end
-            "#{type}#{b.title}\t#{b.selector}\t#{host}\t#{port}\r\n" <>
-            "i    [#{b.folder}] Added: #{String.slice(b.created_at, 0, 10)}\t\t#{host}\t#{port}\r\n" <>
-            "1    [Remove]\t/bookmarks/remove/#{username}/#{b.id}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
+        # Verify credentials
+        case UserProfiles.authenticate(username, passphrase) do
+          {:ok, _profile} ->
+            # URL-encode the passphrase to handle special characters
+            encoded_pass = URI.encode(passphrase, &URI.char_unreserved?/1)
+            bookmarks_user(username, encoded_pass, nil, host, port, ip)
+
+          {:error, :user_not_found} ->
+            error_response("User not found. Register at /users first.")
+
+          {:error, :invalid_credentials} ->
+            error_response("Invalid passphrase.")
+
+          {:error, :rate_limited} ->
+            error_response("Too many failed attempts. Try again later.")
+
+          {:error, _} ->
+            error_response("Authentication failed.")
         end
 
-        """
-        i=== #{username}'s Bookmarks ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iTotal bookmarks: #{count}/100\t\t#{host}\t#{port}
-        iCurrent folder: #{current_folder}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i--- Folders ---\t\t#{host}\t#{port}
-        #{folder_lines}
-        i\t\t#{host}\t#{port}
-        i--- Bookmarks ---\t\t#{host}\t#{port}
-        #{bookmark_lines}
-        i\t\t#{host}\t#{port}
-        i--- Actions ---\t\t#{host}\t#{port}
-        7Add Bookmark\t/bookmarks/add/#{username}\t#{host}\t#{port}
-        7New Folder\t/bookmarks/newfolder/#{username}\t#{host}\t#{port}
-        0Export Bookmarks\t/bookmarks/export/#{username}\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Menu\t/bookmarks\t#{host}\t#{port}
-        .
-        """
+      _ ->
+        error_response("Invalid format. Use: username:passphrase")
+    end
+  end
+
+  defp bookmarks_user(username, passphrase, folder, host, port, ip) do
+    username = String.trim(username)
+    # Decode the passphrase from URL encoding
+    passphrase = URI.decode(passphrase)
+
+    case Bookmarks.list(username, passphrase, folder) do
+      {:ok, bookmarks} ->
+        case Bookmarks.folders(username, passphrase) do
+          {:ok, folders} ->
+            case Bookmarks.count(username, passphrase) do
+              {:ok, count} ->
+                current_folder = folder || "default"
+                # Re-encode for URLs
+                encoded_pass = URI.encode(passphrase, &URI.char_unreserved?/1)
+
+                folder_lines = folders
+                  |> Enum.map(fn f ->
+                    indicator = if f == current_folder, do: "[*] ", else: "    "
+                    "1#{indicator}#{f}\t/bookmarks/user/#{username}/#{encoded_pass}/#{f}\t#{host}\t#{port}"
+                  end)
+                  |> Enum.join("\r\n")
+
+                bookmark_lines = if Enum.empty?(bookmarks) do
+                  "iNo bookmarks in this folder yet.\t\t#{host}\t#{port}"
+                else
+                  bookmarks
+                  |> Enum.map(fn b ->
+                    # Determine the type from the selector
+                    type = cond do
+                      String.starts_with?(b.selector, "/ask") -> "7"
+                      String.starts_with?(b.selector, "/chat") -> "7"
+                      String.starts_with?(b.selector, "/search") -> "7"
+                      String.ends_with?(b.selector, "/") -> "1"
+                      true -> "1"
+                    end
+                    "#{type}#{b.title}\t#{b.selector}\t#{host}\t#{port}\r\n" <>
+                    "i    [#{b.folder}] Added: #{String.slice(b.created_at, 0, 10)}\t\t#{host}\t#{port}\r\n" <>
+                    "1    [Remove]\t/bookmarks/remove/#{username}/#{encoded_pass}/#{b.id}\t#{host}\t#{port}"
+                  end)
+                  |> Enum.join("\r\n")
+                end
+
+                """
+                i=== #{username}'s Bookmarks ===\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                iTotal bookmarks: #{count}/100\t\t#{host}\t#{port}
+                iCurrent folder: #{current_folder}\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                i--- Folders ---\t\t#{host}\t#{port}
+                #{folder_lines}
+                i\t\t#{host}\t#{port}
+                i--- Bookmarks ---\t\t#{host}\t#{port}
+                #{bookmark_lines}
+                i\t\t#{host}\t#{port}
+                i--- Actions ---\t\t#{host}\t#{port}
+                7Add Bookmark\t/bookmarks/add/#{username}/#{encoded_pass}\t#{host}\t#{port}
+                7New Folder\t/bookmarks/newfolder/#{username}/#{encoded_pass}\t#{host}\t#{port}
+                0Export Bookmarks\t/bookmarks/export/#{username}/#{encoded_pass}\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                1Back to Menu\t/bookmarks\t#{host}\t#{port}
+                .
+                """
+
+              {:error, _} ->
+                error_response("Authentication failed.")
+            end
+
+          {:error, _} ->
+            error_response("Authentication failed.")
+        end
+
+      {:error, :invalid_credentials} ->
+        error_response("Invalid passphrase.")
+
+      {:error, :user_not_found} ->
+        error_response("User not found. Register at /users first.")
 
       {:error, _} ->
         error_response("Could not retrieve bookmarks.")
     end
   end
 
-  defp bookmarks_add_prompt(username, host, port) do
+  defp bookmarks_add_prompt(username, passphrase, host, port) do
+    encoded_pass = URI.encode(URI.decode(passphrase), &URI.char_unreserved?/1)
+
     """
     i=== Add Bookmark ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -6986,7 +7179,7 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  defp bookmarks_add_title_prompt(username, selector, host, port) do
+  defp bookmarks_add_title_prompt(username, passphrase, selector, host, port) do
     """
     i=== Add Bookmark ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -6997,11 +7190,13 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  defp bookmarks_add(username, selector, title, host, port) do
-    # URL decode the selector if needed
+  defp bookmarks_add(username, passphrase, selector, title, host, port, _ip) do
+    # URL decode the selector and passphrase
     selector = URI.decode(selector)
+    passphrase = URI.decode(passphrase)
+    encoded_pass = URI.encode(passphrase, &URI.char_unreserved?/1)
 
-    case Bookmarks.add(username, selector, title) do
+    case Bookmarks.add(username, passphrase, selector, title) do
       {:ok, bookmark} ->
         """
         i=== Bookmark Added! ===\t\t#{host}\t#{port}
@@ -7010,8 +7205,8 @@ defmodule PureGopherAi.GopherHandler do
         iSelector: #{bookmark.selector}\t\t#{host}\t#{port}
         iFolder: #{bookmark.folder}\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
-        1View Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
-        1Add Another\t/bookmarks/add/#{username}\t#{host}\t#{port}
+        1View Bookmarks\t/bookmarks/user/#{username}/#{encoded_pass}\t#{host}\t#{port}
+        7Add Another\t/bookmarks/add/#{username}/#{encoded_pass}\t#{host}\t#{port}
         .
         """
 
@@ -7021,34 +7216,49 @@ defmodule PureGopherAi.GopherHandler do
       {:error, :already_exists} ->
         error_response("This selector is already bookmarked.")
 
+      {:error, :invalid_credentials} ->
+        error_response("Invalid passphrase.")
+
       {:error, _} ->
         error_response("Could not add bookmark.")
     end
   end
 
-  defp bookmarks_remove(username, bookmark_id, host, port) do
-    case Bookmarks.remove(username, bookmark_id) do
+  defp bookmarks_remove(username, passphrase, bookmark_id, host, port, _ip) do
+    passphrase = URI.decode(passphrase)
+    encoded_pass = URI.encode(passphrase, &URI.char_unreserved?/1)
+
+    case Bookmarks.remove(username, passphrase, bookmark_id) do
       :ok ->
         """
         i=== Bookmark Removed ===\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         iThe bookmark has been removed.\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
-        1Back to Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        1Back to Bookmarks\t/bookmarks/user/#{username}/#{encoded_pass}\t#{host}\t#{port}
         .
         """
 
       {:error, :not_found} ->
         error_response("Bookmark not found.")
+
+      {:error, :invalid_credentials} ->
+        error_response("Invalid passphrase.")
+
+      {:error, _} ->
+        error_response("Could not remove bookmark.")
     end
   end
 
-  defp bookmarks_folders(username, host, port) do
-    case Bookmarks.folders(username) do
+  defp bookmarks_folders(username, passphrase, host, port, _ip) do
+    passphrase = URI.decode(passphrase)
+    encoded_pass = URI.encode(passphrase, &URI.char_unreserved?/1)
+
+    case Bookmarks.folders(username, passphrase) do
       {:ok, folders} ->
         folder_lines = folders
           |> Enum.map(fn f ->
-            "1#{f}\t/bookmarks/user/#{username}/#{f}\t#{host}\t#{port}"
+            "1#{f}\t/bookmarks/user/#{username}/#{encoded_pass}/#{f}\t#{host}\t#{port}"
           end)
           |> Enum.join("\r\n")
 
@@ -7057,17 +7267,20 @@ defmodule PureGopherAi.GopherHandler do
         i\t\t#{host}\t#{port}
         #{folder_lines}
         i\t\t#{host}\t#{port}
-        7Create New Folder\t/bookmarks/newfolder/#{username}\t#{host}\t#{port}
-        1Back to Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        7Create New Folder\t/bookmarks/newfolder/#{username}/#{encoded_pass}\t#{host}\t#{port}
+        1Back to Bookmarks\t/bookmarks/user/#{username}/#{encoded_pass}\t#{host}\t#{port}
         .
         """
+
+      {:error, :invalid_credentials} ->
+        error_response("Invalid passphrase.")
 
       {:error, _} ->
         error_response("Could not retrieve folders.")
     end
   end
 
-  defp bookmarks_newfolder_prompt(username, host, port) do
+  defp bookmarks_newfolder_prompt(username, passphrase, host, port) do
     """
     i=== Create Folder ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -7076,16 +7289,19 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  defp bookmarks_create_folder(username, folder_name, host, port) do
-    case Bookmarks.create_folder(username, folder_name) do
+  defp bookmarks_create_folder(username, passphrase, folder_name, host, port, _ip) do
+    passphrase = URI.decode(passphrase)
+    encoded_pass = URI.encode(passphrase, &URI.char_unreserved?/1)
+
+    case Bookmarks.create_folder(username, passphrase, folder_name) do
       :ok ->
         """
         i=== Folder Created! ===\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         iFolder "#{folder_name}" has been created.\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
-        1View Folder\t/bookmarks/user/#{username}/#{folder_name}\t#{host}\t#{port}
-        1Back to Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        1View Folder\t/bookmarks/user/#{username}/#{encoded_pass}/#{folder_name}\t#{host}\t#{port}
+        1Back to Bookmarks\t/bookmarks/user/#{username}/#{encoded_pass}\t#{host}\t#{port}
         .
         """
 
@@ -7097,11 +7313,19 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :invalid_name} ->
         error_response("Invalid folder name.")
+
+      {:error, :invalid_credentials} ->
+        error_response("Invalid passphrase.")
+
+      {:error, _} ->
+        error_response("Could not create folder.")
     end
   end
 
-  defp bookmarks_export(username, host, port) do
-    case Bookmarks.export(username) do
+  defp bookmarks_export(username, passphrase, host, port, _ip) do
+    passphrase = URI.decode(passphrase)
+
+    case Bookmarks.export(username, passphrase) do
       {:ok, export_text} ->
         if export_text == "" do
           """
@@ -7119,6 +7343,9 @@ defmodule PureGopherAi.GopherHandler do
           === End of Export ===
           """
         end
+
+      {:error, :invalid_credentials} ->
+        "Error: Invalid passphrase.\n"
 
       {:error, _} ->
         "Error exporting bookmarks.\n"
@@ -8450,6 +8677,297 @@ defmodule PureGopherAi.GopherHandler do
       "i#{escaped}\t\t#{host}\t#{port}\r\n"
     end)
     |> Enum.join("")
+  end
+
+  # === User Phlog Functions ===
+
+  defp user_phlog_authors(host, port) do
+    case UserPhlog.list_authors(limit: 50) do
+      {:ok, []} ->
+        format_text_response("""
+        === Phlog Authors ===
+
+        No user phlogs yet. Create a profile and start writing!
+        """, host, port)
+
+      {:ok, authors} ->
+        author_lines = authors
+          |> Enum.map(fn a ->
+            "1~#{a.username} (#{a.count} posts)\t/phlog/user/#{a.username}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Phlog Authors ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iUsers who write phlogs (blogs):\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{author_lines}
+        i\t\t#{host}\t#{port}
+        1Recent Posts (All Users)\t/phlog/recent\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp user_phlog_recent(host, port) do
+    case UserPhlog.recent_posts(limit: 20) do
+      {:ok, []} ->
+        format_text_response("""
+        === Recent User Posts ===
+
+        No posts yet. Create a profile and start writing!
+        """, host, port)
+
+      {:ok, posts} ->
+        post_lines = posts
+          |> Enum.map(fn p ->
+            date = format_date(p.created_at)
+            "0[#{date}] #{p.title} (by ~#{p.username})\t/phlog/user/#{p.username_lower}/#{p.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Recent User Posts ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{post_lines}
+        i\t\t#{host}\t#{port}
+        1View by Author\t/phlog/users\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp user_phlog_list(username, host, port) do
+    case UserPhlog.list_posts(username, limit: 50) do
+      {:ok, [], _total} ->
+        """
+        i=== ~#{username}'s Phlog ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo posts yet.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Write a Post\t/phlog/user/#{username}/write\t#{host}\t#{port}
+        1View Profile\t/users/~#{username}\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+
+      {:ok, posts, total} ->
+        post_lines = posts
+          |> Enum.map(fn p ->
+            date = format_date(p.created_at)
+            "0[#{date}] #{p.title}\t/phlog/user/#{username}/#{p.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== ~#{username}'s Phlog ===\t\t#{host}\t#{port}
+        i#{total} posts\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{post_lines}
+        i\t\t#{host}\t#{port}
+        7Write a Post\t/phlog/user/#{username}/write\t#{host}\t#{port}
+        1View Profile\t/users/~#{username}\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp user_phlog_view(username, post_id, host, port) do
+    case UserPhlog.get_post(username, post_id) do
+      {:ok, post} ->
+        date = format_date(post.created_at)
+
+        body_lines = post.body
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=========================================\t\t#{host}\t#{port}
+        i   #{post.title}\t\t#{host}\t#{port}
+        i   by ~#{post.username}\t\t#{host}\t#{port}
+        i   #{date}\t\t#{host}\t#{port}
+        i=========================================\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{body_lines}
+        i\t\t#{host}\t#{port}
+        i---\t\t#{host}\t#{port}
+        iViews: #{post.views}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1More posts by ~#{post.username}\t/phlog/user/#{username}\t#{host}\t#{port}
+        1View Author Profile\t/users/~#{username}\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Post not found.")
+    end
+  end
+
+  defp user_phlog_write_prompt(username, host, port) do
+    """
+    i=== Write a Phlog Post ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPosting as: ~#{username}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter: passphrase|title|body\t\t#{host}\t#{port}
+    i(Use | to separate fields)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    imypassword|My First Post|This is my post content.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTitle: max 100 characters\t\t#{host}\t#{port}
+    iBody: max 10,000 characters\t\t#{host}\t#{port}
+    iRate limit: 1 post per hour\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_user_phlog_write(username, input, host, port, ip) do
+    case String.split(input, "|", parts: 3) do
+      [passphrase, title, body] ->
+        case UserPhlog.create_post(username, String.trim(passphrase), String.trim(title), String.trim(body), ip) do
+          {:ok, post} ->
+            """
+            i=== Post Published! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iYour post "#{post.title}" has been published.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            0View Your Post\t/phlog/user/#{username}/#{post.id}\t#{host}\t#{port}
+            1Your Phlog\t/phlog/user/#{username}\t#{host}\t#{port}
+            1Back to Phlog\t/phlog\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :invalid_credentials} ->
+            error_response("Invalid passphrase.")
+
+          {:error, :rate_limited} ->
+            error_response("Rate limited. You can only post once per hour.")
+
+          {:error, :empty_title} ->
+            error_response("Title cannot be empty.")
+
+          {:error, :title_too_long} ->
+            error_response("Title too long. Maximum 100 characters.")
+
+          {:error, :empty_body} ->
+            error_response("Body cannot be empty.")
+
+          {:error, :body_too_long} ->
+            error_response("Body too long. Maximum 10,000 characters.")
+
+          {:error, :post_limit_reached} ->
+            error_response("You've reached the maximum of 100 posts.")
+
+          {:error, :content_blocked, reason} ->
+            error_response("Content blocked: #{reason}")
+
+          {:error, reason} ->
+            error_response("Failed to create post: #{inspect(reason)}")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: passphrase|title|body")
+    end
+  end
+
+  defp user_phlog_edit_prompt(username, post_id, host, port) do
+    case UserPhlog.get_post(username, post_id) do
+      {:ok, post} ->
+        """
+        i=== Edit Post ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEditing: #{post.title}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEnter: passphrase|new title|new body\t\t#{host}\t#{port}
+        i(Use | to separate fields)\t\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Post not found.")
+    end
+  end
+
+  defp handle_user_phlog_edit(username, post_id, input, host, port, ip) do
+    case String.split(input, "|", parts: 3) do
+      [passphrase, title, body] ->
+        case UserPhlog.edit_post(username, String.trim(passphrase), post_id, String.trim(title), String.trim(body), ip) do
+          {:ok, post} ->
+            """
+            i=== Post Updated! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            0View Your Post\t/phlog/user/#{username}/#{post.id}\t#{host}\t#{port}
+            1Your Phlog\t/phlog/user/#{username}\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :invalid_credentials} ->
+            error_response("Invalid passphrase.")
+
+          {:error, :not_found} ->
+            error_response("Post not found.")
+
+          {:error, :content_blocked, reason} ->
+            error_response("Content blocked: #{reason}")
+
+          {:error, reason} ->
+            error_response("Failed to update: #{inspect(reason)}")
+        end
+
+      _ ->
+        error_response("Invalid format. Use: passphrase|title|body")
+    end
+  end
+
+  defp user_phlog_delete_prompt(username, post_id, host, port) do
+    case UserPhlog.get_post(username, post_id) do
+      {:ok, post} ->
+        """
+        i=== Delete Post ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iAre you sure you want to delete:\t\t#{host}\t#{port}
+        i"#{post.title}"?\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iThis cannot be undone!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iEnter your passphrase to confirm:\t\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Post not found.")
+    end
+  end
+
+  defp handle_user_phlog_delete(username, post_id, passphrase, host, port) do
+    case UserPhlog.delete_post(username, String.trim(passphrase), post_id) do
+      :ok ->
+        """
+        i=== Post Deleted ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iYour post has been deleted.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Your Phlog\t/phlog/user/#{username}\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_credentials} ->
+        error_response("Invalid passphrase.")
+
+      {:error, :not_found} ->
+        error_response("Post not found.")
+
+      {:error, reason} ->
+        error_response("Failed to delete: #{inspect(reason)}")
+    end
   end
 
   # Error response

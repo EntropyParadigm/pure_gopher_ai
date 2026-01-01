@@ -45,6 +45,8 @@ defmodule PureGopherAi.Sitemap do
           %{selector: "/docs/ask", type: 7, description: "Query documents with RAG"},
           %{selector: "/phlog", type: 1, description: "Phlog (blog)"},
           %{selector: "/phlog/feed", type: 0, description: "Atom feed"},
+          %{selector: "/phlog/users", type: 1, description: "User phlog authors"},
+          %{selector: "/phlog/recent", type: 1, description: "Recent user posts"},
           %{selector: "/feeds", type: 1, description: "RSS/Atom feeds"},
           %{selector: "/art", type: 1, description: "ASCII art generator"},
           %{selector: "/files", type: 1, description: "Browse files"}

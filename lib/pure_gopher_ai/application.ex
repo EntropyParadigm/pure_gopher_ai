@@ -78,6 +78,9 @@ defmodule PureGopherAi.Application do
       # User Profiles
       PureGopherAi.UserProfiles,
 
+      # User Phlog (user-submitted blog posts)
+      PureGopherAi.UserPhlog,
+
       # Calendar / Events
       PureGopherAi.Calendar,
 
