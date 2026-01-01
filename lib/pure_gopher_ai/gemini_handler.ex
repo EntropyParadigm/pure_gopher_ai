@@ -235,6 +235,29 @@ defmodule PureGopherAi.GeminiHandler do
     "#{status} #{message}\r\n"
   end
 
+  # Sanitize internal error reasons for user-facing messages
+  defp sanitize_error(reason) do
+    case reason do
+      :enoent -> "File not found"
+      :eacces -> "Permission denied"
+      :timeout -> "Request timed out"
+      :closed -> "Connection closed"
+      :econnrefused -> "Connection refused"
+      {:connect_failed, _} -> "Connection failed"
+      :not_found -> "Not found"
+      :invalid_input -> "Invalid input"
+      :empty_content -> "Content cannot be empty"
+      :rate_limited -> "Rate limit exceeded"
+      :content_blocked -> "Content not allowed"
+      {:content_blocked, _} -> "Content not allowed"
+      :invalid_credentials -> "Invalid credentials"
+      :unauthorized -> "Unauthorized"
+      {:error, inner} -> sanitize_error(inner)
+      {atom, _detail} when is_atom(atom) -> sanitize_error(atom)
+      _ -> "An error occurred"
+    end
+  end
+
   # Pages
   defp home_page do
     success_response("""
@@ -385,7 +408,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "AI generation failed: #{inspect(reason)}")
+        error_response(42, "AI generation failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -411,7 +434,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Query failed: #{inspect(reason)}")
+        error_response(42, "Query failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -601,7 +624,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Failed to generate digest: #{inspect(reason)}")
+        error_response(42, "Failed to generate digest: #{sanitize_error(reason)}")
     end
   end
 
@@ -620,7 +643,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Failed to discover topics: #{inspect(reason)}")
+        error_response(42, "Failed to discover topics: #{sanitize_error(reason)}")
     end
   end
 
@@ -641,7 +664,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Failed to get recommendations: #{inspect(reason)}")
+        error_response(42, "Failed to get recommendations: #{sanitize_error(reason)}")
     end
   end
 
@@ -662,7 +685,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Failed to explain: #{inspect(reason)}")
+        error_response(42, "Failed to explain: #{sanitize_error(reason)}")
     end
   end
 
@@ -693,7 +716,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Fetch failed: #{inspect(reason)}")
+        error_response(42, "Fetch failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -719,7 +742,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Fetch failed: #{inspect(reason)}")
+        error_response(42, "Fetch failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -895,7 +918,7 @@ defmodule PureGopherAi.GeminiHandler do
             """)
 
           {:error, reason} ->
-            error_response(42, "Code generation failed: #{inspect(reason)}")
+            error_response(42, "Code generation failed: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -918,7 +941,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Code explanation failed: #{inspect(reason)}")
+        error_response(42, "Code explanation failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -937,7 +960,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Code review failed: #{inspect(reason)}")
+        error_response(42, "Code review failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -1020,7 +1043,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Failed to start adventure: #{inspect(reason)}")
+        error_response(42, "Failed to start adventure: #{sanitize_error(reason)}")
     end
   end
 
@@ -1070,7 +1093,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Adventure action failed: #{inspect(reason)}")
+        error_response(42, "Adventure action failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -1336,7 +1359,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Failed to generate digest: #{inspect(reason)}")
+        error_response(42, "Failed to generate digest: #{sanitize_error(reason)}")
     end
   end
 
@@ -1408,7 +1431,7 @@ defmodule PureGopherAi.GeminiHandler do
         error_response(51, "Location not found: #{location}")
 
       {:error, reason} ->
-        error_response(42, "Weather error: #{inspect(reason)}")
+        error_response(42, "Weather error: #{sanitize_error(reason)}")
     end
   end
 
@@ -1437,7 +1460,7 @@ defmodule PureGopherAi.GeminiHandler do
         error_response(51, "Location not found: #{location}")
 
       {:error, reason} ->
-        error_response(42, "Forecast error: #{inspect(reason)}")
+        error_response(42, "Forecast error: #{sanitize_error(reason)}")
     end
   end
 
@@ -1493,7 +1516,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Fortune error: #{inspect(reason)}")
+        error_response(42, "Fortune error: #{sanitize_error(reason)}")
     end
   end
 
@@ -1519,7 +1542,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Fortune error: #{inspect(reason)}")
+        error_response(42, "Fortune error: #{sanitize_error(reason)}")
     end
   end
 
@@ -1544,7 +1567,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Fortune error: #{inspect(reason)}")
+        error_response(42, "Fortune error: #{sanitize_error(reason)}")
     end
   end
 
@@ -1609,7 +1632,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Interpretation failed: #{inspect(reason)}")
+        error_response(42, "Interpretation failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -1654,7 +1677,7 @@ defmodule PureGopherAi.GeminiHandler do
         """)
 
       {:error, reason} ->
-        error_response(42, "Search error: #{inspect(reason)}")
+        error_response(42, "Search error: #{sanitize_error(reason)}")
     end
   end
 

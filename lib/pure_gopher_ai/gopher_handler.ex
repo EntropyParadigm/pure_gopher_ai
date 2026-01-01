@@ -2021,7 +2021,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("File not found: #{path}")
 
       {:error, reason} ->
-        error_response("Error serving file: #{inspect(reason)}")
+        error_response("Error serving file: #{sanitize_error(reason)}")
     end
   end
 
@@ -2144,7 +2144,11 @@ defmodule PureGopherAi.GopherHandler do
   defp health_ready do
     case HealthCheck.ready() do
       :ok -> "OK\r\n"
-      {:error, reasons} -> "FAIL: #{inspect(reasons)}\r\n"
+      {:error, reasons} when is_list(reasons) ->
+        # Sanitize to just show which components failed, not internal details
+        failed = reasons |> Enum.map(&elem(&1, 0)) |> Enum.join(", ")
+        "FAIL: #{failed}\r\n"
+      {:error, _reasons} -> "FAIL: service unavailable\r\n"
     end
   end
 
@@ -2814,7 +2818,7 @@ defmodule PureGopherAi.GopherHandler do
           :streamed
 
         {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "\r\nError: #{inspect(reason)}\r\n.\r\n")
+          ThousandIsland.Socket.send(socket, "\r\nError: #{sanitize_error(reason)}\r\n.\r\n")
           :streamed
       end
     else
@@ -2833,7 +2837,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Query failed: #{inspect(reason)}")
+          error_response("Query failed: #{sanitize_error(reason)}")
       end
     end
   end
@@ -2902,7 +2906,7 @@ defmodule PureGopherAi.GopherHandler do
         """
 
       {:error, reason} ->
-        error_response("Search failed: #{inspect(reason)}")
+        error_response("Search failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -3285,7 +3289,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Failed to generate digest: #{inspect(reason)}")
+          error_response("Failed to generate digest: #{sanitize_error(reason)}")
       end
     end
   end
@@ -3318,7 +3322,7 @@ defmodule PureGopherAi.GopherHandler do
           :streamed
 
         {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
+          ThousandIsland.Socket.send(socket, "iError: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
           :streamed
       end
     else
@@ -3336,7 +3340,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Failed to discover topics: #{inspect(reason)}")
+          error_response("Failed to discover topics: #{sanitize_error(reason)}")
       end
     end
   end
@@ -3382,7 +3386,7 @@ defmodule PureGopherAi.GopherHandler do
           :streamed
 
         {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
+          ThousandIsland.Socket.send(socket, "iError: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
           :streamed
       end
     else
@@ -3400,7 +3404,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Failed to get recommendations: #{inspect(reason)}")
+          error_response("Failed to get recommendations: #{sanitize_error(reason)}")
       end
     end
   end
@@ -3459,7 +3463,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Failed to explain: #{inspect(reason)}")
+          error_response("Failed to explain: #{sanitize_error(reason)}")
       end
     end
   end
@@ -3504,7 +3508,7 @@ defmodule PureGopherAi.GopherHandler do
         """, host, port)
 
       {:error, reason} ->
-        error_response("Fetch failed: #{inspect(reason)}")
+        error_response("Fetch failed: #{sanitize_error(reason)}")
     end
   end
 
@@ -3544,7 +3548,7 @@ defmodule PureGopherAi.GopherHandler do
           :streamed
 
         {:error, reason} ->
-          error_response("Fetch failed: #{inspect(reason)}")
+          error_response("Fetch failed: #{sanitize_error(reason)}")
       end
     else
       case GopherProxy.fetch_and_summarize(url) do
@@ -3563,7 +3567,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Fetch failed: #{inspect(reason)}")
+          error_response("Fetch failed: #{sanitize_error(reason)}")
       end
     end
   end
@@ -3806,7 +3810,7 @@ defmodule PureGopherAi.GopherHandler do
               """, host, port)
 
             {:error, reason} ->
-              error_response("Code generation failed: #{inspect(reason)}")
+              error_response("Code generation failed: #{sanitize_error(reason)}")
           end
         end
 
@@ -3877,7 +3881,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Code explanation failed: #{inspect(reason)}")
+          error_response("Code explanation failed: #{sanitize_error(reason)}")
       end
     end
   end
@@ -3935,7 +3939,7 @@ defmodule PureGopherAi.GopherHandler do
           """, host, port)
 
         {:error, reason} ->
-          error_response("Code review failed: #{inspect(reason)}")
+          error_response("Code review failed: #{sanitize_error(reason)}")
       end
     end
   end
@@ -4064,7 +4068,7 @@ defmodule PureGopherAi.GopherHandler do
             ".\r\n"
 
         {:error, reason} ->
-          error_response("Failed to start adventure: #{inspect(reason)}")
+          error_response("Failed to start adventure: #{sanitize_error(reason)}")
       end
     end
   end
@@ -4147,7 +4151,7 @@ defmodule PureGopherAi.GopherHandler do
 
         {:error, reason} ->
           ThousandIsland.Socket.send(socket,
-            "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n.\r\n"
+            "iError: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n.\r\n"
           )
       end
 
@@ -4201,7 +4205,7 @@ defmodule PureGopherAi.GopherHandler do
           """
 
         {:error, reason} ->
-          error_response("Adventure action failed: #{inspect(reason)}")
+          error_response("Adventure action failed: #{sanitize_error(reason)}")
       end
     end
   end
@@ -4508,7 +4512,7 @@ defmodule PureGopherAi.GopherHandler do
           ThousandIsland.Socket.send(socket, Enum.join(formatted))
 
         {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "iError: #{inspect(reason)}\t\t#{host}\t#{port}\r\n")
+          ThousandIsland.Socket.send(socket, "iError: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n")
       end
 
       elapsed = System.monotonic_time(:millisecond) - start_time
@@ -4540,7 +4544,7 @@ defmodule PureGopherAi.GopherHandler do
             ".\r\n"
 
         {:error, reason} ->
-          error_response("Failed to generate digest: #{inspect(reason)}")
+          error_response("Failed to generate digest: #{sanitize_error(reason)}")
       end
     end
   end
@@ -4640,7 +4644,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Location not found: #{location}")
 
       {:error, reason} ->
-        error_response("Weather error: #{inspect(reason)}")
+        error_response("Weather error: #{sanitize_error(reason)}")
     end
   end
 
@@ -4677,7 +4681,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Location not found: #{location}")
 
       {:error, reason} ->
-        error_response("Forecast error: #{inspect(reason)}")
+        error_response("Forecast error: #{sanitize_error(reason)}")
     end
   end
 
@@ -4728,7 +4732,7 @@ defmodule PureGopherAi.GopherHandler do
         """, host, port)
 
       {:error, reason} ->
-        error_response("Fortune error: #{inspect(reason)}")
+        error_response("Fortune error: #{sanitize_error(reason)}")
     end
   end
 
@@ -4749,7 +4753,7 @@ defmodule PureGopherAi.GopherHandler do
         """, host, port)
 
       {:error, reason} ->
-        error_response("Fortune error: #{inspect(reason)}")
+        error_response("Fortune error: #{sanitize_error(reason)}")
     end
   end
 
@@ -4768,7 +4772,7 @@ defmodule PureGopherAi.GopherHandler do
         """, host, port)
 
       {:error, reason} ->
-        error_response("Fortune error: #{inspect(reason)}")
+        error_response("Fortune error: #{sanitize_error(reason)}")
     end
   end
 
@@ -4847,7 +4851,7 @@ defmodule PureGopherAi.GopherHandler do
         end)
 
       {:error, reason} ->
-        ThousandIsland.Socket.send(socket, "iInterpretation failed: #{inspect(reason)}\t\t#{host}\t#{port}\r\n")
+        ThousandIsland.Socket.send(socket, "iInterpretation failed: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n")
     end
 
     footer = """
@@ -4905,7 +4909,7 @@ defmodule PureGopherAi.GopherHandler do
         """, host, port)
 
       {:error, reason} ->
-        error_response("Search error: #{inspect(reason)}")
+        error_response("Search error: #{sanitize_error(reason)}")
     end
   end
 
@@ -4992,7 +4996,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Cannot create empty paste.")
 
       {:error, reason} ->
-        error_response("Failed to create paste: #{inspect(reason)}")
+        error_response("Failed to create paste: #{sanitize_error(reason)}")
     end
   end
 
@@ -5025,7 +5029,7 @@ defmodule PureGopherAi.GopherHandler do
         """
 
       {:error, reason} ->
-        error_response("Failed to list pastes: #{inspect(reason)}")
+        error_response("Failed to list pastes: #{sanitize_error(reason)}")
     end
   end
 
@@ -5062,7 +5066,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("This paste has expired.")
 
       {:error, reason} ->
-        error_response("Failed to get paste: #{inspect(reason)}")
+        error_response("Failed to get paste: #{sanitize_error(reason)}")
     end
   end
 
@@ -5145,7 +5149,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("Too many options. Maximum 10 options.")
 
           {:error, reason} ->
-            error_response("Failed to create poll: #{inspect(reason)}")
+            error_response("Failed to create poll: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -5182,7 +5186,7 @@ defmodule PureGopherAi.GopherHandler do
         """
 
       {:error, reason} ->
-        error_response("Failed to list polls: #{inspect(reason)}")
+        error_response("Failed to list polls: #{sanitize_error(reason)}")
     end
   end
 
@@ -5208,7 +5212,7 @@ defmodule PureGopherAi.GopherHandler do
         """
 
       {:error, reason} ->
-        error_response("Failed to list polls: #{inspect(reason)}")
+        error_response("Failed to list polls: #{sanitize_error(reason)}")
     end
   end
 
@@ -5259,7 +5263,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Poll not found.")
 
       {:error, reason} ->
-        error_response("Failed to get poll: #{inspect(reason)}")
+        error_response("Failed to get poll: #{sanitize_error(reason)}")
     end
   end
 
@@ -5294,7 +5298,7 @@ defmodule PureGopherAi.GopherHandler do
                 error_response("Poll not found.")
 
               {:error, reason} ->
-                error_response("Failed to vote: #{inspect(reason)}")
+                error_response("Failed to vote: #{sanitize_error(reason)}")
             end
 
           _ ->
@@ -5390,7 +5394,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("That username is already taken.")
 
           {:error, reason} ->
-            error_response("Failed to create profile: #{inspect(reason)}")
+            error_response("Failed to create profile: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -5639,7 +5643,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("Invalid date format. Use YYYY-MM-DD.")
 
           {:error, reason} ->
-            error_response("Failed to create event: #{inspect(reason)}")
+            error_response("Failed to create event: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -5802,7 +5806,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Invalid URL. Must start with http://, https://, gopher://, or gemini://")
 
       {:error, reason} ->
-        error_response("Failed to create short URL: #{inspect(reason)}")
+        error_response("Failed to create short URL: #{sanitize_error(reason)}")
     end
   end
 
@@ -6573,7 +6577,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("Invalid credentials.")
 
           {:error, reason} ->
-            error_response("Failed to load inbox: #{inspect(reason)}")
+            error_response("Failed to load inbox: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -6691,7 +6695,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("Message is too long (max 2000 characters).")
 
           {:error, reason} ->
-            error_response("Failed to send message: #{inspect(reason)}")
+            error_response("Failed to send message: #{sanitize_error(reason)}")
         end
 
       [_only_subject] ->
@@ -8489,7 +8493,7 @@ defmodule PureGopherAi.GopherHandler do
       {:error, :already_ingested} ->
         admin_action_result(token, "Already ingested: #{path}", host, port)
       {:error, reason} ->
-        admin_action_result(token, "Ingest failed: #{inspect(reason)}", host, port)
+        admin_action_result(token, "Ingest failed: #{sanitize_error(reason)}", host, port)
     end
   end
 
@@ -8501,7 +8505,7 @@ defmodule PureGopherAi.GopherHandler do
       {:error, {:http_error, status}} ->
         admin_action_result(token, "HTTP error: #{status}", host, port)
       {:error, reason} ->
-        admin_action_result(token, "Ingest failed: #{inspect(reason)}", host, port)
+        admin_action_result(token, "Ingest failed: #{sanitize_error(reason)}", host, port)
     end
   end
 
@@ -8820,7 +8824,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("Content blocked: #{reason}")
 
           {:error, reason} ->
-            error_response("Failed to create post: #{inspect(reason)}")
+            error_response("Failed to create post: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -8869,7 +8873,7 @@ defmodule PureGopherAi.GopherHandler do
             error_response("Content blocked: #{reason}")
 
           {:error, reason} ->
-            error_response("Failed to update: #{inspect(reason)}")
+            error_response("Failed to update: #{sanitize_error(reason)}")
         end
 
       _ ->
@@ -8917,7 +8921,7 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Post not found.")
 
       {:error, reason} ->
-        error_response("Failed to delete: #{inspect(reason)}")
+        error_response("Failed to delete: #{sanitize_error(reason)}")
     end
   end
 
@@ -8927,6 +8931,70 @@ defmodule PureGopherAi.GopherHandler do
     3#{message}\t\terror.host\t1
     .
     """
+  end
+
+  # Sanitize internal error reasons for user-facing messages
+  # Prevents leaking internal implementation details
+  defp sanitize_error(reason) do
+    case reason do
+      # File/IO errors
+      :enoent -> "File not found"
+      :eacces -> "Permission denied"
+      :eisdir -> "Path is a directory"
+      :enotdir -> "Not a directory"
+      :enomem -> "Insufficient memory"
+      :enospc -> "No space left on device"
+
+      # Network errors
+      :timeout -> "Request timed out"
+      :closed -> "Connection closed"
+      :econnrefused -> "Connection refused"
+      :ehostunreach -> "Host unreachable"
+      :enetunreach -> "Network unreachable"
+      {:connect_failed, _} -> "Connection failed"
+      {:send_failed, _} -> "Send failed"
+      {:recv_failed, _} -> "Receive failed"
+
+      # Application-specific errors
+      :not_found -> "Not found"
+      :invalid_input -> "Invalid input"
+      :empty_content -> "Content cannot be empty"
+      :rate_limited -> "Rate limit exceeded"
+      :already_exists -> "Already exists"
+      :already_ingested -> "Already processed"
+      :path_not_allowed -> "Path not allowed"
+      :invalid_host -> "Invalid host"
+      :invalid_url -> "Invalid URL"
+      :file_not_found -> "File not found"
+      :content_blocked -> "Content not allowed"
+      {:content_blocked, _} -> "Content not allowed"
+      :question_too_long -> "Question too long"
+      :option_too_long -> "Option too long"
+      :empty_question -> "Question cannot be empty"
+      :empty_option -> "Option cannot be empty"
+      :title_too_long -> "Title too long"
+      :body_too_long -> "Content too long"
+      :empty_title -> "Title cannot be empty"
+      :empty_body -> "Content cannot be empty"
+      :invalid_credentials -> "Invalid credentials"
+      :unauthorized -> "Unauthorized"
+      :poll_closed -> "Poll has closed"
+      :already_voted -> "Already voted"
+      :invalid_option -> "Invalid option"
+      :recipient_not_found -> "Recipient not found"
+      :recipient_inbox_full -> "Recipient inbox full"
+      :passphrase_too_short -> "Passphrase too short"
+      :invalid_username -> "Invalid username"
+      :username_taken -> "Username already taken"
+      :post_limit_reached -> "Post limit reached"
+
+      # Tuple errors - extract message if available
+      {:error, inner} -> sanitize_error(inner)
+      {atom, _detail} when is_atom(atom) -> sanitize_error(atom)
+
+      # Unknown errors - generic message
+      _ -> "An error occurred"
+    end
   end
 
   # Rate limit response

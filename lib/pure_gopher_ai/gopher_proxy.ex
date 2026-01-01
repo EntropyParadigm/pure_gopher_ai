@@ -157,7 +157,61 @@ defmodule PureGopherAi.GopherProxy do
 
   defp valid_host?(host) do
     # Basic validation - non-empty, no spaces
-    byte_size(host) > 0 and not String.contains?(host, " ")
+    if byte_size(host) == 0 or String.contains?(host, " ") do
+      false
+    else
+      # SSRF protection: Block private/internal addresses
+      not is_private_or_internal?(host)
+    end
+  end
+
+  # SSRF protection - block requests to internal/private addresses
+  defp is_private_or_internal?(host) do
+    host_lower = String.downcase(host)
+
+    # Block localhost variations
+    localhost_patterns = ["localhost", "127.", "0.0.0.0", "::1", "[::1]", "0:0:0:0:0:0:0:1"]
+    if Enum.any?(localhost_patterns, &String.starts_with?(host_lower, &1)) do
+      true
+    else
+      # Check if it's an IP address and block private ranges
+      case parse_ipv4(host) do
+        {:ok, {a, b, _c, _d}} ->
+          # RFC 1918 private ranges + link-local + loopback
+          cond do
+            a == 10 -> true                           # 10.0.0.0/8
+            a == 172 and b >= 16 and b <= 31 -> true  # 172.16.0.0/12
+            a == 192 and b == 168 -> true             # 192.168.0.0/16
+            a == 127 -> true                          # 127.0.0.0/8 loopback
+            a == 169 and b == 254 -> true             # 169.254.0.0/16 link-local
+            a == 0 -> true                            # 0.0.0.0/8
+            true -> false
+          end
+        :error ->
+          # Not an IP - check for suspicious hostnames
+          suspicious_hostnames = [
+            "internal", "intranet", "corp", "private", "local",
+            "metadata", "169.254.169.254"  # AWS metadata service
+          ]
+          Enum.any?(suspicious_hostnames, &String.contains?(host_lower, &1))
+      end
+    end
+  end
+
+  defp parse_ipv4(host) do
+    case String.split(host, ".") do
+      [a, b, c, d] ->
+        with {a_int, ""} <- Integer.parse(a),
+             {b_int, ""} <- Integer.parse(b),
+             {c_int, ""} <- Integer.parse(c),
+             {d_int, ""} <- Integer.parse(d),
+             true <- Enum.all?([a_int, b_int, c_int, d_int], &(&1 >= 0 and &1 <= 255)) do
+          {:ok, {a_int, b_int, c_int, d_int}}
+        else
+          _ -> :error
+        end
+      _ -> :error
+    end
   end
 
   defp connect_and_fetch(host, port, selector, timeout, max_size) do

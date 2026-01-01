@@ -222,6 +222,18 @@ defmodule PureGopherAi.Rag.DocumentStore do
     |> Path.expand()
   end
 
+  # Security: Validate path is within allowed directories to prevent path traversal
+  defp path_allowed?(expanded_path) do
+    docs_dir = get_docs_dir()
+    temp_dir = System.tmp_dir!() |> Path.expand()
+
+    # Path must start with either the docs directory or temp directory
+    String.starts_with?(expanded_path, docs_dir <> "/") or
+      expanded_path == docs_dir or
+      String.starts_with?(expanded_path, temp_dir <> "/") or
+      expanded_path == temp_dir
+  end
+
   defp scan_and_ingest_directory(dir) do
     Logger.info("RAG: Scanning #{dir} for documents...")
 
@@ -251,47 +263,54 @@ defmodule PureGopherAi.Rag.DocumentStore do
   defp do_ingest(path) do
     expanded = Path.expand(path)
 
-    if File.exists?(expanded) do
-      case extract_text(expanded) do
-        {:ok, text} ->
-          doc_id = generate_doc_id(expanded)
+    cond do
+      # Security: Validate path is within allowed directories
+      not path_allowed?(expanded) ->
+        Logger.warning("RAG: Path traversal attempt blocked: #{path}")
+        {:error, :path_not_allowed}
 
-          # Check if already ingested
-          case :ets.lookup(@table_name, doc_id) do
-            [{^doc_id, _existing}] ->
-              {:error, :already_ingested}
+      not File.exists?(expanded) ->
+        {:error, :file_not_found}
 
-            [] ->
-              # Create chunks
-              chunks = chunk_text(text, doc_id)
+      true ->
+        case extract_text(expanded) do
+          {:ok, text} ->
+            doc_id = generate_doc_id(expanded)
 
-              # Store chunks
-              Enum.each(chunks, fn chunk ->
-                :ets.insert(@chunks_table, {chunk.id, chunk})
-              end)
+            # Check if already ingested
+            case :ets.lookup(@table_name, doc_id) do
+              [{^doc_id, _existing}] ->
+                {:error, :already_ingested}
 
-              # Store document metadata
-              doc = %{
-                id: doc_id,
-                path: expanded,
-                filename: Path.basename(expanded),
-                type: detect_type(expanded),
-                size: File.stat!(expanded).size,
-                chunk_count: length(chunks),
-                ingested_at: DateTime.utc_now(),
-                metadata: %{}
-              }
+              [] ->
+                # Create chunks
+                chunks = chunk_text(text, doc_id)
 
-              :ets.insert(@table_name, {doc_id, doc})
+                # Store chunks
+                Enum.each(chunks, fn chunk ->
+                  :ets.insert(@chunks_table, {chunk.id, chunk})
+                end)
 
-              {:ok, doc}
-          end
+                # Store document metadata
+                doc = %{
+                  id: doc_id,
+                  path: expanded,
+                  filename: Path.basename(expanded),
+                  type: detect_type(expanded),
+                  size: File.stat!(expanded).size,
+                  chunk_count: length(chunks),
+                  ingested_at: DateTime.utc_now(),
+                  metadata: %{}
+                }
 
-        {:error, reason} ->
-          {:error, reason}
-      end
-    else
-      {:error, :file_not_found}
+                :ets.insert(@table_name, {doc_id, doc})
+
+                {:ok, doc}
+            end
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
