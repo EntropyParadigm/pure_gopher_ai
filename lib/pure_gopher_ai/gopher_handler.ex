@@ -47,6 +47,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.SemanticSearch
   alias PureGopherAi.CreativeStudio
   alias PureGopherAi.CodeCompanion
+  alias PureGopherAi.Oracle
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -955,6 +956,79 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/code/languages", host, port, _network, _ip, _socket),
     do: code_languages(host, port)
+
+  # AI Oracle & Advisor routes
+  defp route_selector("/oracle", host, port, _network, _ip, _socket),
+    do: oracle_menu(host, port)
+
+  defp route_selector("/oracle/", host, port, _network, _ip, _socket),
+    do: oracle_menu(host, port)
+
+  defp route_selector("/oracle/fortune", host, port, _network, _ip, _socket),
+    do: oracle_fortune(host, port)
+
+  defp route_selector("/oracle/advice", host, port, _network, _ip, _socket),
+    do: oracle_advice_prompt(host, port)
+
+  defp route_selector("/oracle/advice\t" <> input, host, port, _network, _ip, _socket),
+    do: oracle_advice(input, host, port)
+
+  defp route_selector("/oracle/advice " <> input, host, port, _network, _ip, _socket),
+    do: oracle_advice(input, host, port)
+
+  defp route_selector("/oracle/tarot", host, port, _network, _ip, _socket),
+    do: oracle_tarot_prompt(host, port)
+
+  defp route_selector("/oracle/tarot\t" <> input, host, port, _network, _ip, _socket),
+    do: oracle_tarot(input, host, port)
+
+  defp route_selector("/oracle/tarot " <> input, host, port, _network, _ip, _socket),
+    do: oracle_tarot(input, host, port)
+
+  defp route_selector("/oracle/iching", host, port, _network, _ip, _socket),
+    do: oracle_iching_prompt(host, port)
+
+  defp route_selector("/oracle/iching\t" <> input, host, port, _network, _ip, _socket),
+    do: oracle_iching(input, host, port)
+
+  defp route_selector("/oracle/iching " <> input, host, port, _network, _ip, _socket),
+    do: oracle_iching(input, host, port)
+
+  defp route_selector("/oracle/dream", host, port, _network, _ip, _socket),
+    do: oracle_dream_prompt(host, port)
+
+  defp route_selector("/oracle/dream\t" <> input, host, port, _network, _ip, _socket),
+    do: oracle_dream(input, host, port)
+
+  defp route_selector("/oracle/dream " <> input, host, port, _network, _ip, _socket),
+    do: oracle_dream(input, host, port)
+
+  defp route_selector("/oracle/horoscope", host, port, _network, _ip, _socket),
+    do: oracle_horoscope_menu(host, port)
+
+  defp route_selector("/oracle/horoscope/" <> sign, host, port, _network, _ip, _socket),
+    do: oracle_horoscope(sign, host, port)
+
+  defp route_selector("/oracle/yesno", host, port, _network, _ip, _socket),
+    do: oracle_yesno_prompt(host, port)
+
+  defp route_selector("/oracle/yesno\t" <> input, host, port, _network, _ip, _socket),
+    do: oracle_yesno(input, host, port)
+
+  defp route_selector("/oracle/yesno " <> input, host, port, _network, _ip, _socket),
+    do: oracle_yesno(input, host, port)
+
+  defp route_selector("/oracle/affirmation", host, port, _network, _ip, _socket),
+    do: oracle_affirmation(host, port)
+
+  defp route_selector("/oracle/lifepath", host, port, _network, _ip, _socket),
+    do: oracle_lifepath_prompt(host, port)
+
+  defp route_selector("/oracle/lifepath\t" <> input, host, port, _network, _ip, _socket),
+    do: oracle_lifepath(input, host, port)
+
+  defp route_selector("/oracle/lifepath " <> input, host, port, _network, _ip, _socket),
+    do: oracle_lifepath(input, host, port)
 
   # AI Writing Assistant routes
   defp route_selector("/write", host, port, _network, _ip, _socket),
@@ -8045,6 +8119,500 @@ defmodule PureGopherAi.GopherHandler do
     1Back to Code Menu\t/code\t#{host}\t#{port}
     .
     """
+  end
+
+  # === AI Oracle & Advisor Functions ===
+
+  defp oracle_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║             AI ORACLE & ADVISOR                       ║\t\t#{host}\t#{port}
+    i  ║       Wisdom, Guidance, and Mystical Insights         ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Seek wisdom from the AI Oracle! Get fortunes, advice,\t\t#{host}\t#{port}
+    i  tarot readings, and mystical insights.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  DAILY WISDOM\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    1Daily Fortune\t/oracle/fortune\t#{host}\t#{port}
+    1Daily Affirmation\t/oracle/affirmation\t#{host}\t#{port}
+    1Your Horoscope\t/oracle/horoscope\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  SEEK GUIDANCE\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Ask for Advice\t/oracle/advice\t#{host}\t#{port}
+    7Yes/No Oracle\t/oracle/yesno\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  MYSTICAL READINGS\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Tarot Reading\t/oracle/tarot\t#{host}\t#{port}
+    7I Ching Consultation\t/oracle/iching\t#{host}\t#{port}
+    7Dream Interpretation\t/oracle/dream\t#{host}\t#{port}
+    7Life Path Number\t/oracle/lifepath\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_fortune(host, port) do
+    case Oracle.daily_fortune() do
+      {:ok, fortune} ->
+        formatted = format_text_as_info(fortune, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i  ✧･ﾟ: *✧･ﾟ:* DAILY FORTUNE *:･ﾟ✧*:･ﾟ✧\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        1Get Another Fortune\t/oracle/fortune\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error consulting the oracle: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_advice_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Ask for Advice ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDescribe your situation and receive\t\t#{host}\t#{port}
+    ithoughtful guidance from the Oracle.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "I'm torn between two job offers"\t\t#{host}\t#{port}
+    i  "A friend hurt me and I don't know what to do"\t\t#{host}\t#{port}
+    i  "I want to make a big life change but I'm scared"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Describe Your Situation\t/oracle/advice\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_advice(situation, host, port) do
+    situation = String.trim(situation)
+
+    case Oracle.advice(situation) do
+      {:ok, advice} ->
+        formatted = format_text_as_info(advice, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== The Oracle's Guidance ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Ask Another Question\t/oracle/advice\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_tarot_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Tarot Reading ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAsk a question for the cards, or leave blank\t\t#{host}\t#{port}
+    ifor a general reading.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThe Oracle will draw from the Major Arcana\t\t#{host}\t#{port}
+    iand interpret the cards for you.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Your Question (or press Enter)\t/oracle/tarot\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_tarot(question, host, port) do
+    question = String.trim(question)
+    question = if question == "", do: nil, else: question
+
+    case Oracle.tarot_reading(question) do
+      {:ok, reading} ->
+        card_lines = reading.cards
+        |> Enum.with_index(1)
+        |> Enum.map(fn {{name, _meaning}, idx} ->
+          "i  Card #{idx}: #{name}\t\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\r\n")
+
+        formatted = format_text_as_info(reading.interpretation, host, port)
+
+        question_line = if reading.question do
+          "iQuestion: #{truncate(reading.question, 50)}\t\t#{host}\t#{port}"
+        else
+          "i(General reading)\t\t#{host}\t#{port}"
+        end
+
+        """
+        i\t\t#{host}\t#{port}
+        i  ✧ TAROT READING ✧\t\t#{host}\t#{port}
+        i  #{reading.spread}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{question_line}
+        i\t\t#{host}\t#{port}
+        i--- Cards Drawn ---\t\t#{host}\t#{port}
+        #{card_lines}
+        i\t\t#{host}\t#{port}
+        i--- Interpretation ---\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7New Tarot Reading\t/oracle/tarot\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error drawing cards: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_iching_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== I Ching Consultation ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThe I Ching (Book of Changes) is an ancient\t\t#{host}\t#{port}
+    iChinese divination text.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAsk a question or leave blank for guidance.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Your Question (or press Enter)\t/oracle/iching\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_iching(question, host, port) do
+    question = String.trim(question)
+    question = if question == "", do: nil, else: question
+
+    case Oracle.i_ching(question) do
+      {:ok, reading} ->
+        {upper_name, upper_sym, _} = reading.upper
+        {lower_name, lower_sym, _} = reading.lower
+        formatted = format_text_as_info(reading.interpretation, host, port)
+
+        question_line = if reading.question do
+          "iQuestion: #{truncate(reading.question, 50)}\t\t#{host}\t#{port}"
+        else
+          "i(General guidance)\t\t#{host}\t#{port}"
+        end
+
+        """
+        i\t\t#{host}\t#{port}
+        i  ☯ I CHING READING ☯\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{question_line}
+        i\t\t#{host}\t#{port}
+        i--- Hexagram #{reading.hexagram} ---\t\t#{host}\t#{port}
+        i  Upper: #{upper_sym} #{upper_name}\t\t#{host}\t#{port}
+        i  Lower: #{lower_sym} #{lower_name}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Interpretation ---\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7New I Ching Reading\t/oracle/iching\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error casting: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_dream_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Dream Interpretation ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDescribe your dream and the Oracle will\t\t#{host}\t#{port}
+    iinterpret its symbols and meaning.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iInclude details like:\t\t#{host}\t#{port}
+    i  - What happened in the dream\t\t#{host}\t#{port}
+    i  - How you felt during/after\t\t#{host}\t#{port}
+    i  - Any notable symbols or people\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Describe Your Dream\t/oracle/dream\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_dream(dream, host, port) do
+    dream = String.trim(dream)
+
+    case Oracle.dream_interpretation(dream) do
+      {:ok, interpretation} ->
+        formatted = format_text_as_info(interpretation, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Dream Interpretation ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Interpret Another Dream\t/oracle/dream\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_horoscope_menu(host, port) do
+    signs = Oracle.zodiac_signs()
+
+    sign_lines = signs
+    |> Enum.map(fn sign ->
+      name = sign |> Atom.to_string() |> String.capitalize()
+      "1#{name}\t/oracle/horoscope/#{sign}\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Daily Horoscope ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSelect your zodiac sign:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{sign_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_horoscope(sign, host, port) do
+    sign = String.trim(sign)
+    sign_atom = String.to_existing_atom(sign)
+
+    if Enum.member?(Oracle.zodiac_signs(), sign_atom) do
+      case Oracle.horoscope(sign_atom) do
+        {:ok, horoscope} ->
+          formatted = format_text_as_info(horoscope, host, port)
+          sign_name = sign |> String.capitalize()
+          """
+          i\t\t#{host}\t#{port}
+          i  ✦ #{sign_name} Horoscope ✦\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          #{formatted}
+          i\t\t#{host}\t#{port}
+          1All Signs\t/oracle/horoscope\t#{host}\t#{port}
+          1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+          .
+          """
+
+        {:error, reason} ->
+          """
+          i\t\t#{host}\t#{port}
+          3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+          .
+          """
+      end
+    else
+      """
+      i\t\t#{host}\t#{port}
+      3Unknown zodiac sign: #{sign}\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1View All Signs\t/oracle/horoscope\t#{host}\t#{port}
+      1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+      .
+      """
+    end
+  rescue
+    _ ->
+      """
+      i\t\t#{host}\t#{port}
+      3Unknown zodiac sign: #{sign}\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1View All Signs\t/oracle/horoscope\t#{host}\t#{port}
+      1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+      .
+      """
+  end
+
+  defp oracle_yesno_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Yes/No Oracle ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAsk a yes/no question and receive\t\t#{host}\t#{port}
+    ioracular wisdom in response.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "Should I take the new job?"\t\t#{host}\t#{port}
+    i  "Is now the right time to move?"\t\t#{host}\t#{port}
+    i  "Will this relationship work out?"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Ask Your Question\t/oracle/yesno\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_yesno(question, host, port) do
+    question = String.trim(question)
+
+    case Oracle.yes_no_oracle(question) do
+      {:ok, result} ->
+        formatted = format_text_as_info(result.response, host, port)
+        tendency_icon = case result.tendency do
+          :yes -> "✓"
+          :no -> "✗"
+          :maybe -> "◐"
+        end
+        """
+        i\t\t#{host}\t#{port}
+        i=== The Oracle Speaks #{tendency_icon} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iQuestion: #{truncate(question, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Ask Another Question\t/oracle/yesno\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_affirmation(host, port) do
+    case Oracle.affirmation() do
+      {:ok, affirmation} ->
+        formatted = format_text_as_info(affirmation, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i  ✧ YOUR DAILY AFFIRMATION ✧\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        iRepeat this to yourself throughout the day.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Get Another Affirmation\t/oracle/affirmation\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp oracle_lifepath_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Life Path Number ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iYour Life Path Number reveals your purpose\t\t#{host}\t#{port}
+    iand core traits based on numerology.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your birth date (any format):\t\t#{host}\t#{port}
+    i  Examples: 1990-05-15, 05/15/1990, May 15 1990\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Your Birth Date\t/oracle/lifepath\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp oracle_lifepath(birthdate, host, port) do
+    birthdate = String.trim(birthdate)
+
+    case Oracle.life_path_reading(birthdate) do
+      {:ok, result} ->
+        formatted = format_text_as_info(result.reading, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Life Path Number: #{result.life_path} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Calculate Another\t/oracle/lifepath\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
   end
 
   # === Link Directory Functions ===

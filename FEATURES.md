@@ -2678,18 +2678,32 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 **Files:** `code_companion.ex`
 
 ### 12.8 AI Oracle & Advisor
-**Status:** 🔴 Planned
+**Status:** ✅ Complete
 **Description:** Fun daily content with AI personality - fortunes, advice, readings.
 
 **Features:**
-- Daily wisdom/fortune
-- Situational advice
-- Tarot card readings with AI interpretation
-- I Ching consultation
-- Dream interpretation
-- Personality-based horoscopes
+- Daily wisdom/fortune generation
+- Situational advice from a wise advisor
+- Tarot card readings (Major Arcana) with AI interpretation
+- I Ching consultation with hexagram interpretation
+- Dream interpretation with symbolism analysis
+- Zodiac horoscopes for all 12 signs
+- Yes/No oracle with oracular wisdom
+- Daily affirmations
+- Life path number calculation (numerology)
 
-**Routes:** `/oracle`, `/oracle/fortune`, `/oracle/advice`, `/oracle/tarot`, `/oracle/iching`, `/oracle/dreams`, `/oracle/horoscope`
+**Routes:**
+- `/oracle` - Oracle & advisor menu
+- `/oracle/fortune` - Daily fortune
+- `/oracle/advice` - Ask for advice
+- `/oracle/tarot` - Tarot reading
+- `/oracle/iching` - I Ching consultation
+- `/oracle/dream` - Dream interpretation
+- `/oracle/horoscope` - Horoscope menu
+- `/oracle/horoscope/<sign>` - Sign-specific horoscope
+- `/oracle/yesno` - Yes/No oracle
+- `/oracle/affirmation` - Daily affirmation
+- `/oracle/lifepath` - Life path number reading
 
 **Files:** `oracle.ex`
 
