@@ -232,7 +232,7 @@ defmodule PureGopherAi.Summarizer do
   @doc """
   Generates content recommendations based on a query or interest.
   """
-  def recommend(interest, opts \\ []) do
+  def recommend(interest, _opts \\ []) do
     # Search across phlog and docs
     phlog_results = search_phlog_content(interest)
     doc_results = search_document_content(interest)

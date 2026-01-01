@@ -76,7 +76,7 @@ defmodule PureGopherAi.Rag.Embeddings do
   end
 
   @impl true
-  def handle_call({:embed, text}, _from, %{serving: nil} = state) do
+  def handle_call({:embed, _text}, _from, %{serving: nil} = state) do
     {:reply, {:error, :model_not_loaded}, state}
   end
 
@@ -87,7 +87,7 @@ defmodule PureGopherAi.Rag.Embeddings do
   end
 
   @impl true
-  def handle_call({:embed_batch, texts}, _from, %{serving: nil} = state) do
+  def handle_call({:embed_batch, _texts}, _from, %{serving: nil} = state) do
     {:reply, {:error, :model_not_loaded}, state}
   end
 
@@ -114,7 +114,7 @@ defmodule PureGopherAi.Rag.Embeddings do
         results = semantic_search(query_embedding, top_k, threshold)
         {:reply, {:ok, results}, state}
 
-      {:error, _} = error ->
+      {:error, _} ->
         # Fallback to keyword search
         results = keyword_search(query, opts)
         {:reply, {:ok, results}, state}

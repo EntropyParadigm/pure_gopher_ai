@@ -435,7 +435,7 @@ defmodule PureGopherAi.Rag.DocumentStore do
     end)
   end
 
-  defp create_chunks(words, chunk_size, overlap) when length(words) <= chunk_size do
+  defp create_chunks(words, chunk_size, _overlap) when length(words) <= chunk_size do
     [Enum.join(words, " ")]
   end
 

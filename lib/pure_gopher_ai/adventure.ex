@@ -350,12 +350,10 @@ defmodule PureGopherAi.Adventure do
   end
 
   defp generate_response(prompt, true = _stream?, callback) do
-    chunks = []
-
     result = AiEngine.generate_stream(prompt, nil, fn chunk ->
       callback.(chunk)
       chunk
-    end, max_new_tokens: 400)
+    end)
 
     case result do
       {:ok, full_response} -> {:ok, String.trim(full_response)}

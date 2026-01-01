@@ -147,7 +147,10 @@ defmodule PureGopherAi.RequestValidator do
   - `:allow_newlines` - Allow newline characters (default: true)
   - `:require_content` - Require non-empty content (default: true)
   """
-  def validate_content(content, opts \\ []) when is_binary(content) do
+  def validate_content(content, opts \\ [])
+  def validate_content(nil, _opts), do: {:error, :missing_content}
+
+  def validate_content(content, opts) when is_binary(content) do
     max_length = Keyword.get(opts, :max_length, 4000)
     allow_newlines = Keyword.get(opts, :allow_newlines, true)
     require_content = Keyword.get(opts, :require_content, true)
@@ -172,7 +175,6 @@ defmodule PureGopherAi.RequestValidator do
     end
   end
 
-  def validate_content(nil, _opts), do: {:error, :missing_content}
   def validate_content(_, _opts), do: {:error, :invalid_content}
 
   @doc """

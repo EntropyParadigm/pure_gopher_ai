@@ -221,7 +221,8 @@ defmodule PureGopherAi.Polls do
     polls = :dets.foldl(fn {_id, poll}, acc ->
       if not poll.closed do
         case DateTime.from_iso8601(poll.ends_at) do
-          {:ok, ends_at, _} when ends_at > now -> [poll | acc]
+          {:ok, ends_at, _} ->
+            if DateTime.compare(ends_at, now) == :gt, do: [poll | acc], else: acc
           _ -> acc
         end
       else

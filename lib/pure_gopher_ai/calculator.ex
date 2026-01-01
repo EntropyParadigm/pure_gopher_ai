@@ -283,7 +283,7 @@ defmodule PureGopherAi.Calculator do
   defp apply_operator("+", a, b), do: a + b
   defp apply_operator("-", a, b), do: a - b
   defp apply_operator("*", a, b), do: a * b
-  defp apply_operator("/", _a, 0.0), do: raise ArithmeticError
+  defp apply_operator("/", _a, +0.0), do: raise ArithmeticError
   defp apply_operator("/", _a, 0), do: raise ArithmeticError
   defp apply_operator("/", a, b), do: a / b
   defp apply_operator("^", a, b), do: :math.pow(a, b)

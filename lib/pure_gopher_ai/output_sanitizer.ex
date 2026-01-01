@@ -25,7 +25,10 @@ defmodule PureGopherAi.OutputSanitizer do
   - `:redact_system_prompts` - Redact system prompt leakage (default: true)
   - `:max_length` - Maximum output length (default: 10000)
   """
-  def sanitize(output, opts \\ []) when is_binary(output) do
+  def sanitize(output, opts \\ [])
+  def sanitize(nil, _opts), do: ""
+
+  def sanitize(output, opts) when is_binary(output) do
     redact_secrets = Keyword.get(opts, :redact_secrets, true)
     redact_system = Keyword.get(opts, :redact_system_prompts, true)
     max_length = Keyword.get(opts, :max_length, 10000)
@@ -35,8 +38,6 @@ defmodule PureGopherAi.OutputSanitizer do
     |> maybe_redact_system_prompts(redact_system)
     |> String.slice(0, max_length)
   end
-
-  def sanitize(nil, _opts), do: ""
 
   @doc """
   Checks if output contains potentially sensitive content.

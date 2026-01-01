@@ -85,7 +85,7 @@ defmodule PureGopherAi.CodeAssistant do
   @doc """
   Generates code with streaming output.
   """
-  def generate_stream(language, description, callback, opts \\ []) do
+  def generate_stream(language, description, callback, _opts \\ []) do
     lang_name = language_name(language)
 
     prompt = """
@@ -101,7 +101,7 @@ defmodule PureGopherAi.CodeAssistant do
     #{lang_name} code:
     """
 
-    AiEngine.generate_stream(prompt, nil, callback, opts)
+    AiEngine.generate_stream(prompt, nil, callback)
   end
 
   @doc """
@@ -171,7 +171,7 @@ defmodule PureGopherAi.CodeAssistant do
     Explanation:
     """
 
-    AiEngine.generate_stream(prompt, nil, callback, opts)
+    AiEngine.generate_stream(prompt, nil, callback)
   end
 
   @doc """
@@ -243,7 +243,7 @@ defmodule PureGopherAi.CodeAssistant do
     Code Review:
     """
 
-    AiEngine.generate_stream(prompt, nil, callback, opts)
+    AiEngine.generate_stream(prompt, nil, callback)
   end
 
   @doc """
@@ -275,7 +275,7 @@ defmodule PureGopherAi.CodeAssistant do
   @doc """
   Converts code with streaming output.
   """
-  def convert_stream(code, from_language, to_language, callback, opts \\ []) do
+  def convert_stream(code, from_language, to_language, callback, _opts \\ []) do
     from_name = language_name(from_language)
     to_name = language_name(to_language)
 
@@ -295,7 +295,7 @@ defmodule PureGopherAi.CodeAssistant do
     #{to_name} code:
     """
 
-    AiEngine.generate_stream(prompt, nil, callback, opts)
+    AiEngine.generate_stream(prompt, nil, callback)
   end
 
   @doc """
@@ -367,7 +367,7 @@ defmodule PureGopherAi.CodeAssistant do
     Fixed code:
     """
 
-    AiEngine.generate_stream(prompt, nil, callback, opts)
+    AiEngine.generate_stream(prompt, nil, callback)
   end
 
   @doc """

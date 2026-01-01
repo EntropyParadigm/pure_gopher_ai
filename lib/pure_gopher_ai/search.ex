@@ -97,7 +97,7 @@ defmodule PureGopherAi.Search do
   end
 
   # Scan directory for matching files
-  defp scan_directory(base_dir, relative_path, query_terms, type) do
+  defp scan_directory(base_dir, relative_path, query_terms, _type) do
     full_path = Path.join(base_dir, relative_path)
 
     case File.ls(full_path) do

@@ -1216,7 +1216,7 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/board/recent", host, port, _network, _ip, _socket),
     do: handle_board_recent(host, port)
 
-  defp route_selector("/board/" <> rest, host, port, _network, ip, _socket) do
+  defp route_selector("/board/" <> rest, host, port, _network, _ip, _socket) do
     case String.split(rest, "/", parts: 3) do
       [board_id] ->
         handle_board_list(board_id, host, port)
@@ -2196,7 +2196,7 @@ defmodule PureGopherAi.GopherHandler do
             ""
           end
 
-        base_url = phlog_base_url(host, port, network)
+        _base_url = phlog_base_url(host, port, network)
 
         """
         i=== PureGopherAI Phlog ===\t\t#{host}\t#{port}
@@ -3579,7 +3579,7 @@ defmodule PureGopherAi.GopherHandler do
     else
       result.entries
       |> Enum.map(fn entry ->
-        date = Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")
+        date = Elixir.Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")
         message_lines = entry.message
           |> String.split("\n")
           |> Enum.map(&"i  #{&1}\t\t#{host}\t#{port}")
@@ -3658,7 +3658,7 @@ defmodule PureGopherAi.GopherHandler do
 
             Name: #{entry.name}
             Message: #{entry.message}
-            Time: #{Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")}
+            Time: #{Elixir.Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")}
 
             => /guestbook View Guestbook
             => / Back to Main Menu
@@ -4440,7 +4440,7 @@ defmodule PureGopherAi.GopherHandler do
         entry_lines = if length(entries) > 0 do
           entries
           |> Enum.map(fn entry ->
-            date = if entry.published_at, do: Calendar.strftime(entry.published_at, "%Y-%m-%d"), else: ""
+            date = if entry.published_at, do: Elixir.Calendar.strftime(entry.published_at, "%Y-%m-%d"), else: ""
             title = String.slice(entry.title || "Untitled", 0, 60)
             "0[#{date}] #{title}\t/feeds/#{feed_id}/entry/#{entry.id}\t#{host}\t#{port}"
           end)
@@ -4467,7 +4467,7 @@ defmodule PureGopherAi.GopherHandler do
   defp feed_entry(feed_id, entry_id, host, port) do
     case FeedAggregator.get_entry(feed_id, entry_id) do
       {:ok, entry} ->
-        date = if entry.published_at, do: Calendar.strftime(entry.published_at, "%Y-%m-%d %H:%M"), else: "Unknown date"
+        date = if entry.published_at, do: Elixir.Calendar.strftime(entry.published_at, "%Y-%m-%d %H:%M"), else: "Unknown date"
         content = entry.content || entry.summary || "No content available."
         # Truncate very long content
         content = if String.length(content) > 3000, do: String.slice(content, 0, 3000) <> "...", else: content
@@ -4560,7 +4560,7 @@ defmodule PureGopherAi.GopherHandler do
 
     feed_lines = stats.feeds
       |> Enum.map(fn feed ->
-        last = if feed.last_fetched, do: Calendar.strftime(feed.last_fetched, "%Y-%m-%d %H:%M"), else: "Never"
+        last = if feed.last_fetched, do: Elixir.Calendar.strftime(feed.last_fetched, "%Y-%m-%d %H:%M"), else: "Never"
         "i  #{feed.name}: #{feed.entries} entries (last: #{last})\t\t#{host}\t#{port}"
       end)
       |> Enum.join("\r\n")
@@ -6605,53 +6605,6 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  defp mail_sent(_username, host, port) do
-    # Sent messages now require login first
-    """
-    i=== Sent Messages ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iPlease use the login to access sent messages.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    7Login to Mailbox\t/mail/login\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp _mail_sent_old(username, host, port) do
-    # This function is deprecated - kept for reference
-    case Mailbox.get_sent(username, "deprecated", limit: 20) do
-      {:ok, []} ->
-        """
-        i=== Sent Messages: #{username} ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iNo sent messages yet.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
-        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
-        .
-        """
-
-      {:ok, messages} ->
-        message_lines = messages
-          |> Enum.map(fn msg ->
-            date = format_date(msg.created_at)
-            "1#{truncate(msg.subject, 30)} - to #{msg.to} (#{date})\t/mail/read/#{username}/#{msg.id}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
-
-        """
-        i=== Sent Messages: #{username} ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iTotal: #{length(messages)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{message_lines}
-        i\t\t#{host}\t#{port}
-        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
-        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
-        .
-        """
-    end
-  end
 
   defp mail_read(_username, _message_id, host, port) do
     # Reading messages now requires passphrase authentication
@@ -6840,7 +6793,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp trivia_answer_prompt(question_id, host, port) do
+  defp trivia_answer_prompt(_question_id, host, port) do
     """
     i=== Answer Question ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -7085,7 +7038,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp bookmarks_user(username, passphrase, folder, host, port, ip) do
+  defp bookmarks_user(username, passphrase, folder, host, port, _ip) do
     username = String.trim(username)
     # Decode the passphrase from URL encoding
     passphrase = URI.decode(passphrase)
@@ -7167,9 +7120,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp bookmarks_add_prompt(username, passphrase, host, port) do
-    encoded_pass = URI.encode(URI.decode(passphrase), &URI.char_unreserved?/1)
-
+  defp bookmarks_add_prompt(_username, _passphrase, host, port) do
     """
     i=== Add Bookmark ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -7179,7 +7130,7 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  defp bookmarks_add_title_prompt(username, passphrase, selector, host, port) do
+  defp bookmarks_add_title_prompt(_username, _passphrase, selector, host, port) do
     """
     i=== Add Bookmark ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -7280,7 +7231,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp bookmarks_newfolder_prompt(username, passphrase, host, port) do
+  defp bookmarks_newfolder_prompt(_username, _passphrase, host, port) do
     """
     i=== Create Folder ===\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -7322,7 +7273,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp bookmarks_export(username, passphrase, host, port, _ip) do
+  defp bookmarks_export(username, passphrase, _host, _port, _ip) do
     passphrase = URI.decode(passphrase)
 
     case Bookmarks.export(username, passphrase) do
@@ -7519,7 +7470,7 @@ defmodule PureGopherAi.GopherHandler do
     expr = String.trim(expr)
 
     case Calculator.evaluate(expr) do
-      {:ok, result, formatted} ->
+      {:ok, _result, formatted} ->
         """
         i=== Calculator Result ===\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
@@ -8120,7 +8071,7 @@ defmodule PureGopherAi.GopherHandler do
         else
           threads
           |> Enum.map(fn t ->
-            date = format_date(t.created_at)
+            _date = format_date(t.created_at)
             replies = if t.reply_count > 0, do: " (#{t.reply_count} replies)", else: ""
             "1#{t.title} - #{t.author}#{replies}\t/board/#{board_id}/thread/#{t.id}\t#{host}\t#{port}"
           end)
@@ -8242,7 +8193,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp board_reply_prompt(board_id, thread_id, host, port) do
+  defp board_reply_prompt(_board_id, _thread_id, host, port) do
     """
     iReply to Thread\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -8312,7 +8263,7 @@ defmodule PureGopherAi.GopherHandler do
   defp format_date(iso_string) when is_binary(iso_string) do
     case DateTime.from_iso8601(iso_string) do
       {:ok, dt, _} ->
-        Calendar.strftime(dt, "%Y-%m-%d %H:%M")
+        Elixir.Calendar.strftime(dt, "%Y-%m-%d %H:%M")
       _ ->
         iso_string
     end
@@ -8524,7 +8475,7 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp handle_admin_command(_token, command, host, port) do
+  defp handle_admin_command(_token, command, _host, _port) do
     error_response("Unknown admin command: #{command}")
   end
 

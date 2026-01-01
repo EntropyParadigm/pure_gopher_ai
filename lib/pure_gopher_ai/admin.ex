@@ -33,9 +33,16 @@ defmodule PureGopherAi.Admin do
   def valid_token?(token) do
     case get_token() do
       nil -> false
-      configured_token -> Plug.Crypto.secure_compare(token, configured_token)
+      configured_token -> secure_compare(token, configured_token)
     end
   end
+
+  # Constant-time string comparison to prevent timing attacks
+  defp secure_compare(left, right) when is_binary(left) and is_binary(right) do
+    byte_size(left) == byte_size(right) and :crypto.hash_equals(left, right)
+  end
+
+  defp secure_compare(_, _), do: false
 
   @doc """
   Gets detailed system stats for admin view.

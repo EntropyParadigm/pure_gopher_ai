@@ -21,7 +21,11 @@ defmodule PureGopherAi.ContentModerator do
 
   Content types: :phlog_post, :message, :comment, :paste
   """
-  def check(content, content_type \\ :text) when is_binary(content) do
+  def check(content, content_type \\ :text)
+  def check(nil, _content_type), do: {:ok, :approved}
+  def check("", _content_type), do: {:ok, :approved}
+
+  def check(content, content_type) when is_binary(content) do
     # Skip very short content (likely not problematic)
     if String.length(content) < 10 do
       {:ok, :approved}
@@ -29,9 +33,6 @@ defmodule PureGopherAi.ContentModerator do
       check_with_ai(content, content_type)
     end
   end
-
-  def check(nil, _content_type), do: {:ok, :approved}
-  def check("", _content_type), do: {:ok, :approved}
 
   @doc """
   Checks multiple pieces of content at once.
