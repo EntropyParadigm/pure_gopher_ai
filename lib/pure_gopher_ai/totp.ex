@@ -6,6 +6,8 @@ defmodule PureGopherAi.Totp do
   Uses RFC 6238 TOTP algorithm with SHA1, 6 digits, 30-second windows.
   """
 
+  import Bitwise
+
   @digits 6
   @period 30
   @algorithm :sha

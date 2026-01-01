@@ -35,6 +35,9 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Calculator
   alias PureGopherAi.Games
   alias PureGopherAi.UserPhlog
+  alias PureGopherAi.ServerDirectory
+  alias PureGopherAi.CrawlerHints
+  alias PureGopherAi.Caps
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -232,6 +235,17 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/health/json", _host, _port, _network, _ip, _socket),
     do: health_json()
+
+  # Server directory (Gopherspace links)
+  defp route_selector("/servers", host, port, _network, _ip, _socket),
+    do: ServerDirectory.generate_gophermap(host, port)
+
+  # Crawler optimization
+  defp route_selector("/robots.txt", host, port, _network, _ip, _socket),
+    do: format_text_response(CrawlerHints.robots_txt(), host, port)
+
+  defp route_selector("/caps.txt", host, port, _network, _ip, _socket),
+    do: format_text_response(Caps.generate(), host, port)
 
   # Pastebin routes
   defp route_selector("/paste", host, port, _network, _ip, _socket),
@@ -1378,6 +1392,7 @@ defmodule PureGopherAi.GopherHandler do
     0About this server\t/about\t#{host}\t#{port}
     0Server statistics\t/stats\t#{host}\t#{port}
     0Health check\t/health\t#{host}\t#{port}
+    1Gopherspace Directory\t/servers\t#{host}\t#{port}
     1Full Sitemap\t/sitemap\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     iTip: /summary/phlog/<path> for TL;DR summaries\t\t#{host}\t#{port}

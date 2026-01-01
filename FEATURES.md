@@ -2411,6 +2411,57 @@ PureGopherAi.Config.admin_token()
 
 ---
 
+### 11.17 Gopherspace Server Directory
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Directory of major Gopherspace servers and hubs for community discovery.
+
+**Implementation:**
+- [x] Create `ServerDirectory` module
+- [x] Major hubs (Floodgap, SDF, Quux.org, Circumlunar)
+- [x] Search engines (Veronica-2, GopherVR)
+- [x] Phlog communities (Gopher Club, Zaibatsu, Cosmic Voyage)
+- [x] Public access Unix systems (RTC, tilde.town, Ctrl-C)
+- [x] Documentation resources (RFC 1436, Gopher+, Overbite)
+- [x] Gophermap generation with category sections
+- [x] Getting listed instructions
+- [x] Added /servers route to handler
+- [x] Added to root menu
+
+**Served at:** /servers
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/server_directory.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes, menu)
+
+---
+
+### 11.18 Crawler Optimization
+**Status:** 🟢 Complete
+**Priority:** Low
+**Description:** Optimize for Gopher search engine crawlers (Veronica-2) and indexing.
+
+**Implementation:**
+- [x] Create `CrawlerHints` module
+- [x] robots.txt equivalent for Gopher crawlers
+- [x] Allow/Disallow directives for public/private content
+- [x] Crawl-delay recommendation
+- [x] Sitemap generation (text and gophermap formats)
+- [x] Dynamic content inclusion (user phlogs, bulletin boards)
+- [x] Meta block generation for page metadata
+- [x] Root hints for crawler discovery
+- [x] Added /robots.txt route
+- [x] Integration with existing /caps.txt
+
+**Served at:** /robots.txt, integrated with /sitemap
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/crawler_hints.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (routes)
+- `lib/pure_gopher_ai/config.ex` (admin_email)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

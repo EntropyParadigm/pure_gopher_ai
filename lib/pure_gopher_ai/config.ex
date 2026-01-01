@@ -41,6 +41,7 @@ defmodule PureGopherAi.Config do
 
       # Admin
       admin_token: Application.get_env(:pure_gopher_ai, :admin_token),
+      admin_email: Application.get_env(:pure_gopher_ai, :admin_email, "admin@example.com"),
 
       # Blocklist
       blocklist_enabled: Application.get_env(:pure_gopher_ai, :blocklist_enabled, false),
@@ -120,6 +121,9 @@ defmodule PureGopherAi.Config do
 
   @doc "Get admin token"
   def admin_token, do: get(:admin_token)
+
+  @doc "Get admin email"
+  def admin_email, do: get(:admin_email)
 
   @doc "Check if blocklist is enabled"
   def blocklist_enabled?, do: get(:blocklist_enabled)
