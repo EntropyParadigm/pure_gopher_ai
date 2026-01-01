@@ -18,6 +18,7 @@ defmodule PureGopherAi.Mailbox do
   alias PureGopherAi.UserProfiles
   alias PureGopherAi.ContentModerator
   alias PureGopherAi.InputSanitizer
+  alias PureGopherAi.Crypto
 
   @table_name :mailbox
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
@@ -169,12 +170,14 @@ defmodule PureGopherAi.Mailbox do
               {:ok, :approved} ->
                 message_id = generate_id()
 
+                # Encrypt subject and body at rest
                 message = %{
                   id: message_id,
                   from: from_username_clean,
                   to: to_username_clean,
-                  subject: subject_clean,
-                  body: body_clean,
+                  subject: Crypto.encrypt(subject_clean),
+                  body: Crypto.encrypt(body_clean),
+                  encrypted: true,
                   read: false,
                   created_at: DateTime.utc_now() |> DateTime.to_iso8601(),
                   ip_hash: ip_hash
@@ -223,7 +226,8 @@ defmodule PureGopherAi.Mailbox do
           |> Enum.sort_by(& &1.created_at, :desc)
           |> Enum.drop(offset)
           |> Enum.take(limit)
-          |> Enum.map(&Map.drop(&1, [:ip_hash]))
+          |> Enum.map(&decrypt_message/1)
+          |> Enum.map(&Map.drop(&1, [:ip_hash, :encrypted]))
 
         {:reply, {:ok, sorted}, state}
 
@@ -249,7 +253,8 @@ defmodule PureGopherAi.Mailbox do
           |> Enum.sort_by(& &1.created_at, :desc)
           |> Enum.drop(offset)
           |> Enum.take(limit)
-          |> Enum.map(&Map.drop(&1, [:ip_hash]))
+          |> Enum.map(&decrypt_message/1)
+          |> Enum.map(&Map.drop(&1, [:ip_hash, :encrypted]))
 
         {:reply, {:ok, sorted}, state}
 
@@ -272,14 +277,16 @@ defmodule PureGopherAi.Mailbox do
             :dets.insert(@table_name, {inbox_key, updated})
             :dets.sync(@table_name)
 
-            {:reply, {:ok, Map.drop(updated, [:ip_hash])}, state}
+            decrypted = decrypt_message(updated)
+            {:reply, {:ok, Map.drop(decrypted, [:ip_hash, :encrypted])}, state}
 
           [] ->
             # Check sent folder
             sent_key = {:sent, username_lower, message_id}
             case :dets.lookup(@table_name, sent_key) do
               [{^sent_key, message}] ->
-                {:reply, {:ok, Map.drop(message, [:ip_hash])}, state}
+                decrypted = decrypt_message(message)
+                {:reply, {:ok, Map.drop(decrypted, [:ip_hash, :encrypted])}, state}
               [] ->
                 {:reply, {:error, :not_found}, state}
             end
@@ -453,6 +460,15 @@ defmodule PureGopherAi.Mailbox do
         true
     end
   end
+
+  defp decrypt_message(%{encrypted: true} = message) do
+    %{message |
+      subject: Crypto.decrypt_or_original(message.subject),
+      body: Crypto.decrypt_or_original(message.body)
+    }
+  end
+
+  defp decrypt_message(message), do: message
 
   defp inbox_full?(username) do
     username = String.downcase(username)

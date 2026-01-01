@@ -36,8 +36,7 @@ defmodule PureGopherAi.AiEngine do
     # Configure generation parameters
     generation_config =
       Bumblebee.configure(generation_config,
-        max_new_tokens: 100,
-        no_repeat_ngram_size: 2
+        max_new_tokens: 100
       )
 
     # Streaming mode enabled (yields tokens as they're generated)

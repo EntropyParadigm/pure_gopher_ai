@@ -1,0 +1,215 @@
+defmodule PureGopherAi.Handlers.Shared do
+  @moduledoc """
+  Shared utilities for Gopher protocol handlers.
+
+  Provides common formatting, error handling, and response generation
+  functions used across all handler modules.
+  """
+
+  alias PureGopherAi.InputSanitizer
+  alias PureGopherAi.OutputSanitizer
+
+  # === Response Formatting (using iodata for performance) ===
+
+  @doc """
+  Format text as Gopher info lines with proper escaping.
+  Returns iodata for zero-copy socket sends.
+  """
+  def format_text_response(text, host, port) do
+    lines =
+      text
+      |> InputSanitizer.escape_gopher()
+      |> String.split("\r\n")
+      |> Enum.map(&[?i, &1, ?\t, ?\t, host, ?\t, Integer.to_string(port), "\r\n"])
+
+    [lines, ".\r\n"]
+  end
+
+  @doc """
+  Format a list of lines as Gopher info lines.
+  Returns iodata for zero-copy socket sends.
+  """
+  def format_gopher_lines(lines, host, port) do
+    Enum.map(lines, fn line ->
+      escaped = InputSanitizer.escape_gopher(line)
+      [?i, escaped, ?\t, ?\t, host, ?\t, Integer.to_string(port), "\r\n"]
+    end)
+  end
+
+  @doc """
+  Format a Gopher menu item.
+  Returns iodata.
+  """
+  def menu_item(type, text, selector, host, port) do
+    [type, text, ?\t, selector, ?\t, host, ?\t, Integer.to_string(port), "\r\n"]
+  end
+
+  @doc """
+  Format an info line (type i).
+  """
+  def info_line(text, host, port) do
+    menu_item(?i, text, "", host, port)
+  end
+
+  @doc """
+  Format a link line (type 1 for directory).
+  """
+  def link_line(text, selector, host, port) do
+    menu_item(?1, text, selector, host, port)
+  end
+
+  @doc """
+  Format a text file link (type 0).
+  """
+  def text_link(text, selector, host, port) do
+    menu_item(?0, text, selector, host, port)
+  end
+
+  @doc """
+  Format a search/input line (type 7).
+  """
+  def search_line(text, selector, host, port) do
+    menu_item(?7, text, selector, host, port)
+  end
+
+  # === Error Responses ===
+
+  @doc """
+  Generate a Gopher error response (type 3).
+  """
+  def error_response(message) do
+    ["3", message, "\t\terror.host\t1\r\n.\r\n"]
+  end
+
+  @doc """
+  Sanitize internal error reasons for user-facing messages.
+  Prevents leaking internal implementation details.
+  """
+  def sanitize_error(reason) do
+    case reason do
+      # File/IO errors
+      :enoent -> "File not found"
+      :eacces -> "Permission denied"
+      :eisdir -> "Path is a directory"
+      :enotdir -> "Not a directory"
+      :enomem -> "Insufficient memory"
+      :enospc -> "No space left on device"
+
+      # Network errors
+      :timeout -> "Request timed out"
+      :closed -> "Connection closed"
+      :econnrefused -> "Connection refused"
+      :ehostunreach -> "Host unreachable"
+      :enetunreach -> "Network unreachable"
+      {:connect_failed, _} -> "Connection failed"
+      {:send_failed, _} -> "Send failed"
+      {:recv_failed, _} -> "Receive failed"
+
+      # Application-specific errors
+      :not_found -> "Not found"
+      :invalid_input -> "Invalid input"
+      :empty_content -> "Content cannot be empty"
+      :rate_limited -> "Rate limit exceeded"
+      :already_exists -> "Already exists"
+      :already_ingested -> "Already processed"
+      :path_not_allowed -> "Path not allowed"
+      :invalid_host -> "Invalid host"
+      :invalid_url -> "Invalid URL"
+      :file_not_found -> "File not found"
+      :content_blocked -> "Content not allowed"
+      {:content_blocked, _} -> "Content not allowed"
+      :question_too_long -> "Question too long"
+      :option_too_long -> "Option too long"
+      :empty_question -> "Question cannot be empty"
+      :empty_option -> "Option cannot be empty"
+      :title_too_long -> "Title too long"
+      :body_too_long -> "Content too long"
+      :empty_title -> "Title cannot be empty"
+      :empty_body -> "Content cannot be empty"
+      :invalid_credentials -> "Invalid credentials"
+      :unauthorized -> "Unauthorized"
+      :poll_closed -> "Poll has closed"
+      :already_voted -> "Already voted"
+      :invalid_option -> "Invalid option"
+      :recipient_not_found -> "Recipient not found"
+      :recipient_inbox_full -> "Recipient inbox full"
+      :passphrase_too_short -> "Passphrase too short"
+      :invalid_username -> "Invalid username"
+      :username_taken -> "Username already taken"
+      :post_limit_reached -> "Post limit reached"
+
+      # Tuple errors - extract message if available
+      {:error, inner} -> sanitize_error(inner)
+      {atom, _detail} when is_atom(atom) -> sanitize_error(atom)
+
+      # Unknown errors - generic message
+      _ -> "An error occurred"
+    end
+  end
+
+  @doc """
+  Generate rate limit response.
+  """
+  def rate_limit_response(retry_after_ms) do
+    retry_seconds = div(retry_after_ms, 1000) + 1
+    ["3Rate limit exceeded. Please wait ", Integer.to_string(retry_seconds), " seconds.\t\terror.host\t1\r\n.\r\n"]
+  end
+
+  @doc """
+  Generate banned IP response.
+  """
+  def banned_response do
+    "3Access denied. Your IP has been banned.\t\terror.host\t1\r\n.\r\n"
+  end
+
+  @doc """
+  Generate blocklisted IP response.
+  """
+  def blocklisted_response do
+    "3Access denied. Your IP is on a public blocklist.\t\terror.host\t1\r\n.\r\n"
+  end
+
+  # === Streaming Helpers ===
+
+  @doc """
+  Stream a chunk to socket with proper formatting.
+  """
+  def stream_chunk(socket, chunk, host, port) do
+    if String.length(chunk) > 0 do
+      sanitized = OutputSanitizer.sanitize(chunk)
+      escaped = InputSanitizer.escape_gopher(sanitized)
+      lines = String.split(escaped, "\r\n", trim: false)
+      formatted = Enum.map(lines, &[?i, &1, ?\t, ?\t, host, ?\t, Integer.to_string(port), "\r\n"])
+      ThousandIsland.Socket.send(socket, formatted)
+    end
+  end
+
+  # === IP Formatting ===
+
+  @doc """
+  Format IP address tuple to string.
+  """
+  def format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
+  def format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
+  def format_ip(ip), do: inspect(ip)
+
+  @doc """
+  Hash IP for privacy-friendly logging (first 8 chars of SHA256).
+  """
+  def hash_ip_for_log(ip) do
+    ip_str = format_ip(ip)
+    :crypto.hash(:sha256, ip_str)
+    |> Base.encode16(case: :lower)
+    |> String.slice(0, 8)
+  end
+
+  @doc """
+  Generate session ID from IP (for stateful operations).
+  """
+  def session_id_from_ip(ip) do
+    ip_str = format_ip(ip)
+    :crypto.hash(:sha256, ip_str)
+    |> Base.encode16(case: :lower)
+    |> String.slice(0, 16)
+  end
+end

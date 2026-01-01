@@ -12,12 +12,13 @@ defmodule PureGopherAi.Admin do
   alias PureGopherAi.ConversationStore
 
   @doc """
-  Gets the admin token from config or environment.
+  Gets the admin token from environment or config.
   Returns nil if admin is disabled.
+  Uses persistent terms for fast config access.
   """
   def get_token do
     System.get_env("ADMIN_TOKEN") ||
-      Application.get_env(:pure_gopher_ai, :admin_token)
+      PureGopherAi.Config.admin_token()
   end
 
   @doc """

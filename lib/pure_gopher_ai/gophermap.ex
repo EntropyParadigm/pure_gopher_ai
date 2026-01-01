@@ -50,11 +50,10 @@ defmodule PureGopherAi.Gophermap do
   }
 
   @doc """
-  Gets the configured content directory.
+  Gets the configured content directory (uses persistent terms for speed).
   """
   def content_dir do
-    Application.get_env(:pure_gopher_ai, :content_dir, "~/.gopher")
-    |> Path.expand()
+    PureGopherAi.Config.content_dir()
   end
 
   @doc """

@@ -13,6 +13,9 @@ defmodule PureGopherAi.UserProfiles do
   use GenServer
   require Logger
 
+  alias PureGopherAi.PasswordValidator
+  alias PureGopherAi.Recovery
+
   @table_name :user_profiles
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
   @max_bio_length 500
@@ -20,7 +23,6 @@ defmodule PureGopherAi.UserProfiles do
   @max_interests 10
   @username_min_length 3
   @username_max_length 20
-  @passphrase_min_length 8
   @cooldown_ms 86400_000  # 1 day between profile creations per IP
   @pbkdf2_iterations 100_000
   @max_auth_failures_per_ip 5
@@ -50,6 +52,22 @@ defmodule PureGopherAi.UserProfiles do
   """
   def authenticate(username, passphrase, ip \\ nil) do
     GenServer.call(__MODULE__, {:authenticate, username, passphrase, ip})
+  end
+
+  @doc """
+  Recovers an account using recovery phrase.
+  Resets the passphrase if the recovery phrase is valid.
+  Returns {:ok, new_recovery_words} or {:error, reason}.
+  """
+  def recover(username, recovery_words, new_passphrase) when is_list(recovery_words) do
+    GenServer.call(__MODULE__, {:recover, username, recovery_words, new_passphrase})
+  end
+
+  def recover(username, recovery_input, new_passphrase) when is_binary(recovery_input) do
+    case Recovery.parse_input(recovery_input) do
+      {:ok, words} -> recover(username, words, new_passphrase)
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @doc """
@@ -135,9 +153,10 @@ defmodule PureGopherAi.UserProfiles do
       String.length(username) > @username_max_length ->
         {:reply, {:error, :username_too_long}, state}
 
-      # Validate passphrase
-      String.length(passphrase) < @passphrase_min_length ->
-        {:reply, {:error, :passphrase_too_short}, state}
+      # Validate passphrase strength
+      match?({:error, _}, PasswordValidator.validate(passphrase)) ->
+        {:error, reason} = PasswordValidator.validate(passphrase)
+        {:reply, {:error, {:passphrase_weak, reason}}, state}
 
       # Check if username already exists
       username_exists?(username_lower) ->
@@ -165,11 +184,16 @@ defmodule PureGopherAi.UserProfiles do
           |> Enum.take(@max_interests)
           |> Enum.map(&sanitize_text/1)
 
+        # Generate recovery phrase
+        recovery_words = Recovery.generate_phrase()
+        recovery_hash = Recovery.hash_phrase(recovery_words)
+
         profile = %{
           username: username,
           username_lower: username_lower,
           passphrase_hash: passphrase_hash,
           salt: salt,
+          recovery_hash: recovery_hash,
           bio: bio,
           links: links,
           interests: interests,
@@ -185,7 +209,7 @@ defmodule PureGopherAi.UserProfiles do
         :ets.insert(:profile_cooldowns, {ip_hash, now})
 
         Logger.info("[UserProfiles] Created profile: #{username}")
-        {:reply, {:ok, username}, state}
+        {:reply, {:ok, username, recovery_words}, state}
     end
   end
 
@@ -205,7 +229,7 @@ defmodule PureGopherAi.UserProfiles do
           if secure_compare(expected_hash, profile.passphrase_hash) do
             # Clear auth failures on success
             if ip_hash, do: :ets.delete(:profile_auth_failures, ip_hash)
-            {:reply, {:ok, Map.drop(profile, [:passphrase_hash, :salt])}, state}
+            {:reply, {:ok, Map.drop(profile, [:passphrase_hash, :salt, :recovery_hash])}, state}
           else
             # Record auth failure
             if ip_hash, do: record_auth_failure(ip_hash)
@@ -221,6 +245,54 @@ defmodule PureGopherAi.UserProfiles do
   end
 
   @impl true
+  def handle_call({:recover, username, recovery_words, new_passphrase}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+
+    case :dets.lookup(@table_name, username_lower) do
+      [{^username_lower, profile}] ->
+        # Check if account has recovery phrase
+        recovery_hash = Map.get(profile, :recovery_hash)
+
+        cond do
+          is_nil(recovery_hash) ->
+            {:reply, {:error, :no_recovery_available}, state}
+
+          not Recovery.verify_phrase(recovery_words, recovery_hash) ->
+            {:reply, {:error, :invalid_recovery_phrase}, state}
+
+          match?({:error, _}, PasswordValidator.validate(new_passphrase)) ->
+            {:error, reason} = PasswordValidator.validate(new_passphrase)
+            {:reply, {:error, {:passphrase_weak, reason}}, state}
+
+          true ->
+            # Generate new salt and hash new passphrase
+            new_salt = :crypto.strong_rand_bytes(16)
+            new_passphrase_hash = hash_passphrase(new_passphrase, new_salt)
+
+            # Generate new recovery phrase
+            new_recovery_words = Recovery.generate_phrase()
+            new_recovery_hash = Recovery.hash_phrase(new_recovery_words)
+
+            updated = %{profile |
+              passphrase_hash: new_passphrase_hash,
+              salt: new_salt,
+              recovery_hash: new_recovery_hash,
+              updated_at: DateTime.utc_now() |> DateTime.to_iso8601()
+            }
+
+            :dets.insert(@table_name, {username_lower, updated})
+            :dets.sync(@table_name)
+
+            Logger.info("[UserProfiles] Account recovered: #{username}")
+            {:reply, {:ok, new_recovery_words}, state}
+        end
+
+      [] ->
+        {:reply, {:error, :not_found}, state}
+    end
+  end
+
+  @impl true
   def handle_call({:get, username}, _from, state) do
     username_lower = String.downcase(String.trim(username))
 
@@ -230,7 +302,7 @@ defmodule PureGopherAi.UserProfiles do
         updated = %{profile | views: profile.views + 1}
         :dets.insert(@table_name, {username_lower, updated})
         # Don't expose sensitive fields
-        {:reply, {:ok, Map.drop(updated, [:passphrase_hash, :salt])}, state}
+        {:reply, {:ok, Map.drop(updated, [:passphrase_hash, :salt, :recovery_hash])}, state}
 
       [] ->
         {:reply, {:error, :not_found}, state}
@@ -257,7 +329,7 @@ defmodule PureGopherAi.UserProfiles do
           :dets.sync(@table_name)
 
           Logger.info("[UserProfiles] Updated profile: #{username}")
-          {:reply, {:ok, Map.drop(updated, [:passphrase_hash, :salt])}, state}
+          {:reply, {:ok, Map.drop(updated, [:passphrase_hash, :salt, :recovery_hash])}, state}
         else
           {:reply, {:error, :invalid_credentials}, state}
         end
@@ -280,7 +352,7 @@ defmodule PureGopherAi.UserProfiles do
       |> Enum.sort_by(& &1.created_at, :desc)
       |> Enum.drop(offset)
       |> Enum.take(limit)
-      |> Enum.map(fn p -> Map.drop(p, [:passphrase_hash, :salt]) end)
+      |> Enum.map(fn p -> Map.drop(p, [:passphrase_hash, :salt, :recovery_hash]) end)
 
     {:reply, {:ok, sorted, length(profiles)}, state}
   end
@@ -296,7 +368,7 @@ defmodule PureGopherAi.UserProfiles do
       end)
 
       if matches_username or matches_interests do
-        [Map.drop(profile, [:passphrase_hash, :salt]) | acc]
+        [Map.drop(profile, [:passphrase_hash, :salt, :recovery_hash]) | acc]
       else
         acc
       end

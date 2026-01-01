@@ -9,16 +9,17 @@ defmodule PureGopherAi.Application do
 
   @impl true
   def start(_type, _args) do
-    clearnet_port = Application.get_env(:pure_gopher_ai, :clearnet_port, 7070)
-    tor_enabled = Application.get_env(:pure_gopher_ai, :tor_enabled, false)
-    tor_port = Application.get_env(:pure_gopher_ai, :tor_port, 7071)
-    gemini_enabled = Application.get_env(:pure_gopher_ai, :gemini_enabled, false)
-    gemini_port = Application.get_env(:pure_gopher_ai, :gemini_port, 1965)
-    finger_enabled = Application.get_env(:pure_gopher_ai, :finger_enabled, false)
-    finger_port = Application.get_env(:pure_gopher_ai, :finger_port, 79)
+    # Initialize persistent terms for fast config access
+    PureGopherAi.Config.init()
 
-    # Record start time for uptime tracking
-    Application.put_env(:pure_gopher_ai, :start_time, System.system_time(:second))
+    # Get config from persistent terms (faster than Application.get_env)
+    clearnet_port = PureGopherAi.Config.clearnet_port()
+    tor_enabled = PureGopherAi.Config.tor_enabled?()
+    tor_port = PureGopherAi.Config.tor_port()
+    gemini_enabled = PureGopherAi.Config.gemini_enabled?()
+    gemini_port = PureGopherAi.Config.gemini_port()
+    finger_enabled = PureGopherAi.Config.finger_enabled?()
+    finger_port = PureGopherAi.Config.finger_port()
 
     Logger.info("Starting PureGopherAI server...")
     Logger.info("Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
@@ -42,6 +43,30 @@ defmodule PureGopherAi.Application do
 
       # Telemetry / Metrics
       PureGopherAi.Telemetry,
+
+      # Session Token Management
+      PureGopherAi.Session,
+
+      # Audit Logging
+      PureGopherAi.AuditLog,
+
+      # CAPTCHA for Tor high-risk actions
+      PureGopherAi.Captcha,
+
+      # IP Reputation Scoring
+      PureGopherAi.IpReputation,
+
+      # User Notifications
+      PureGopherAi.Notifications,
+
+      # Content Reporting
+      PureGopherAi.ContentReports,
+
+      # User Blocking
+      PureGopherAi.UserBlocks,
+
+      # Scheduled Posts
+      PureGopherAi.ScheduledPosts,
 
       # RAG (Retrieval Augmented Generation)
       PureGopherAi.Rag.DocumentStore,

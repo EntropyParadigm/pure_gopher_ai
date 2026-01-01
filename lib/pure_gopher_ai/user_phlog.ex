@@ -38,6 +38,13 @@ defmodule PureGopherAi.UserPhlog do
   end
 
   @doc """
+  Creates a post without authentication (for internal use by scheduler).
+  """
+  def create_post_internal(username, title, body, opts \\ []) do
+    GenServer.call(__MODULE__, {:create_internal, username, title, body, opts}, 30_000)
+  end
+
+  @doc """
   Lists all posts by a user (public, no auth required).
   """
   def list_posts(username, opts \\ []) do
@@ -158,6 +165,56 @@ defmodule PureGopherAi.UserPhlog do
             {:error, reason} ->
               {:reply, {:error, reason}, state}
           end
+        end
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:create_internal, username, title, body, opts}, _from, state) do
+    # Internal creation without authentication (for scheduled posts)
+    username_lower = String.downcase(String.trim(username))
+
+    # Validate content
+    case validate_post(title, body) do
+      {:ok, clean_title, clean_body} ->
+        # Content moderation (still applies)
+        case ContentModerator.moderate(clean_title <> "\n\n" <> clean_body, :phlog_post) do
+          {:ok, :approved} ->
+            post_id = generate_id()
+            now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+            post = %{
+              id: post_id,
+              username: username,
+              username_lower: username_lower,
+              title: clean_title,
+              body: clean_body,
+              tags: Keyword.get(opts, :tags, []),
+              created_at: now,
+              updated_at: now,
+              views: 0,
+              scheduled: true
+            }
+
+            # Get existing posts for user
+            posts = get_user_posts(username_lower)
+
+            if length(posts) >= @max_posts_per_user do
+              {:reply, {:error, :post_limit_reached}, state}
+            else
+              # Store post
+              :dets.insert(@table_name, {{username_lower, post_id}, post})
+              :dets.sync(@table_name)
+
+              Logger.info("[UserPhlog] Scheduled post created: #{username}/#{post_id}")
+              {:reply, {:ok, post_id}, state}
+            end
+
+          {:error, :blocked, reason} ->
+            {:reply, {:error, :content_blocked, reason}, state}
         end
 
       {:error, reason} ->

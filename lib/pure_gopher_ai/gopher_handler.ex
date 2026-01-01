@@ -12,18 +12,8 @@ defmodule PureGopherAi.GopherHandler do
 
   alias PureGopherAi.Gophermap
   alias PureGopherAi.RateLimiter
-  alias PureGopherAi.ConversationStore
-  alias PureGopherAi.ModelRegistry
   alias PureGopherAi.Telemetry
   alias PureGopherAi.Phlog
-  alias PureGopherAi.Search
-  alias PureGopherAi.AsciiArt
-  alias PureGopherAi.Admin
-  alias PureGopherAi.Rag
-  alias PureGopherAi.Summarizer
-  alias PureGopherAi.GopherProxy
-  alias PureGopherAi.Guestbook
-  alias PureGopherAi.CodeAssistant
   alias PureGopherAi.Adventure
   alias PureGopherAi.FeedAggregator
   alias PureGopherAi.Weather
@@ -32,10 +22,6 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.BulletinBoard
   alias PureGopherAi.HealthCheck
   alias PureGopherAi.InputSanitizer
-  alias PureGopherAi.RequestValidator
-  alias PureGopherAi.OutputSanitizer
-  alias PureGopherAi.Pastebin
-  alias PureGopherAi.Polls
   alias PureGopherAi.PhlogComments
   alias PureGopherAi.UserProfiles
   alias PureGopherAi.Calendar
@@ -49,6 +35,14 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Calculator
   alias PureGopherAi.Games
   alias PureGopherAi.UserPhlog
+
+  # Handler modules (extracted for modularity)
+  alias PureGopherAi.Handlers.Ai, as: AiHandler
+  alias PureGopherAi.Handlers.Community, as: CommunityHandler
+  alias PureGopherAi.Handlers.Tools, as: ToolsHandler
+  alias PureGopherAi.Handlers.Admin, as: AdminHandler
+  alias PureGopherAi.Handlers.Shared, as: SharedHandler
+  alias PureGopherAi.Handlers.Security, as: SecurityHandler
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -99,17 +93,17 @@ defmodule PureGopherAi.GopherHandler do
         Logger.warning("Rate limited: #{hash_ip_for_log(client_ip)}, retry after #{retry_after}ms")
         # Record violation for abuse detection (may trigger auto-ban)
         RateLimiter.record_violation(client_ip)
-        response = rate_limit_response(retry_after)
+        response = SharedHandler.rate_limit_response(retry_after)
         ThousandIsland.Socket.send(socket, response)
 
       {:error, :banned} ->
         Logger.warning("Banned IP attempted access: #{hash_ip_for_log(client_ip)}")
-        response = banned_response()
+        response = SharedHandler.banned_response()
         ThousandIsland.Socket.send(socket, response)
 
       {:error, :blocklisted} ->
         Logger.warning("Blocklisted IP attempted access: #{hash_ip_for_log(client_ip)}")
-        response = blocklisted_response()
+        response = SharedHandler.blocklisted_response()
         ThousandIsland.Socket.send(socket, response)
     end
 
@@ -147,22 +141,8 @@ defmodule PureGopherAi.GopherHandler do
     :crypto.hash(:sha256, "adventure-default") |> Base.encode16(case: :lower)
   end
 
-  # Get appropriate host/port based on network type
-  defp get_host_port(:tor) do
-    onion = Application.get_env(:pure_gopher_ai, :onion_address)
-
-    if onion do
-      {onion, 70}
-    else
-      {"[onion-address]", 70}
-    end
-  end
-
-  defp get_host_port(:clearnet) do
-    host = Application.get_env(:pure_gopher_ai, :clearnet_host, "localhost")
-    port = Application.get_env(:pure_gopher_ai, :clearnet_port, 7070)
-    {host, port}
-  end
+  # Get appropriate host/port based on network type (uses persistent terms for speed)
+  defp get_host_port(network), do: PureGopherAi.Config.host_port(network)
 
   # Route selector to appropriate handler (with socket for streaming)
   defp route_selector("", host, port, network, _ip, _socket), do: root_menu(host, port, network)
@@ -170,65 +150,65 @@ defmodule PureGopherAi.GopherHandler do
 
   # AI queries (stateless) - with streaming support
   defp route_selector("/ask\t" <> query, host, port, _network, _ip, socket),
-    do: handle_ask(query, host, port, socket)
+    do: AiHandler.handle_ask(query, host, port, socket)
 
   defp route_selector("/ask " <> query, host, port, _network, _ip, socket),
-    do: handle_ask(query, host, port, socket)
+    do: AiHandler.handle_ask(query, host, port, socket)
 
   defp route_selector("/ask", host, port, _network, _ip, _socket),
-    do: ask_prompt(host, port)
+    do: AiHandler.ask_prompt(host, port)
 
   # Chat (with conversation memory) - with streaming support
   defp route_selector("/chat\t" <> query, host, port, _network, client_ip, socket),
-    do: handle_chat(query, host, port, client_ip, socket)
+    do: AiHandler.handle_chat(query, host, port, client_ip, socket)
 
   defp route_selector("/chat " <> query, host, port, _network, client_ip, socket),
-    do: handle_chat(query, host, port, client_ip, socket)
+    do: AiHandler.handle_chat(query, host, port, client_ip, socket)
 
   defp route_selector("/chat", host, port, _network, _ip, _socket),
-    do: chat_prompt(host, port)
+    do: AiHandler.chat_prompt(host, port)
 
   # Clear conversation
   defp route_selector("/clear", host, port, _network, client_ip, _socket),
-    do: handle_clear(host, port, client_ip)
+    do: AiHandler.handle_clear(host, port, client_ip)
 
   # List available models
   defp route_selector("/models", host, port, _network, _ip, _socket),
-    do: models_page(host, port)
+    do: AiHandler.models_page(host, port)
 
   # List available personas
   defp route_selector("/personas", host, port, _network, _ip, _socket),
-    do: personas_page(host, port)
+    do: AiHandler.personas_page(host, port)
 
   # Persona-specific queries (e.g., /ask-pirate, /ask-coder)
   defp route_selector("/persona-" <> rest, host, port, _network, _ip, socket) do
-    case parse_model_query(rest) do
-      {persona_id, ""} -> persona_ask_prompt(persona_id, host, port)
-      {persona_id, query} -> handle_persona_ask(persona_id, query, host, port, socket)
+    case AiHandler.parse_model_query(rest) do
+      {persona_id, ""} -> AiHandler.persona_ask_prompt(persona_id, host, port)
+      {persona_id, query} -> AiHandler.handle_persona_ask(persona_id, query, host, port, socket)
     end
   end
 
   # Persona-specific chat
   defp route_selector("/chat-persona-" <> rest, host, port, _network, client_ip, socket) do
-    case parse_model_query(rest) do
-      {persona_id, ""} -> persona_chat_prompt(persona_id, host, port)
-      {persona_id, query} -> handle_persona_chat(persona_id, query, host, port, client_ip, socket)
+    case AiHandler.parse_model_query(rest) do
+      {persona_id, ""} -> AiHandler.persona_chat_prompt(persona_id, host, port)
+      {persona_id, query} -> AiHandler.handle_persona_chat(persona_id, query, host, port, client_ip, socket)
     end
   end
 
   # Model-specific queries (e.g., /ask-gpt2, /ask-gpt2-medium)
   defp route_selector("/ask-" <> rest, host, port, _network, _ip, socket) do
-    case parse_model_query(rest) do
-      {model_id, ""} -> model_ask_prompt(model_id, host, port)
-      {model_id, query} -> handle_model_ask(model_id, query, host, port, socket)
+    case AiHandler.parse_model_query(rest) do
+      {model_id, ""} -> AiHandler.model_ask_prompt(model_id, host, port)
+      {model_id, query} -> AiHandler.handle_model_ask(model_id, query, host, port, socket)
     end
   end
 
   # Model-specific chat (e.g., /chat-gpt2)
   defp route_selector("/chat-" <> rest, host, port, _network, client_ip, socket) do
-    case parse_model_query(rest) do
-      {model_id, ""} -> model_chat_prompt(model_id, host, port)
-      {model_id, query} -> handle_model_chat(model_id, query, host, port, client_ip, socket)
+    case AiHandler.parse_model_query(rest) do
+      {model_id, ""} -> AiHandler.model_chat_prompt(model_id, host, port)
+      {model_id, query} -> AiHandler.handle_model_chat(model_id, query, host, port, client_ip, socket)
     end
   end
 
@@ -255,86 +235,86 @@ defmodule PureGopherAi.GopherHandler do
 
   # Pastebin routes
   defp route_selector("/paste", host, port, _network, _ip, _socket),
-    do: paste_menu(host, port)
+    do: CommunityHandler.paste_menu(host, port)
 
   defp route_selector("/paste/new", host, port, _network, _ip, _socket),
-    do: paste_new_prompt(host, port)
+    do: CommunityHandler.paste_new_prompt(host, port)
 
   defp route_selector("/paste/new\t" <> content, host, port, _network, ip, _socket),
-    do: handle_paste_create(content, ip, host, port)
+    do: CommunityHandler.handle_paste_create(content, ip, host, port)
 
   defp route_selector("/paste/new " <> content, host, port, _network, ip, _socket),
-    do: handle_paste_create(content, ip, host, port)
+    do: CommunityHandler.handle_paste_create(content, ip, host, port)
 
   defp route_selector("/paste/recent", host, port, _network, _ip, _socket),
-    do: paste_recent(host, port)
+    do: CommunityHandler.paste_recent(host, port)
 
   defp route_selector("/paste/raw/" <> id, _host, _port, _network, _ip, _socket),
-    do: paste_raw(id)
+    do: CommunityHandler.paste_raw(id)
 
   defp route_selector("/paste/" <> id, host, port, _network, _ip, _socket),
-    do: paste_view(id, host, port)
+    do: CommunityHandler.paste_view(id, host, port)
 
   # Polls routes
   defp route_selector("/polls", host, port, _network, _ip, _socket),
-    do: polls_menu(host, port)
+    do: CommunityHandler.polls_menu(host, port)
 
   defp route_selector("/polls/new", host, port, _network, _ip, _socket),
-    do: polls_new_prompt(host, port)
+    do: CommunityHandler.polls_new_prompt(host, port)
 
   defp route_selector("/polls/new\t" <> input, host, port, _network, ip, _socket),
-    do: handle_polls_create(input, ip, host, port)
+    do: CommunityHandler.handle_polls_create(input, ip, host, port)
 
   defp route_selector("/polls/new " <> input, host, port, _network, ip, _socket),
-    do: handle_polls_create(input, ip, host, port)
+    do: CommunityHandler.handle_polls_create(input, ip, host, port)
 
   defp route_selector("/polls/active", host, port, _network, _ip, _socket),
-    do: polls_active(host, port)
+    do: CommunityHandler.polls_active(host, port)
 
   defp route_selector("/polls/closed", host, port, _network, _ip, _socket),
-    do: polls_closed(host, port)
+    do: CommunityHandler.polls_closed(host, port)
 
   defp route_selector("/polls/vote/" <> rest, host, port, _network, ip, _socket),
-    do: handle_polls_vote(rest, ip, host, port)
+    do: CommunityHandler.handle_polls_vote(rest, ip, host, port)
 
   defp route_selector("/polls/" <> id, host, port, _network, ip, _socket),
-    do: polls_view(id, ip, host, port)
+    do: CommunityHandler.polls_view(id, ip, host, port)
 
   # User Profiles
   defp route_selector("/users", host, port, _network, _ip, _socket),
-    do: users_menu(host, port)
+    do: CommunityHandler.users_menu(host, port)
 
   defp route_selector("/users/create", host, port, _network, _ip, _socket),
-    do: users_create_prompt(host, port)
+    do: CommunityHandler.users_create_prompt(host, port)
 
   defp route_selector("/users/create\t" <> input, host, port, _network, ip, _socket),
-    do: handle_users_create(input, ip, host, port)
+    do: CommunityHandler.handle_users_create(input, ip, host, port)
 
   defp route_selector("/users/create " <> input, host, port, _network, ip, _socket),
-    do: handle_users_create(input, ip, host, port)
+    do: CommunityHandler.handle_users_create(input, ip, host, port)
 
   defp route_selector("/users/search", host, port, _network, _ip, _socket),
-    do: users_search_prompt(host, port)
+    do: CommunityHandler.users_search_prompt(host, port)
 
   defp route_selector("/users/search\t" <> query, host, port, _network, _ip, _socket),
-    do: handle_users_search(query, host, port)
+    do: CommunityHandler.handle_users_search(query, host, port)
 
   defp route_selector("/users/search " <> query, host, port, _network, _ip, _socket),
-    do: handle_users_search(query, host, port)
+    do: CommunityHandler.handle_users_search(query, host, port)
 
   defp route_selector("/users/list", host, port, _network, _ip, _socket),
-    do: users_list(host, port, 1)
+    do: CommunityHandler.users_list(host, port, 1)
 
   defp route_selector("/users/list/page/" <> page_str, host, port, _network, _ip, _socket) do
     page = case Integer.parse(page_str) do
       {p, ""} when p > 0 -> p
       _ -> 1
     end
-    users_list(host, port, page)
+    CommunityHandler.users_list(host, port, page)
   end
 
   defp route_selector("/users/~" <> username, host, port, _network, _ip, _socket),
-    do: users_view(username, host, port)
+    do: CommunityHandler.users_view(username, host, port)
 
   # Calendar / Events
   defp route_selector("/calendar", host, port, _network, _ip, _socket),
@@ -886,202 +866,202 @@ defmodule PureGopherAi.GopherHandler do
 
   # Search (Type 7)
   defp route_selector("/search", host, port, _network, _ip, _socket),
-    do: search_prompt(host, port)
+    do: ToolsHandler.search_prompt(host, port)
 
   defp route_selector("/search\t" <> query, host, port, _network, _ip, _socket),
-    do: handle_search(query, host, port)
+    do: ToolsHandler.handle_search(query, host, port)
 
   defp route_selector("/search " <> query, host, port, _network, _ip, _socket),
-    do: handle_search(query, host, port)
+    do: ToolsHandler.handle_search(query, host, port)
 
   # ASCII Art
   defp route_selector("/art", host, port, _network, _ip, _socket),
-    do: art_menu(host, port)
+    do: ToolsHandler.art_menu(host, port)
 
   defp route_selector("/art/text", host, port, _network, _ip, _socket),
-    do: art_text_prompt(host, port)
+    do: ToolsHandler.art_text_prompt(host, port)
 
   defp route_selector("/art/text\t" <> text, host, port, _network, _ip, _socket),
-    do: handle_art_text(text, host, port, :block)
+    do: ToolsHandler.handle_art_text(text, host, port, :block)
 
   defp route_selector("/art/text " <> text, host, port, _network, _ip, _socket),
-    do: handle_art_text(text, host, port, :block)
+    do: ToolsHandler.handle_art_text(text, host, port, :block)
 
   defp route_selector("/art/small", host, port, _network, _ip, _socket),
-    do: art_small_prompt(host, port)
+    do: ToolsHandler.art_small_prompt(host, port)
 
   defp route_selector("/art/small\t" <> text, host, port, _network, _ip, _socket),
-    do: handle_art_text(text, host, port, :small)
+    do: ToolsHandler.handle_art_text(text, host, port, :small)
 
   defp route_selector("/art/small " <> text, host, port, _network, _ip, _socket),
-    do: handle_art_text(text, host, port, :small)
+    do: ToolsHandler.handle_art_text(text, host, port, :small)
 
   defp route_selector("/art/banner", host, port, _network, _ip, _socket),
-    do: art_banner_prompt(host, port)
+    do: ToolsHandler.art_banner_prompt(host, port)
 
   defp route_selector("/art/banner\t" <> text, host, port, _network, _ip, _socket),
-    do: handle_art_banner(text, host, port)
+    do: ToolsHandler.handle_art_banner(text, host, port)
 
   defp route_selector("/art/banner " <> text, host, port, _network, _ip, _socket),
-    do: handle_art_banner(text, host, port)
+    do: ToolsHandler.handle_art_banner(text, host, port)
 
   # RAG (Document Query) routes
   defp route_selector("/docs", host, port, _network, _ip, _socket),
-    do: docs_menu(host, port)
+    do: ToolsHandler.docs_menu(host, port)
 
   defp route_selector("/docs/", host, port, _network, _ip, _socket),
-    do: docs_menu(host, port)
+    do: ToolsHandler.docs_menu(host, port)
 
   defp route_selector("/docs/list", host, port, _network, _ip, _socket),
-    do: docs_list(host, port)
+    do: ToolsHandler.docs_list(host, port)
 
   defp route_selector("/docs/stats", host, port, _network, _ip, _socket),
-    do: docs_stats(host, port)
+    do: ToolsHandler.docs_stats(host, port)
 
   defp route_selector("/docs/ask", host, port, _network, _ip, _socket),
-    do: docs_ask_prompt(host, port)
+    do: ToolsHandler.docs_ask_prompt(host, port)
 
   defp route_selector("/docs/ask\t" <> query, host, port, _network, _ip, socket),
-    do: handle_docs_ask(query, host, port, socket)
+    do: ToolsHandler.handle_docs_ask(query, host, port, socket)
 
   defp route_selector("/docs/ask " <> query, host, port, _network, _ip, socket),
-    do: handle_docs_ask(query, host, port, socket)
+    do: ToolsHandler.handle_docs_ask(query, host, port, socket)
 
   defp route_selector("/docs/search", host, port, _network, _ip, _socket),
-    do: docs_search_prompt(host, port)
+    do: ToolsHandler.docs_search_prompt(host, port)
 
   defp route_selector("/docs/search\t" <> query, host, port, _network, _ip, _socket),
-    do: handle_docs_search(query, host, port)
+    do: ToolsHandler.handle_docs_search(query, host, port)
 
   defp route_selector("/docs/search " <> query, host, port, _network, _ip, _socket),
-    do: handle_docs_search(query, host, port)
+    do: ToolsHandler.handle_docs_search(query, host, port)
 
   defp route_selector("/docs/view/" <> doc_id, host, port, _network, _ip, _socket),
-    do: docs_view(doc_id, host, port)
+    do: ToolsHandler.docs_view(doc_id, host, port)
 
   # === AI Services: Summarization ===
 
   # Phlog summarization
   defp route_selector("/summary/phlog/" <> path, host, port, _network, _ip, socket),
-    do: handle_phlog_summary(path, host, port, socket)
+    do: ToolsHandler.handle_phlog_summary(path, host, port, socket)
 
   # Document summarization
   defp route_selector("/summary/doc/" <> doc_id, host, port, _network, _ip, socket),
-    do: handle_doc_summary(doc_id, host, port, socket)
+    do: ToolsHandler.handle_doc_summary(doc_id, host, port, socket)
 
   # === AI Services: Translation ===
 
   # Translation menu
   defp route_selector("/translate", host, port, _network, _ip, _socket),
-    do: translate_menu(host, port)
+    do: ToolsHandler.translate_menu(host, port)
 
   # Translate phlog: /translate/<lang>/phlog/<path>
   defp route_selector("/translate/" <> rest, host, port, _network, _ip, socket) do
-    handle_translate_route(rest, host, port, socket)
+    ToolsHandler.handle_translate_route(rest, host, port, socket)
   end
 
   # === AI Services: Dynamic Content ===
 
   # Daily digest
   defp route_selector("/digest", host, port, _network, _ip, socket),
-    do: handle_digest(host, port, socket)
+    do: ToolsHandler.handle_digest(host, port, socket)
 
   # Topic discovery
   defp route_selector("/topics", host, port, _network, _ip, socket),
-    do: handle_topics(host, port, socket)
+    do: ToolsHandler.handle_topics(host, port, socket)
 
   # Content discovery/recommendations
   defp route_selector("/discover", host, port, _network, _ip, _socket),
-    do: discover_prompt(host, port)
+    do: ToolsHandler.discover_prompt(host, port)
 
   defp route_selector("/discover\t" <> interest, host, port, _network, _ip, socket),
-    do: handle_discover(interest, host, port, socket)
+    do: ToolsHandler.handle_discover(interest, host, port, socket)
 
   defp route_selector("/discover " <> interest, host, port, _network, _ip, socket),
-    do: handle_discover(interest, host, port, socket)
+    do: ToolsHandler.handle_discover(interest, host, port, socket)
 
   # Explain terms
   defp route_selector("/explain", host, port, _network, _ip, _socket),
-    do: explain_prompt(host, port)
+    do: ToolsHandler.explain_prompt(host, port)
 
   defp route_selector("/explain\t" <> term, host, port, _network, _ip, socket),
-    do: handle_explain(term, host, port, socket)
+    do: ToolsHandler.handle_explain(term, host, port, socket)
 
   defp route_selector("/explain " <> term, host, port, _network, _ip, socket),
-    do: handle_explain(term, host, port, socket)
+    do: ToolsHandler.handle_explain(term, host, port, socket)
 
   # === Gopher Proxy ===
 
   # Fetch external gopher content
   defp route_selector("/fetch", host, port, _network, _ip, _socket),
-    do: fetch_prompt(host, port)
+    do: ToolsHandler.fetch_prompt(host, port)
 
   defp route_selector("/fetch\t" <> url, host, port, _network, _ip, _socket),
-    do: handle_fetch(url, host, port)
+    do: ToolsHandler.handle_fetch(url, host, port)
 
   defp route_selector("/fetch " <> url, host, port, _network, _ip, _socket),
-    do: handle_fetch(url, host, port)
+    do: ToolsHandler.handle_fetch(url, host, port)
 
   # Fetch and summarize
   defp route_selector("/fetch-summary\t" <> url, host, port, _network, _ip, socket),
-    do: handle_fetch_summary(url, host, port, socket)
+    do: ToolsHandler.handle_fetch_summary(url, host, port, socket)
 
   defp route_selector("/fetch-summary " <> url, host, port, _network, _ip, socket),
-    do: handle_fetch_summary(url, host, port, socket)
+    do: ToolsHandler.handle_fetch_summary(url, host, port, socket)
 
   # === Guestbook ===
 
   defp route_selector("/guestbook", host, port, _network, _ip, _socket),
-    do: guestbook_page(host, port, 1)
+    do: CommunityHandler.guestbook_page(host, port, 1)
 
   defp route_selector("/guestbook/page/" <> page_str, host, port, _network, _ip, _socket) do
     page = parse_int(page_str, 1)
-    guestbook_page(host, port, page)
+    CommunityHandler.guestbook_page(host, port, page)
   end
 
   defp route_selector("/guestbook/sign", host, port, _network, _ip, _socket),
-    do: guestbook_sign_prompt(host, port)
+    do: CommunityHandler.guestbook_sign_prompt(host, port)
 
   defp route_selector("/guestbook/sign\t" <> input, host, port, _network, ip, _socket),
-    do: handle_guestbook_sign(input, host, port, ip)
+    do: CommunityHandler.handle_guestbook_sign(input, host, port, ip)
 
   defp route_selector("/guestbook/sign " <> input, host, port, _network, ip, _socket),
-    do: handle_guestbook_sign(input, host, port, ip)
+    do: CommunityHandler.handle_guestbook_sign(input, host, port, ip)
 
   # === Code Assistant ===
 
   defp route_selector("/code", host, port, _network, _ip, _socket),
-    do: code_menu(host, port)
+    do: ToolsHandler.code_menu(host, port)
 
   defp route_selector("/code/languages", host, port, _network, _ip, _socket),
-    do: code_languages(host, port)
+    do: ToolsHandler.code_languages(host, port)
 
   defp route_selector("/code/generate", host, port, _network, _ip, _socket),
-    do: code_generate_prompt(host, port)
+    do: ToolsHandler.code_generate_prompt(host, port)
 
   defp route_selector("/code/generate\t" <> input, host, port, _network, _ip, socket),
-    do: handle_code_generate(input, host, port, socket)
+    do: ToolsHandler.handle_code_generate(input, host, port, socket)
 
   defp route_selector("/code/generate " <> input, host, port, _network, _ip, socket),
-    do: handle_code_generate(input, host, port, socket)
+    do: ToolsHandler.handle_code_generate(input, host, port, socket)
 
   defp route_selector("/code/explain", host, port, _network, _ip, _socket),
-    do: code_explain_prompt(host, port)
+    do: ToolsHandler.code_explain_prompt(host, port)
 
   defp route_selector("/code/explain\t" <> input, host, port, _network, _ip, socket),
-    do: handle_code_explain(input, host, port, socket)
+    do: ToolsHandler.handle_code_explain(input, host, port, socket)
 
   defp route_selector("/code/explain " <> input, host, port, _network, _ip, socket),
-    do: handle_code_explain(input, host, port, socket)
+    do: ToolsHandler.handle_code_explain(input, host, port, socket)
 
   defp route_selector("/code/review", host, port, _network, _ip, _socket),
-    do: code_review_prompt(host, port)
+    do: ToolsHandler.code_review_prompt(host, port)
 
   defp route_selector("/code/review\t" <> input, host, port, _network, _ip, socket),
-    do: handle_code_review(input, host, port, socket)
+    do: ToolsHandler.handle_code_review(input, host, port, socket)
 
   defp route_selector("/code/review " <> input, host, port, _network, _ip, socket),
-    do: handle_code_review(input, host, port, socket)
+    do: ToolsHandler.handle_code_review(input, host, port, socket)
 
   # === Text Adventure ===
 
@@ -1255,9 +1235,59 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/board-reply " <> input, host, port, _network, ip, _socket),
     do: handle_board_reply(input, host, port, ip)
 
+  # === Auth / Session Routes ===
+
+  defp route_selector("/auth", host, port, _network, _ip, _socket),
+    do: SecurityHandler.session_menu(host, port)
+
+  defp route_selector("/auth/login", host, port, _network, _ip, _socket),
+    do: SecurityHandler.login_prompt(host, port)
+
+  defp route_selector("/auth/login\t" <> input, host, port, _network, ip, _socket),
+    do: SecurityHandler.handle_login(input, ip, host, port)
+
+  defp route_selector("/auth/login " <> input, host, port, _network, ip, _socket),
+    do: SecurityHandler.handle_login(input, ip, host, port)
+
+  defp route_selector("/auth/logout/" <> token, host, port, _network, ip, _socket),
+    do: SecurityHandler.handle_logout(token, ip, host, port)
+
+  defp route_selector("/auth/validate\t" <> token, host, port, _network, ip, _socket),
+    do: SecurityHandler.handle_validate(token, ip, host, port)
+
+  defp route_selector("/auth/validate " <> token, host, port, _network, ip, _socket),
+    do: SecurityHandler.handle_validate(token, ip, host, port)
+
+  defp route_selector("/auth/refresh/" <> token, host, port, _network, ip, _socket),
+    do: SecurityHandler.handle_refresh(token, ip, host, port)
+
+  # CAPTCHA routes
+  defp route_selector("/captcha/verify/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 3) do
+      [action, challenge_id, encoded_return] ->
+        # Extract response from tab-separated input
+        {encoded_return, response} = case String.split(encoded_return, "\t", parts: 2) do
+          [enc, resp] -> {enc, resp}
+          [enc] -> {enc, ""}
+        end
+        SecurityHandler.handle_captcha_verify(action, challenge_id, encoded_return, response, host, port)
+      _ ->
+        error_response("Invalid CAPTCHA path")
+    end
+  end
+
+  defp route_selector("/captcha/new/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [action, encoded_return] ->
+        SecurityHandler.handle_new_captcha(action, encoded_return, host, port)
+      _ ->
+        error_response("Invalid CAPTCHA path")
+    end
+  end
+
   # Admin routes (token-authenticated)
   defp route_selector("/admin/" <> rest, host, port, _network, _ip, _socket) do
-    handle_admin(rest, host, port)
+    AdminHandler.handle_admin(rest, host, port)
   end
 
   # Static content via gophermap
@@ -1353,676 +1383,6 @@ defmodule PureGopherAi.GopherHandler do
     iTip: /summary/phlog/<path> for TL;DR summaries\t\t#{host}\t#{port}
     .
     """
-  end
-
-  # Prompt for AI query (Type 7 search)
-  defp ask_prompt(host, port) do
-    """
-    iAsk AI a Question\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your question below:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Models listing page
-  defp models_page(host, port) do
-    models = ModelRegistry.list_models()
-    default_model = ModelRegistry.default_model()
-
-    model_lines =
-      models
-      |> Enum.map(fn {id, info} ->
-        status = if info.loaded, do: "[Loaded]", else: "[Not loaded]"
-        default = if id == default_model, do: " (default)", else: ""
-
-        """
-        i\t\t#{host}\t#{port}
-        i#{info.name}#{default}\t\t#{host}\t#{port}
-        i  #{info.description}\t\t#{host}\t#{port}
-        i  Status: #{status}\t\t#{host}\t#{port}
-        7Ask #{info.name}\t/ask-#{id}\t#{host}\t#{port}
-        7Chat with #{info.name}\t/chat-#{id}\t#{host}\t#{port}
-        """
-      end)
-      |> Enum.join("")
-
-    """
-    i=== Available AI Models ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iModels are loaded on first use (lazy loading)\t\t#{host}\t#{port}
-    #{model_lines}i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Parse model ID and query from selector like "gpt2\tquery" or "gpt2 query"
-  defp parse_model_query(rest) do
-    # Try tab separator first (standard Gopher)
-    case String.split(rest, "\t", parts: 2) do
-      [model_with_query] ->
-        # Try space separator
-        case String.split(model_with_query, " ", parts: 2) do
-          [model_id, query] -> {model_id, query}
-          [model_id] -> {model_id, ""}
-        end
-
-      [model_id, query] ->
-        {model_id, query}
-    end
-  end
-
-  # Model-specific ask prompt
-  defp model_ask_prompt(model_id, host, port) do
-    case ModelRegistry.get_model(model_id) do
-      nil ->
-        error_response("Unknown model: #{model_id}")
-
-      info ->
-        """
-        iAsk #{info.name}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i#{info.description}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iEnter your question below:\t\t#{host}\t#{port}
-        .
-        """
-    end
-  end
-
-  # Model-specific chat prompt
-  defp model_chat_prompt(model_id, host, port) do
-    case ModelRegistry.get_model(model_id) do
-      nil ->
-        error_response("Unknown model: #{model_id}")
-
-      info ->
-        """
-        iChat with #{info.name}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i#{info.description}\t\t#{host}\t#{port}
-        iYour conversation history is preserved.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iEnter your message below:\t\t#{host}\t#{port}
-        .
-        """
-    end
-  end
-
-  # Handle model-specific ask query
-  defp handle_model_ask(model_id, query, host, port, socket) when byte_size(query) > 0 do
-    if ModelRegistry.exists?(model_id) do
-      Logger.info("AI Query (#{model_id}): #{query}")
-      start_time = System.monotonic_time(:millisecond)
-
-      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-        stream_model_response(socket, model_id, query, nil, host, port, start_time)
-      else
-        response = ModelRegistry.generate(model_id, query)
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        Logger.info("AI Response (#{model_id}) generated in #{elapsed}ms")
-
-        format_text_response(
-          """
-          Query: #{query}
-          Model: #{model_id}
-
-          Response:
-          #{response}
-
-          ---
-          Generated in #{elapsed}ms
-          """,
-          host,
-          port
-        )
-      end
-    else
-      error_response("Unknown model: #{model_id}")
-    end
-  end
-
-  defp handle_model_ask(model_id, _query, _host, _port, _socket) do
-    if ModelRegistry.exists?(model_id) do
-      error_response("Please provide a query after /ask-#{model_id}")
-    else
-      error_response("Unknown model: #{model_id}")
-    end
-  end
-
-  # Handle model-specific chat query
-  defp handle_model_chat(model_id, query, host, port, client_ip, socket) when byte_size(query) > 0 do
-    if ModelRegistry.exists?(model_id) do
-      session_id = ConversationStore.get_session_id(client_ip)
-      Logger.info("Chat query (#{model_id}) from session #{session_id}: #{query}")
-
-      context = ConversationStore.get_context(session_id)
-      ConversationStore.add_message(session_id, :user, query)
-
-      start_time = System.monotonic_time(:millisecond)
-
-      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-        stream_model_chat_response(socket, model_id, query, context, session_id, host, port, start_time)
-      else
-        response = ModelRegistry.generate(model_id, query, context)
-        elapsed = System.monotonic_time(:millisecond) - start_time
-
-        ConversationStore.add_message(session_id, :assistant, response)
-        history = ConversationStore.get_history(session_id)
-        history_count = length(history)
-
-        Logger.info("Chat response (#{model_id}) generated in #{elapsed}ms, history: #{history_count} messages")
-
-        format_text_response(
-          """
-          You: #{query}
-          Model: #{model_id}
-
-          AI: #{response}
-
-          ---
-          Session: #{session_id} | Messages: #{history_count}
-          Generated in #{elapsed}ms
-          """,
-          host,
-          port
-        )
-      end
-    else
-      error_response("Unknown model: #{model_id}")
-    end
-  end
-
-  defp handle_model_chat(model_id, _query, _host, _port, _ip, _socket) do
-    if ModelRegistry.exists?(model_id) do
-      error_response("Please provide a message after /chat-#{model_id}")
-    else
-      error_response("Unknown model: #{model_id}")
-    end
-  end
-
-  # Stream model-specific response
-  defp stream_model_response(socket, model_id, query, _context, host, port, start_time) do
-    header = format_gopher_lines(["Query: #{query}", "Model: #{model_id}", "", "Response:"], host, port)
-    ThousandIsland.Socket.send(socket, header)
-
-    _response = ModelRegistry.generate_stream(model_id, query, nil, fn chunk ->
-      if String.length(chunk) > 0 do
-        lines = String.split(chunk, "\n", trim: false)
-        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-        ThousandIsland.Socket.send(socket, Enum.join(formatted))
-      end
-    end)
-
-    elapsed = System.monotonic_time(:millisecond) - start_time
-    Logger.info("AI Response (#{model_id}) streamed in #{elapsed}ms")
-
-    footer = format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-
-    :streamed
-  end
-
-  # Stream model-specific chat response
-  defp stream_model_chat_response(socket, model_id, query, context, session_id, host, port, start_time) do
-    header = format_gopher_lines(["You: #{query}", "Model: #{model_id}", "", "AI:"], host, port)
-    ThousandIsland.Socket.send(socket, header)
-
-    {:ok, response_agent} = Agent.start_link(fn -> [] end)
-
-    _response = ModelRegistry.generate_stream(model_id, query, context, fn chunk ->
-      Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
-      if String.length(chunk) > 0 do
-        # Sanitize output to prevent sensitive data leakage, then escape for protocol
-        sanitized = OutputSanitizer.sanitize(chunk)
-        escaped = InputSanitizer.escape_gopher(sanitized)
-        lines = String.split(escaped, "\r\n", trim: false)
-        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-        ThousandIsland.Socket.send(socket, Enum.join(formatted))
-      end
-    end)
-
-    full_response =
-      response_agent
-      |> Agent.get(& &1)
-      |> Enum.reverse()
-      |> Enum.join("")
-
-    Agent.stop(response_agent)
-
-    ConversationStore.add_message(session_id, :assistant, full_response)
-    history = ConversationStore.get_history(session_id)
-    history_count = length(history)
-
-    elapsed = System.monotonic_time(:millisecond) - start_time
-    Logger.info("Chat response (#{model_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
-
-    footer = format_gopher_lines([
-      "",
-      "---",
-      "Session: #{session_id} | Messages: #{history_count}",
-      "Generated in #{elapsed}ms (streamed)"
-    ], host, port)
-    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-
-    :streamed
-  end
-
-  # === Persona Functions ===
-
-  # Personas listing page
-  defp personas_page(host, port) do
-    personas = PureGopherAi.AiEngine.list_personas()
-
-    persona_lines =
-      personas
-      |> Enum.map(fn {id, info} ->
-        """
-        i\t\t#{host}\t#{port}
-        i#{info.name}\t\t#{host}\t#{port}
-        i  "#{String.slice(info.prompt, 0..60)}..."\t\t#{host}\t#{port}
-        7Ask as #{info.name}\t/persona-#{id}\t#{host}\t#{port}
-        7Chat as #{info.name}\t/chat-persona-#{id}\t#{host}\t#{port}
-        """
-      end)
-      |> Enum.join("")
-
-    """
-    i=== Available AI Personas ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iPersonas modify AI behavior with system prompts\t\t#{host}\t#{port}
-    #{persona_lines}i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Persona ask prompt
-  defp persona_ask_prompt(persona_id, host, port) do
-    case PureGopherAi.AiEngine.get_persona(persona_id) do
-      nil ->
-        error_response("Unknown persona: #{persona_id}")
-
-      info ->
-        """
-        iAsk #{info.name}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i"#{info.prompt}"\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iEnter your question below:\t\t#{host}\t#{port}
-        .
-        """
-    end
-  end
-
-  # Persona chat prompt
-  defp persona_chat_prompt(persona_id, host, port) do
-    case PureGopherAi.AiEngine.get_persona(persona_id) do
-      nil ->
-        error_response("Unknown persona: #{persona_id}")
-
-      info ->
-        """
-        iChat with #{info.name}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i"#{info.prompt}"\t\t#{host}\t#{port}
-        iYour conversation history is preserved.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iEnter your message below:\t\t#{host}\t#{port}
-        .
-        """
-    end
-  end
-
-  # Handle persona-specific ask
-  defp handle_persona_ask(persona_id, query, host, port, socket) when byte_size(query) > 0 do
-    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
-      Logger.info("AI Query (persona: #{persona_id}): #{query}")
-      start_time = System.monotonic_time(:millisecond)
-
-      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-        stream_persona_response(socket, persona_id, query, nil, host, port, start_time)
-      else
-        case PureGopherAi.AiEngine.generate_with_persona(persona_id, query) do
-          {:ok, response} ->
-            elapsed = System.monotonic_time(:millisecond) - start_time
-            Logger.info("AI Response (persona: #{persona_id}) generated in #{elapsed}ms")
-
-            format_text_response(
-              """
-              Query: #{query}
-              Persona: #{persona_id}
-
-              Response:
-              #{response}
-
-              ---
-              Generated in #{elapsed}ms
-              """,
-              host,
-              port
-            )
-
-          {:error, _} ->
-            error_response("Unknown persona: #{persona_id}")
-        end
-      end
-    else
-      error_response("Unknown persona: #{persona_id}")
-    end
-  end
-
-  defp handle_persona_ask(persona_id, _query, _host, _port, _socket) do
-    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
-      error_response("Please provide a query after /persona-#{persona_id}")
-    else
-      error_response("Unknown persona: #{persona_id}")
-    end
-  end
-
-  # Handle persona-specific chat
-  defp handle_persona_chat(persona_id, query, host, port, client_ip, socket) when byte_size(query) > 0 do
-    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
-      session_id = ConversationStore.get_session_id(client_ip)
-      Logger.info("Chat query (persona: #{persona_id}) from session #{session_id}: #{query}")
-
-      context = ConversationStore.get_context(session_id)
-      ConversationStore.add_message(session_id, :user, query)
-
-      start_time = System.monotonic_time(:millisecond)
-
-      if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-        stream_persona_chat_response(socket, persona_id, query, context, session_id, host, port, start_time)
-      else
-        case PureGopherAi.AiEngine.generate_with_persona(persona_id, query, context) do
-          {:ok, response} ->
-            elapsed = System.monotonic_time(:millisecond) - start_time
-
-            ConversationStore.add_message(session_id, :assistant, response)
-            history = ConversationStore.get_history(session_id)
-            history_count = length(history)
-
-            Logger.info("Chat response (persona: #{persona_id}) generated in #{elapsed}ms, history: #{history_count} messages")
-
-            format_text_response(
-              """
-              You: #{query}
-              Persona: #{persona_id}
-
-              AI: #{response}
-
-              ---
-              Session: #{session_id} | Messages: #{history_count}
-              Generated in #{elapsed}ms
-              """,
-              host,
-              port
-            )
-
-          {:error, _} ->
-            error_response("Unknown persona: #{persona_id}")
-        end
-      end
-    else
-      error_response("Unknown persona: #{persona_id}")
-    end
-  end
-
-  defp handle_persona_chat(persona_id, _query, _host, _port, _ip, _socket) do
-    if PureGopherAi.AiEngine.persona_exists?(persona_id) do
-      error_response("Please provide a message after /chat-persona-#{persona_id}")
-    else
-      error_response("Unknown persona: #{persona_id}")
-    end
-  end
-
-  # Stream persona response
-  defp stream_persona_response(socket, persona_id, query, _context, host, port, start_time) do
-    header = format_gopher_lines(["Query: #{query}", "Persona: #{persona_id}", "", "Response:"], host, port)
-    ThousandIsland.Socket.send(socket, header)
-
-    case PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, nil, fn chunk ->
-           if String.length(chunk) > 0 do
-             # Sanitize output to prevent sensitive data leakage, then escape for protocol
-             sanitized = OutputSanitizer.sanitize(chunk)
-             escaped = InputSanitizer.escape_gopher(sanitized)
-             lines = String.split(escaped, "\r\n", trim: false)
-             formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-             ThousandIsland.Socket.send(socket, Enum.join(formatted))
-           end
-         end) do
-      {:ok, _response} ->
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        Logger.info("AI Response (persona: #{persona_id}) streamed in #{elapsed}ms")
-
-        footer = format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-        ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-
-      {:error, _} ->
-        ThousandIsland.Socket.send(socket, "i[Error: Unknown persona]\t\t#{host}\t#{port}\r\n.\r\n")
-    end
-
-    :streamed
-  end
-
-  # Stream persona chat response
-  defp stream_persona_chat_response(socket, persona_id, query, context, session_id, host, port, start_time) do
-    header = format_gopher_lines(["You: #{query}", "Persona: #{persona_id}", "", "AI:"], host, port)
-    ThousandIsland.Socket.send(socket, header)
-
-    {:ok, response_agent} = Agent.start_link(fn -> [] end)
-
-    result = PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, context, fn chunk ->
-      Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
-      if String.length(chunk) > 0 do
-        # Sanitize output to prevent sensitive data leakage, then escape for protocol
-        sanitized = OutputSanitizer.sanitize(chunk)
-        escaped = InputSanitizer.escape_gopher(sanitized)
-        lines = String.split(escaped, "\r\n", trim: false)
-        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-        ThousandIsland.Socket.send(socket, Enum.join(formatted))
-      end
-    end)
-
-    case result do
-      {:ok, _} ->
-        full_response =
-          response_agent
-          |> Agent.get(& &1)
-          |> Enum.reverse()
-          |> Enum.join("")
-
-        ConversationStore.add_message(session_id, :assistant, full_response)
-
-      {:error, _} ->
-        :ok
-    end
-
-    Agent.stop(response_agent)
-
-    history = ConversationStore.get_history(session_id)
-    history_count = length(history)
-
-    elapsed = System.monotonic_time(:millisecond) - start_time
-    Logger.info("Chat response (persona: #{persona_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
-
-    footer = format_gopher_lines([
-      "",
-      "---",
-      "Session: #{session_id} | Messages: #{history_count}",
-      "Generated in #{elapsed}ms (streamed)"
-    ], host, port)
-    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-
-    :streamed
-  end
-
-  # Handle AI query with streaming support and security checks
-  defp handle_ask(query, host, port, socket) when byte_size(query) > 0 do
-    # Validate and sanitize the query
-    case RequestValidator.validate_query(query) do
-      {:ok, _} ->
-        case InputSanitizer.sanitize_prompt(query) do
-          {:ok, sanitized_query} ->
-            Logger.info("AI Query: #{sanitized_query}")
-            start_time = System.monotonic_time(:millisecond)
-
-            if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-              # Stream response to socket
-              stream_ai_response(socket, sanitized_query, nil, host, port, start_time)
-            else
-              # Non-streaming fallback
-              response = PureGopherAi.AiEngine.generate(sanitized_query)
-              # Sanitize output for potential sensitive data
-              safe_response = OutputSanitizer.sanitize(response)
-              elapsed = System.monotonic_time(:millisecond) - start_time
-              Logger.info("AI Response generated in #{elapsed}ms")
-
-              format_text_response(
-                """
-                Query: #{sanitized_query}
-
-                Response:
-                #{safe_response}
-
-                ---
-                Generated in #{elapsed}ms using GPU acceleration
-                """,
-                host,
-                port
-              )
-            end
-
-          {:blocked, reason} ->
-            Logger.warning("Blocked AI query (injection attempt): #{String.slice(query, 0..50)}")
-            format_text_response(
-              """
-              Query Blocked
-
-              Your query was rejected for security reasons.
-              Reason: #{reason}
-
-              Please rephrase your question without special instructions.
-              """,
-              host,
-              port
-            )
-        end
-
-      {:error, reason} ->
-        Logger.warning("Invalid AI query: #{reason}")
-        error_response("Invalid query: #{reason}")
-    end
-  end
-
-  defp handle_ask(_, _host, _port, _socket), do: error_response("Please provide a query after /ask")
-
-  # Prompt for chat (Type 7 search)
-  defp chat_prompt(host, port) do
-    """
-    iChat with AI (Conversation Memory)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iYour conversation history is preserved.\t\t#{host}\t#{port}
-    iEnter your message below:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Handle chat query with conversation memory, streaming support, and security checks
-  defp handle_chat(query, host, port, client_ip, socket) when byte_size(query) > 0 do
-    # Validate and sanitize the query
-    case RequestValidator.validate_query(query) do
-      {:ok, _} ->
-        case InputSanitizer.sanitize_prompt(query) do
-          {:ok, sanitized_query} ->
-            session_id = ConversationStore.get_session_id(client_ip)
-            Logger.info("Chat query from session #{session_id}: #{sanitized_query}")
-
-            # Get existing conversation context
-            context = ConversationStore.get_context(session_id)
-
-            # Add user message to history
-            ConversationStore.add_message(session_id, :user, sanitized_query)
-
-            start_time = System.monotonic_time(:millisecond)
-
-            if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-              # Stream response to socket with chat context
-              stream_chat_response(socket, sanitized_query, context, session_id, host, port, start_time)
-            else
-              # Non-streaming fallback
-              response = PureGopherAi.AiEngine.generate(sanitized_query, context)
-              # Sanitize output for potential sensitive data
-              safe_response = OutputSanitizer.sanitize(response)
-              elapsed = System.monotonic_time(:millisecond) - start_time
-
-              # Add assistant response to history
-              ConversationStore.add_message(session_id, :assistant, safe_response)
-
-              # Get updated history for display
-              history = ConversationStore.get_history(session_id)
-              history_count = length(history)
-
-              Logger.info("Chat response generated in #{elapsed}ms, history: #{history_count} messages")
-
-              format_text_response(
-                """
-                You: #{sanitized_query}
-
-                AI: #{safe_response}
-
-                ---
-                Session: #{session_id} | Messages: #{history_count}
-                Generated in #{elapsed}ms
-                """,
-                host,
-                port
-              )
-            end
-
-          {:blocked, reason} ->
-            Logger.warning("Blocked chat message (injection attempt): #{String.slice(query, 0..50)}")
-            format_text_response(
-              """
-              Message Blocked
-
-              Your message was rejected for security reasons.
-              Reason: #{reason}
-
-              Please rephrase your message without special instructions.
-              """,
-              host,
-              port
-            )
-        end
-
-      {:error, reason} ->
-        Logger.warning("Invalid chat query: #{reason}")
-        error_response("Invalid message: #{reason}")
-    end
-  end
-
-  defp handle_chat(_, _host, _port, _ip, _socket), do: error_response("Please provide a message after /chat")
-
-  # Handle conversation clear
-  defp handle_clear(host, port, client_ip) do
-    session_id = ConversationStore.get_session_id(client_ip)
-    ConversationStore.clear(session_id)
-    Logger.info("Conversation cleared for session #{session_id}")
-
-    format_text_response(
-      """
-      Conversation Cleared
-
-      Your chat history has been reset.
-      Start a new conversation with /chat.
-
-      Session: #{session_id}
-      """,
-      host,
-      port
-    )
   end
 
   # Serve static files via gophermap
@@ -2525,1441 +1885,8 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  # === Search Functions ===
-
-  # Search prompt (Type 7)
-  defp search_prompt(host, port) do
-    """
-    iSearch Content\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iSearch across all phlog entries and static files.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your search query below:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Handle search query
-  defp handle_search(query, host, port) when byte_size(query) > 0 do
-    query = String.trim(query)
-
-    if String.length(query) < 2 do
-      """
-      i=== Search Results ===\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      iQuery too short. Please enter at least 2 characters.\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      7Try Again\t/search\t#{host}\t#{port}
-      1Back to Main Menu\t/\t#{host}\t#{port}
-      .
-      """
-    else
-      results = Search.search(query)
-
-      if Enum.empty?(results) do
-        """
-        i=== Search Results ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iNo results found for: "#{query}"\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        7Try Another Search\t/search\t#{host}\t#{port}
-        1Back to Main Menu\t/\t#{host}\t#{port}
-        .
-        """
-      else
-        result_lines =
-          results
-          |> Enum.map(fn {type, title, selector, snippet} ->
-            type_char = search_result_type(type)
-            snippet_line = "i  #{truncate_snippet(snippet, 70)}\t\t#{host}\t#{port}\r\n"
-            "#{type_char}#{title}\t#{selector}\t#{host}\t#{port}\r\n#{snippet_line}"
-          end)
-          |> Enum.join("")
-
-        """
-        i=== Search Results ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iQuery: "#{query}"\t\t#{host}\t#{port}
-        iFound #{length(results)} result(s)\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{result_lines}i\t\t#{host}\t#{port}
-        7New Search\t/search\t#{host}\t#{port}
-        1Back to Main Menu\t/\t#{host}\t#{port}
-        .
-        """
-      end
-    end
-  end
-
-  defp handle_search(_query, host, port) do
-    search_prompt(host, port)
-  end
-
-  defp search_result_type(:file), do: "0"
-  defp search_result_type(:phlog), do: "0"
-  defp search_result_type(:dir), do: "1"
-  defp search_result_type(_), do: "0"
-
-  defp truncate_snippet(snippet, max_length) do
-    if String.length(snippet) > max_length do
-      String.slice(snippet, 0, max_length - 3) <> "..."
-    else
-      snippet
-    end
-  end
-
-  # === ASCII Art Functions ===
-
-  # ASCII art menu
-  defp art_menu(host, port) do
-    """
-    i=== ASCII Art Generator ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iGenerate ASCII art from text!\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Font Styles ---\t\t#{host}\t#{port}
-    7Large Block Letters\t/art/text\t#{host}\t#{port}
-    7Small Compact Letters\t/art/small\t#{host}\t#{port}
-    7Banner with Border\t/art/banner\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Examples ---\t\t#{host}\t#{port}
-    0Sample: HELLO\t/art/text HELLO\t#{host}\t#{port}
-    0Sample: GOPHER\t/art/banner GOPHER\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Art text prompt
-  defp art_text_prompt(host, port) do
-    """
-    iASCII Art - Block Letters\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter text to convert to large block ASCII art.\t\t#{host}\t#{port}
-    i(Letters, numbers, and basic punctuation supported)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your text below:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Art small prompt
-  defp art_small_prompt(host, port) do
-    """
-    iASCII Art - Small Letters\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter text to convert to compact ASCII art.\t\t#{host}\t#{port}
-    i(Great for shorter messages)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your text below:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Art banner prompt
-  defp art_banner_prompt(host, port) do
-    """
-    iASCII Art - Banner\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter text to create a decorated banner.\t\t#{host}\t#{port}
-    i(Includes a fancy border around the text)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your text below:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Handle art text generation
-  defp handle_art_text(text, host, port, style) when byte_size(text) > 0 do
-    text = String.trim(text) |> String.slice(0, 10)  # Limit to 10 chars
-    art = AsciiArt.generate(text, style: style)
-
-    style_name = case style do
-      :block -> "Block"
-      :small -> "Small"
-      _ -> "Default"
-    end
-
-    format_text_response(
-      """
-      === ASCII Art (#{style_name}) ===
-
-      #{art}
-
-      ---
-      Text: "#{text}"
-      """,
-      host,
-      port
-    )
-  end
-
-  defp handle_art_text(_text, host, port, _style) do
-    art_text_prompt(host, port)
-  end
-
-  # Handle art banner generation
-  defp handle_art_banner(text, host, port) when byte_size(text) > 0 do
-    text = String.trim(text) |> String.slice(0, 8)  # Limit to 8 chars for banner
-    banner = AsciiArt.banner(text)
-
-    format_text_response(
-      """
-      === ASCII Art Banner ===
-
-      #{banner}
-
-      ---
-      Text: "#{text}"
-      """,
-      host,
-      port
-    )
-  end
-
-  defp handle_art_banner(_text, host, port) do
-    art_banner_prompt(host, port)
-  end
-
-  # === RAG (Document Query) Functions ===
-
-  defp docs_menu(host, port) do
-    stats = Rag.stats()
-    docs_dir = Rag.docs_dir()
-
-    """
-    i=== Document Knowledge Base ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iQuery your documents with AI-powered search.\t\t#{host}\t#{port}
-    iDrop files into #{docs_dir} for auto-ingestion.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Statistics ---\t\t#{host}\t#{port}
-    iDocuments: #{stats.documents}\t\t#{host}\t#{port}
-    iChunks: #{stats.chunks} (#{stats.embedding_coverage}% embedded)\t\t#{host}\t#{port}
-    iEmbedding Model: #{stats.embedding_model}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Actions ---\t\t#{host}\t#{port}
-    7Ask a Question\t/docs/ask\t#{host}\t#{port}
-    7Search Documents\t/docs/search\t#{host}\t#{port}
-    1List All Documents\t/docs/list\t#{host}\t#{port}
-    0View Statistics\t/docs/stats\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp docs_list(host, port) do
-    documents = Rag.list_documents()
-
-    header = """
-    i=== Ingested Documents ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    """
-
-    doc_lines =
-      if documents == [] do
-        "iNo documents ingested yet.\t\t#{host}\t#{port}\n" <>
-        "iDrop files into #{Rag.docs_dir()} to add documents.\t\t#{host}\t#{port}\n"
-      else
-        documents
-        |> Enum.map(fn doc ->
-          size_kb = Float.round(doc.size / 1024, 1)
-          "0#{doc.filename} (#{size_kb} KB, #{doc.chunk_count} chunks)\t/docs/view/#{doc.id}\t#{host}\t#{port}"
-        end)
-        |> Enum.join("\n")
-      end
-
-    footer = """
-    i\t\t#{host}\t#{port}
-    1Back to Docs Menu\t/docs\t#{host}\t#{port}
-    .
-    """
-
-    header <> doc_lines <> "\n" <> footer
-  end
-
-  defp docs_stats(host, port) do
-    stats = Rag.stats()
-
-    format_text_response("""
-    === RAG System Statistics ===
-
-    Documents: #{stats.documents}
-    Total Chunks: #{stats.chunks}
-    Embedded Chunks: #{stats.embedded_chunks}
-    Embedding Coverage: #{stats.embedding_coverage}%
-
-    Embedding Model: #{stats.embedding_model}
-    Embeddings Enabled: #{stats.embeddings_enabled}
-    Model Loaded: #{stats.embeddings_loaded}
-
-    Docs Directory: #{Rag.docs_dir()}
-
-    Supported Formats:
-    - Plain text (.txt, .text)
-    - Markdown (.md, .markdown)
-    - PDF (.pdf)
-    """, host, port)
-  end
-
-  defp docs_ask_prompt(host, port) do
-    """
-    i=== Ask Your Documents ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iAsk a question and get an AI-powered answer\t\t#{host}\t#{port}
-    ibased on your ingested documents.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    7Enter your question:\t/docs/ask\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Docs Menu\t/docs\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_docs_ask(query, host, port, socket) when byte_size(query) > 0 do
-    query = String.trim(query)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      # Stream the response
-      ThousandIsland.Socket.send(socket, "Answer (based on your documents):\r\n\r\n")
-
-      case Rag.query_stream(query, fn chunk ->
-        ThousandIsland.Socket.send(socket, chunk)
-      end) do
-        {:ok, _response} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          ThousandIsland.Socket.send(socket, "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n")
-          :streamed
-
-        {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "\r\nError: #{sanitize_error(reason)}\r\n.\r\n")
-          :streamed
-      end
-    else
-      # Non-streaming response
-      case Rag.query(query) do
-        {:ok, response} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          Question: #{query}
-
-          Answer (based on your documents):
-          #{response}
-
-          ---
-          Generated in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Query failed: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  defp handle_docs_ask(_query, host, port, _socket) do
-    docs_ask_prompt(host, port)
-  end
-
-  defp docs_search_prompt(host, port) do
-    """
-    i=== Search Documents ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iSearch for relevant content in your documents.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    7Enter search query:\t/docs/search\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Docs Menu\t/docs\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_docs_search(query, host, port) when byte_size(query) > 0 do
-    query = String.trim(query)
-
-    case Rag.search(query, top_k: 10) do
-      {:ok, results} when results != [] ->
-        header = """
-        i=== Search Results for "#{query}" ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iFound #{length(results)} relevant chunks:\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        """
-
-        result_lines =
-          results
-          |> Enum.with_index(1)
-          |> Enum.map(fn {%{chunk: chunk, document: doc, score: score, type: type}, idx} ->
-            snippet = String.slice(chunk.content, 0, 100) |> String.replace(~r/\s+/, " ")
-            type_label = if type == :semantic, do: "semantic", else: "keyword"
-            """
-            i#{idx}. #{doc.filename} (#{type_label}, score: #{score})\t\t#{host}\t#{port}
-            i   #{snippet}...\t\t#{host}\t#{port}
-            0   View document\t/docs/view/#{doc.id}\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            """
-          end)
-          |> Enum.join("")
-
-        footer = """
-        1Back to Docs Menu\t/docs\t#{host}\t#{port}
-        .
-        """
-
-        header <> result_lines <> footer
-
-      {:ok, []} ->
-        """
-        i=== Search Results ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iNo results found for "#{query}"\t\t#{host}\t#{port}
-        iTry different keywords or add more documents.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        7Try another search\t/docs/search\t#{host}\t#{port}
-        1Back to Docs Menu\t/docs\t#{host}\t#{port}
-        .
-        """
-
-      {:error, reason} ->
-        error_response("Search failed: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp handle_docs_search(_query, host, port) do
-    docs_search_prompt(host, port)
-  end
-
-  defp docs_view(doc_id, host, port) do
-    case Rag.get_document(doc_id) do
-      {:ok, doc} ->
-        chunks = PureGopherAi.Rag.DocumentStore.get_chunks(doc_id)
-
-        header = """
-        i=== Document: #{doc.filename} ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iPath: #{doc.path}\t\t#{host}\t#{port}
-        iType: #{doc.type}\t\t#{host}\t#{port}
-        iSize: #{Float.round(doc.size / 1024, 1)} KB\t\t#{host}\t#{port}
-        iChunks: #{doc.chunk_count}\t\t#{host}\t#{port}
-        iIngested: #{DateTime.to_string(doc.ingested_at)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i--- Content Preview (first 3 chunks) ---\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        """
-
-        chunk_previews =
-          chunks
-          |> Enum.take(3)
-          |> Enum.map(fn chunk ->
-            preview = String.slice(chunk.content, 0, 200) |> String.replace(~r/\s+/, " ")
-            embedded = if chunk.embedding, do: "✓", else: "○"
-            "i[#{embedded}] Chunk #{chunk.index}: #{preview}...\t\t#{host}\t#{port}\n"
-          end)
-          |> Enum.join("")
-
-        footer = """
-        i\t\t#{host}\t#{port}
-        1Back to Document List\t/docs/list\t#{host}\t#{port}
-        1Back to Docs Menu\t/docs\t#{host}\t#{port}
-        .
-        """
-
-        header <> chunk_previews <> footer
-
-      {:error, :not_found} ->
-        error_response("Document not found: #{doc_id}")
-    end
-  end
-
-  # === AI Services: Summarization Functions ===
-
-  defp handle_phlog_summary(path, host, port, socket) do
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      case Phlog.get_entry(path) do
-        {:ok, entry} ->
-          header = format_gopher_lines([
-            "=== TL;DR: #{entry.title} ===",
-            "Date: #{entry.date}",
-            "",
-            "Summary:"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, header)
-
-          Summarizer.summarize_phlog_stream(path, fn chunk ->
-            if String.length(chunk) > 0 do
-              lines = String.split(chunk, "\n", trim: false)
-              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-              ThousandIsland.Socket.send(socket, Enum.join(formatted))
-            end
-          end)
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Generated in #{elapsed}ms",
-            "",
-            "=> Full entry: /phlog/entry/#{path}"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, _} ->
-          error_response("Phlog entry not found: #{path}")
-      end
-    else
-      case Summarizer.summarize_phlog(path) do
-        {:ok, result} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === TL;DR: #{result.title} ===
-          Date: #{result.date}
-
-          Summary:
-          #{result.summary}
-
-          ---
-          Generated in #{elapsed}ms
-          Full entry: /phlog/entry/#{path}
-          """, host, port)
-
-        {:error, _} ->
-          error_response("Failed to summarize phlog entry: #{path}")
-      end
-    end
-  end
-
-  defp handle_doc_summary(doc_id, host, port, socket) do
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      case Rag.get_document(doc_id) do
-        {:ok, doc} ->
-          header = format_gopher_lines([
-            "=== Document Summary: #{doc.filename} ===",
-            "",
-            "Summary:"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, header)
-
-          Summarizer.summarize_document_stream(doc_id, fn chunk ->
-            if String.length(chunk) > 0 do
-              lines = String.split(chunk, "\n", trim: false)
-              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-              ThousandIsland.Socket.send(socket, Enum.join(formatted))
-            end
-          end)
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Generated in #{elapsed}ms",
-            "",
-            "=> Full document: /docs/view/#{doc_id}"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, _} ->
-          error_response("Document not found: #{doc_id}")
-      end
-    else
-      case Summarizer.summarize_document(doc_id) do
-        {:ok, result} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Document Summary: #{result.filename} ===
-
-          Summary:
-          #{result.summary}
-
-          ---
-          Generated in #{elapsed}ms
-          Full document: /docs/view/#{doc_id}
-          """, host, port)
-
-        {:error, _} ->
-          error_response("Failed to summarize document: #{doc_id}")
-      end
-    end
-  end
-
-  # === AI Services: Translation Functions ===
-
-  defp translate_menu(host, port) do
-    languages = Summarizer.supported_languages()
-
-    lang_lines = languages
-      |> Enum.map(fn {code, name} ->
-        "i  #{code} - #{name}\t\t#{host}\t#{port}"
-      end)
-      |> Enum.join("\r\n")
-
-    """
-    i=== Translation Service ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iTranslate content using AI.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Supported Languages ---\t\t#{host}\t#{port}
-    #{lang_lines}
-    i\t\t#{host}\t#{port}
-    i--- Usage ---\t\t#{host}\t#{port}
-    iTranslate phlog:\t\t#{host}\t#{port}
-    i  /translate/<lang>/phlog/<path>\t\t#{host}\t#{port}
-    iTranslate document:\t\t#{host}\t#{port}
-    i  /translate/<lang>/doc/<id>\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Examples ---\t\t#{host}\t#{port}
-    0Translate to Spanish\t/translate/es/phlog/2025/01/01-hello\t#{host}\t#{port}
-    0Translate to Japanese\t/translate/ja/doc/abc123\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_translate_route(rest, host, port, socket) do
-    # Parse: <lang>/phlog/<path> or <lang>/doc/<id>
-    case String.split(rest, "/", parts: 3) do
-      [lang, "phlog", path] ->
-        handle_translate_phlog(lang, path, host, port, socket)
-
-      [lang, "doc", doc_id] ->
-        handle_translate_doc(lang, doc_id, host, port, socket)
-
-      _ ->
-        error_response("Invalid translation path. Use /translate/<lang>/phlog/<path> or /translate/<lang>/doc/<id>")
-    end
-  end
-
-  defp handle_translate_phlog(lang, path, host, port, socket) do
-    lang_name = Summarizer.language_name(lang)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      case Phlog.get_entry(path) do
-        {:ok, entry} ->
-          header = format_gopher_lines([
-            "=== Translation: #{entry.title} ===",
-            "Original: English -> #{lang_name}",
-            "",
-            "Translated Content:"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, header)
-
-          Summarizer.translate_phlog_stream(path, lang, fn chunk ->
-            if String.length(chunk) > 0 do
-              lines = String.split(chunk, "\n", trim: false)
-              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-              ThousandIsland.Socket.send(socket, Enum.join(formatted))
-            end
-          end)
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Translated to #{lang_name} in #{elapsed}ms",
-            "",
-            "=> Original: /phlog/entry/#{path}"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, _} ->
-          error_response("Phlog entry not found: #{path}")
-      end
-    else
-      case Summarizer.translate_phlog(path, lang) do
-        {:ok, result} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Translation: #{result.title} ===
-          Original: English -> #{lang_name}
-
-          Translated Content:
-          #{result.translated_content}
-
-          ---
-          Translated in #{elapsed}ms
-          Original: /phlog/entry/#{path}
-          """, host, port)
-
-        {:error, _} ->
-          error_response("Failed to translate phlog entry: #{path}")
-      end
-    end
-  end
-
-  defp handle_translate_doc(lang, doc_id, host, port, socket) do
-    lang_name = Summarizer.language_name(lang)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      case Rag.get_document(doc_id) do
-        {:ok, doc} ->
-          header = format_gopher_lines([
-            "=== Translation: #{doc.filename} ===",
-            "Original: English -> #{lang_name}",
-            "",
-            "Translated Content:"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, header)
-
-          chunks = PureGopherAi.Rag.DocumentStore.get_chunks(doc_id)
-          content = chunks
-            |> Enum.map(& &1.content)
-            |> Enum.join("\n\n")
-            |> String.slice(0, 6000)
-
-          Summarizer.translate_stream(content, lang, fn chunk ->
-            if String.length(chunk) > 0 do
-              lines = String.split(chunk, "\n", trim: false)
-              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-              ThousandIsland.Socket.send(socket, Enum.join(formatted))
-            end
-          end)
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Translated to #{lang_name} in #{elapsed}ms",
-            "",
-            "=> Original: /docs/view/#{doc_id}"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, _} ->
-          error_response("Document not found: #{doc_id}")
-      end
-    else
-      case Summarizer.translate_document(doc_id, lang) do
-        {:ok, result} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Translation: #{result.filename} ===
-          Original: English -> #{lang_name}
-
-          Translated Content:
-          #{result.translated_content}
-
-          ---
-          Translated in #{elapsed}ms
-          Original: /docs/view/#{doc_id}
-          """, host, port)
-
-        {:error, _} ->
-          error_response("Failed to translate document: #{doc_id}")
-      end
-    end
-  end
-
-  # === AI Services: Dynamic Content Functions ===
-
-  defp handle_digest(host, port, socket) do
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      header = format_gopher_lines([
-        "=== Daily Digest ===",
-        "AI-generated summary of recent activity",
-        "",
-        ""
-      ], host, port)
-      ThousandIsland.Socket.send(socket, header)
-
-      Summarizer.daily_digest_stream(fn chunk ->
-        if String.length(chunk) > 0 do
-          lines = String.split(chunk, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-        end
-      end)
-
-      elapsed = System.monotonic_time(:millisecond) - start_time
-      footer = format_gopher_lines([
-        "",
-        "---",
-        "Generated in #{elapsed}ms"
-      ], host, port)
-      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-      :streamed
-    else
-      case Summarizer.daily_digest() do
-        {:ok, digest} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Daily Digest ===
-          AI-generated summary of recent activity
-
-          #{digest}
-
-          ---
-          Generated in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Failed to generate digest: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  defp handle_topics(host, port, socket) do
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      header = format_gopher_lines([
-        "=== Topic Discovery ===",
-        "AI-identified themes from your content",
-        "",
-        ""
-      ], host, port)
-      ThousandIsland.Socket.send(socket, header)
-
-      case Summarizer.discover_topics() do
-        {:ok, topics} ->
-          lines = String.split(topics, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Generated in #{elapsed}ms"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "iError: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
-          :streamed
-      end
-    else
-      case Summarizer.discover_topics() do
-        {:ok, topics} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Topic Discovery ===
-          AI-identified themes from your content
-
-          #{topics}
-
-          ---
-          Generated in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Failed to discover topics: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  defp discover_prompt(host, port) do
-    """
-    i=== Content Discovery ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iGet AI-powered content recommendations\t\t#{host}\t#{port}
-    ibased on your interests.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter a topic or interest:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_discover(interest, host, port, socket) do
-    interest = String.trim(interest)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      header = format_gopher_lines([
-        "=== Content Recommendations ===",
-        "Based on your interest: \"#{interest}\"",
-        "",
-        ""
-      ], host, port)
-      ThousandIsland.Socket.send(socket, header)
-
-      case Summarizer.recommend(interest) do
-        {:ok, recommendations} ->
-          lines = String.split(recommendations, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Generated in #{elapsed}ms"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, reason} ->
-          ThousandIsland.Socket.send(socket, "iError: #{sanitize_error(reason)}\t\t#{host}\t#{port}\r\n.\r\n")
-          :streamed
-      end
-    else
-      case Summarizer.recommend(interest) do
-        {:ok, recommendations} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Content Recommendations ===
-          Based on your interest: "#{interest}"
-
-          #{recommendations}
-
-          ---
-          Generated in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Failed to get recommendations: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  defp explain_prompt(host, port) do
-    """
-    i=== Explain Mode ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iGet AI-powered explanations for\t\t#{host}\t#{port}
-    itechnical terms and concepts.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter a term to explain:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_explain(term, host, port, socket) do
-    term = String.trim(term)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      header = format_gopher_lines([
-        "=== Explanation: #{term} ===",
-        "",
-        ""
-      ], host, port)
-      ThousandIsland.Socket.send(socket, header)
-
-      Summarizer.explain_stream(term, fn chunk ->
-        if String.length(chunk) > 0 do
-          lines = String.split(chunk, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-        end
-      end)
-
-      elapsed = System.monotonic_time(:millisecond) - start_time
-      footer = format_gopher_lines([
-        "",
-        "---",
-        "Generated in #{elapsed}ms"
-      ], host, port)
-      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-      :streamed
-    else
-      case Summarizer.explain(term) do
-        {:ok, explanation} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Explanation: #{term} ===
-
-          #{explanation}
-
-          ---
-          Generated in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Failed to explain: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  # === Gopher Proxy Functions ===
-
-  defp fetch_prompt(host, port) do
-    """
-    i=== Gopher Proxy ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iFetch content from external Gopher servers.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Usage ---\t\t#{host}\t#{port}
-    iFetch: /fetch gopher://server/selector\t\t#{host}\t#{port}
-    iFetch + Summarize: /fetch-summary gopher://server/selector\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Examples ---\t\t#{host}\t#{port}
-    7Fetch Floodgap\t/fetch gopher://gopher.floodgap.com/\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter a Gopher URL:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_fetch(url, host, port) do
-    url = String.trim(url)
-    Logger.info("[GopherProxy] Fetching: #{url}")
-
-    case GopherProxy.fetch(url) do
-      {:ok, result} ->
-        format_text_response("""
-        === Fetched: #{result.host} ===
-        URL: #{result.url}
-        Selector: #{result.selector}
-        Size: #{result.size} bytes
-
-        --- Content ---
-        #{result.content}
-
-        ---
-        Fetched successfully
-        """, host, port)
-
-      {:error, reason} ->
-        error_response("Fetch failed: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp handle_fetch_summary(url, host, port, socket) do
-    url = String.trim(url)
-    Logger.info("[GopherProxy] Fetching with summary: #{url}")
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      case GopherProxy.fetch(url) do
-        {:ok, result} ->
-          header = format_gopher_lines([
-            "=== Fetched: #{result.host} ===",
-            "URL: #{result.url}",
-            "Size: #{result.size} bytes",
-            "",
-            "--- AI Summary ---",
-            ""
-          ], host, port)
-          ThousandIsland.Socket.send(socket, header)
-
-          Summarizer.summarize_text_stream(result.content, fn chunk ->
-            if String.length(chunk) > 0 do
-              lines = String.split(chunk, "\n", trim: false)
-              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-              ThousandIsland.Socket.send(socket, Enum.join(formatted))
-            end
-          end, type: "gopher content")
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Summarized in #{elapsed}ms"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-
-        {:error, reason} ->
-          error_response("Fetch failed: #{sanitize_error(reason)}")
-      end
-    else
-      case GopherProxy.fetch_and_summarize(url) do
-        {:ok, result} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Fetched: #{result.host} ===
-          URL: #{result.url}
-          Size: #{result.size} bytes
-
-          --- AI Summary ---
-          #{result.summary}
-
-          ---
-          Summarized in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Fetch failed: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  # === Guestbook Functions ===
-
-  defp guestbook_page(host, port, page) do
-    result = Guestbook.list_entries(page: page, per_page: 15)
-    stats = Guestbook.stats()
-
-    entries_section = if result.entries == [] do
-      "iNo entries yet. Be the first to sign!\t\t#{host}\t#{port}"
-    else
-      result.entries
-      |> Enum.map(fn entry ->
-        date = Elixir.Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")
-        message_lines = entry.message
-          |> String.split("\n")
-          |> Enum.map(&"i  #{&1}\t\t#{host}\t#{port}")
-          |> Enum.join("\r\n")
-
-        """
-        i--- #{entry.name} (#{date}) ---\t\t#{host}\t#{port}
-        #{message_lines}
-        i\t\t#{host}\t#{port}
-        """
-      end)
-      |> Enum.join("")
-    end
-
-    # Pagination
-    pagination = if result.total_pages > 1 do
-      pages = for p <- 1..result.total_pages do
-        if p == page do
-          "i[#{p}]\t\t#{host}\t#{port}"
-        else
-          "1Page #{p}\t/guestbook/page/#{p}\t#{host}\t#{port}"
-        end
-      end
-      |> Enum.join("\r\n")
-
-      "\r\ni--- Pages ---\t\t#{host}\t#{port}\r\n#{pages}\r\n"
-    else
-      ""
-    end
-
-    """
-    i=== Guestbook ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iTotal entries: #{stats.total_entries}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    7Sign the Guestbook\t/guestbook/sign\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Entries (Page #{result.page}/#{result.total_pages}) ---\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    #{entries_section}#{pagination}
-    i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp guestbook_sign_prompt(host, port) do
-    """
-    i=== Sign the Guestbook ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iLeave a message for other visitors!\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iFormat: Name | Your message here\t\t#{host}\t#{port}
-    iExample: Alice | Hello from the future!\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your name and message:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_guestbook_sign(input, host, port, client_ip) do
-    input = String.trim(input)
-
-    # Parse "Name | Message" format
-    case String.split(input, "|", parts: 2) do
-      [name, message] ->
-        name = String.trim(name)
-        message = String.trim(message)
-
-        case Guestbook.sign(name, message, client_ip) do
-          {:ok, entry} ->
-            format_text_response("""
-            === Thank You! ===
-
-            Your message has been added to the guestbook.
-
-            Name: #{entry.name}
-            Message: #{entry.message}
-            Time: #{Elixir.Calendar.strftime(entry.timestamp, "%Y-%m-%d %H:%M UTC")}
-
-            => /guestbook View Guestbook
-            => / Back to Main Menu
-            """, host, port)
-
-          {:error, :rate_limited, retry_after_ms} ->
-            minutes = div(retry_after_ms, 60_000)
-            format_text_response("""
-            === Please Wait ===
-
-            You can only sign the guestbook once every 5 minutes.
-            Please wait #{minutes} more minute(s) before signing again.
-
-            => /guestbook View Guestbook
-            => / Back to Main Menu
-            """, host, port)
-
-          {:error, :invalid_input} ->
-            format_text_response("""
-            === Invalid Input ===
-
-            Please provide both a name and message.
-            Format: Name | Your message here
-
-            => /guestbook/sign Try Again
-            => /guestbook View Guestbook
-            """, host, port)
-        end
-
-      _ ->
-        format_text_response("""
-        === Invalid Format ===
-
-        Please use the format: Name | Message
-        Example: Alice | Hello from the future!
-
-        => /guestbook/sign Try Again
-        => /guestbook View Guestbook
-        """, host, port)
-    end
-  end
-
-  # === Code Assistant Functions ===
-
-  defp code_menu(host, port) do
-    """
-    i=== Code Assistant ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iAI-powered code generation, explanation, and review.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Services ---\t\t#{host}\t#{port}
-    7Generate Code\t/code/generate\t#{host}\t#{port}
-    7Explain Code\t/code/explain\t#{host}\t#{port}
-    7Review Code\t/code/review\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Info ---\t\t#{host}\t#{port}
-    1Supported Languages\t/code/languages\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Usage ---\t\t#{host}\t#{port}
-    iGenerate: <language> | <description>\t\t#{host}\t#{port}
-    iExample: python | fibonacci function\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp code_languages(host, port) do
-    langs = CodeAssistant.supported_languages()
-      |> Enum.map(fn {code, name} -> "i  #{code} - #{name}\t\t#{host}\t#{port}" end)
-      |> Enum.join("\r\n")
-
-    """
-    i=== Supported Languages ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    #{langs}
-    i\t\t#{host}\t#{port}
-    1Back to Code Assistant\t/code\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp code_generate_prompt(host, port) do
-    """
-    i=== Generate Code ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iFormat: <language> | <description>\t\t#{host}\t#{port}
-    iExample: python | function to calculate fibonacci numbers\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter language and description:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_code_generate(input, host, port, socket) do
-    input = String.trim(input)
-    start_time = System.monotonic_time(:millisecond)
-
-    case String.split(input, "|", parts: 2) do
-      [language, description] ->
-        language = String.trim(language) |> String.downcase()
-        description = String.trim(description)
-        lang_name = CodeAssistant.language_name(language)
-
-        if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-          header = format_gopher_lines([
-            "=== Generated #{lang_name} Code ===",
-            "",
-            "Task: #{description}",
-            "",
-            "Code:"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, header)
-
-          CodeAssistant.generate_stream(language, description, fn chunk ->
-            if String.length(chunk) > 0 do
-              lines = String.split(chunk, "\n", trim: false)
-              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-              ThousandIsland.Socket.send(socket, Enum.join(formatted))
-            end
-          end)
-
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          footer = format_gopher_lines([
-            "",
-            "---",
-            "Generated in #{elapsed}ms"
-          ], host, port)
-          ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-          :streamed
-        else
-          case CodeAssistant.generate(language, description) do
-            {:ok, code} ->
-              elapsed = System.monotonic_time(:millisecond) - start_time
-              format_text_response("""
-              === Generated #{lang_name} Code ===
-
-              Task: #{description}
-
-              Code:
-              #{code}
-
-              ---
-              Generated in #{elapsed}ms
-              """, host, port)
-
-            {:error, reason} ->
-              error_response("Code generation failed: #{sanitize_error(reason)}")
-          end
-        end
-
-      _ ->
-        format_text_response("""
-        === Invalid Format ===
-
-        Please use: <language> | <description>
-        Example: python | function to sort a list
-
-        => /code/generate Try Again
-        => /code/languages View Supported Languages
-        """, host, port)
-    end
-  end
-
-  defp code_explain_prompt(host, port) do
-    """
-    i=== Explain Code ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iPaste the code you want explained:\t\t#{host}\t#{port}
-    i(Multi-line code works best with Type 7 input)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter code:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_code_explain(input, host, port, socket) do
-    code = String.trim(input)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      header = format_gopher_lines([
-        "=== Code Explanation ===",
-        "",
-        ""
-      ], host, port)
-      ThousandIsland.Socket.send(socket, header)
-
-      CodeAssistant.explain_stream(code, fn chunk ->
-        if String.length(chunk) > 0 do
-          lines = String.split(chunk, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-        end
-      end)
-
-      elapsed = System.monotonic_time(:millisecond) - start_time
-      footer = format_gopher_lines([
-        "",
-        "---",
-        "Explained in #{elapsed}ms"
-      ], host, port)
-      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-      :streamed
-    else
-      case CodeAssistant.explain(code) do
-        {:ok, explanation} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Code Explanation ===
-
-          #{explanation}
-
-          ---
-          Explained in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Code explanation failed: #{sanitize_error(reason)}")
-      end
-    end
-  end
-
-  defp code_review_prompt(host, port) do
-    """
-    i=== Review Code ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iPaste the code you want reviewed:\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter code:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_code_review(input, host, port, socket) do
-    code = String.trim(input)
-    start_time = System.monotonic_time(:millisecond)
-
-    if socket && PureGopherAi.AiEngine.streaming_enabled?() do
-      header = format_gopher_lines([
-        "=== Code Review ===",
-        "",
-        ""
-      ], host, port)
-      ThousandIsland.Socket.send(socket, header)
-
-      CodeAssistant.review_stream(code, fn chunk ->
-        if String.length(chunk) > 0 do
-          lines = String.split(chunk, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-        end
-      end)
-
-      elapsed = System.monotonic_time(:millisecond) - start_time
-      footer = format_gopher_lines([
-        "",
-        "---",
-        "Reviewed in #{elapsed}ms"
-      ], host, port)
-      ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-      :streamed
-    else
-      case CodeAssistant.review(code) do
-        {:ok, review} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
-          format_text_response("""
-          === Code Review ===
-
-          #{review}
-
-          ---
-          Reviewed in #{elapsed}ms
-          """, host, port)
-
-        {:error, reason} ->
-          error_response("Code review failed: #{sanitize_error(reason)}")
-      end
-    end
-  end
+  # Note: Search, Art, Docs, Translate, Summary, AI Services, Gopher Proxy, Guestbook, and Code functions
+  # have been moved to handlers/tools.ex and handlers/community.ex
 
   # === Adventure Functions ===
 
@@ -4935,629 +2862,6 @@ defmodule PureGopherAi.GopherHandler do
       String.slice(text, 0, max_len - 3) <> "..."
     else
       text
-    end
-  end
-
-  # === Pastebin Functions ===
-
-  defp paste_menu(host, port) do
-    %{active_pastes: active, total_views: views} = Pastebin.stats()
-
-    """
-    i=== Pastebin ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iShare text snippets with the Gopher community.\t\t#{host}\t#{port}
-    iPastes expire after 1 week by default.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    7Create New Paste\t/paste/new\t#{host}\t#{port}
-    1Recent Pastes\t/paste/recent\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Stats ---\t\t#{host}\t#{port}
-    iActive pastes: #{active}\t\t#{host}\t#{port}
-    iTotal views: #{views}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Format ---\t\t#{host}\t#{port}
-    iTo create a paste, enter your text.\t\t#{host}\t#{port}
-    iOptional: Start with "title: Your Title" on first line.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Home\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp paste_new_prompt(host, port) do
-    """
-    i=== Create New Paste ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter your text below.\t\t#{host}\t#{port}
-    iOptional: Start with "title: Your Title"\t\t#{host}\t#{port}
-    iMax size: #{div(Pastebin.max_size(), 1000)}KB\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_paste_create(content, ip, host, port) do
-    # Parse optional title from first line
-    {title, body} = case String.split(content, "\n", parts: 2) do
-      [first_line, rest] ->
-        case Regex.run(~r/^title:\s*(.+)$/i, String.trim(first_line)) do
-          [_, title] -> {title, rest}
-          nil -> {nil, content}
-        end
-      _ -> {nil, content}
-    end
-
-    opts = if title, do: [title: title], else: []
-
-    case Pastebin.create(body, ip, opts) do
-      {:ok, id} ->
-        """
-        i=== Paste Created! ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iPaste ID: #{id}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        0View Paste\t/paste/#{id}\t#{host}\t#{port}
-        0Raw Text\t/paste/raw/#{id}\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        iShare this link: gopher://#{host}:#{port}/0/paste/#{id}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        7Create Another\t/paste/new\t#{host}\t#{port}
-        1Back to Pastebin\t/paste\t#{host}\t#{port}
-        .
-        """
-
-      {:error, :too_large} ->
-        error_response("Paste too large. Maximum size is #{div(Pastebin.max_size(), 1000)}KB.")
-
-      {:error, :empty_content} ->
-        error_response("Cannot create empty paste.")
-
-      {:error, reason} ->
-        error_response("Failed to create paste: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp paste_recent(host, port) do
-    case Pastebin.list_recent(20) do
-      {:ok, pastes} when pastes == [] ->
-        format_text_response("""
-        === Recent Pastes ===
-
-        No pastes yet. Be the first to create one!
-        """, host, port)
-
-      {:ok, pastes} ->
-        paste_lines = pastes
-          |> Enum.map(fn p ->
-            title = p.title || "Untitled"
-            created = String.slice(p.created_at, 0, 10)
-            "0[#{created}] #{title} (#{p.lines} lines, #{p.views} views)\t/paste/#{p.id}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
-
-        """
-        i=== Recent Pastes ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{paste_lines}
-        i\t\t#{host}\t#{port}
-        7Create New Paste\t/paste/new\t#{host}\t#{port}
-        1Back to Pastebin\t/paste\t#{host}\t#{port}
-        .
-        """
-
-      {:error, reason} ->
-        error_response("Failed to list pastes: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp paste_view(id, host, port) do
-    case Pastebin.get(id) do
-      {:ok, paste} ->
-        title = paste.title || "Untitled Paste"
-        created = String.slice(paste.created_at, 0, 19) |> String.replace("T", " ")
-        expires = String.slice(paste.expires_at, 0, 10)
-
-        format_text_response("""
-        === #{title} ===
-
-        ID: #{paste.id}
-        Syntax: #{paste.syntax}
-        Size: #{paste.size} bytes (#{paste.lines} lines)
-        Created: #{created}
-        Expires: #{expires}
-        Views: #{paste.views}
-
-        ========== Content ==========
-
-        #{paste.content}
-
-        =============================
-
-        Raw: gopher://#{host}:#{port}/0/paste/raw/#{id}
-        """, host, port)
-
-      {:error, :not_found} ->
-        error_response("Paste not found.")
-
-      {:error, :expired} ->
-        error_response("This paste has expired.")
-
-      {:error, reason} ->
-        error_response("Failed to get paste: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp paste_raw(id) do
-    case Pastebin.get_raw(id) do
-      {:ok, content} ->
-        # Return raw text as Type 0
-        content <> "\r\n"
-
-      {:error, :not_found} ->
-        "Error: Paste not found.\r\n"
-
-      {:error, :expired} ->
-        "Error: This paste has expired.\r\n"
-
-      {:error, _} ->
-        "Error: Failed to retrieve paste.\r\n"
-    end
-  end
-
-  # === Polls Functions ===
-
-  defp polls_menu(host, port) do
-    %{active_polls: active, total_votes: votes} = Polls.stats()
-
-    """
-    i=== Community Polls ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iVote on community polls and create your own!\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Active Polls\t/polls/active\t#{host}\t#{port}
-    1Closed Polls\t/polls/closed\t#{host}\t#{port}
-    7Create New Poll\t/polls/new\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Stats ---\t\t#{host}\t#{port}
-    iActive polls: #{active}\t\t#{host}\t#{port}
-    iTotal votes cast: #{votes}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Home\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp polls_new_prompt(host, port) do
-    """
-    i=== Create New Poll ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iFormat: Question | Option1 | Option2 | Option3 ...\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iExample:\t\t#{host}\t#{port}
-    iWhat's your favorite protocol? | Gopher | Gemini | HTTP | All of them\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iMinimum 2 options, maximum 10.\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_polls_create(input, ip, host, port) do
-    parts = String.split(input, "|") |> Enum.map(&String.trim/1)
-
-    case parts do
-      [question | options] when length(options) >= 2 ->
-        case Polls.create(question, options, ip) do
-          {:ok, id} ->
-            """
-            i=== Poll Created! ===\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            iPoll ID: #{id}\t\t#{host}\t#{port}
-            iQuestion: #{question}\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            1View Your Poll\t/polls/#{id}\t#{host}\t#{port}
-            1Back to Polls\t/polls\t#{host}\t#{port}
-            .
-            """
-
-          {:error, :question_too_long} ->
-            error_response("Question too long. Maximum 200 characters.")
-
-          {:error, :too_many_options} ->
-            error_response("Too many options. Maximum 10 options.")
-
-          {:error, reason} ->
-            error_response("Failed to create poll: #{sanitize_error(reason)}")
-        end
-
-      _ ->
-        error_response("Invalid format. Use: Question | Option1 | Option2 | ...")
-    end
-  end
-
-  defp polls_active(host, port) do
-    case Polls.list_active(20) do
-      {:ok, polls} when polls == [] ->
-        format_text_response("""
-        === Active Polls ===
-
-        No active polls right now.
-        Create one to get the conversation started!
-        """, host, port)
-
-      {:ok, polls} ->
-        poll_lines = polls
-          |> Enum.map(fn p ->
-            ends = String.slice(p.ends_at, 0, 10)
-            "1[#{p.total_votes} votes] #{truncate(p.question, 50)} (ends #{ends})\t/polls/#{p.id}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
-
-        """
-        i=== Active Polls ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{poll_lines}
-        i\t\t#{host}\t#{port}
-        7Create New Poll\t/polls/new\t#{host}\t#{port}
-        1Back to Polls\t/polls\t#{host}\t#{port}
-        .
-        """
-
-      {:error, reason} ->
-        error_response("Failed to list polls: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp polls_closed(host, port) do
-    case Polls.list_closed(20) do
-      {:ok, polls} when polls == [] ->
-        format_text_response("=== Closed Polls ===\n\nNo closed polls yet.", host, port)
-
-      {:ok, polls} ->
-        poll_lines = polls
-          |> Enum.map(fn p ->
-            "1[#{p.total_votes} votes] #{truncate(p.question, 50)}\t/polls/#{p.id}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
-
-        """
-        i=== Closed Polls ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{poll_lines}
-        i\t\t#{host}\t#{port}
-        1Back to Polls\t/polls\t#{host}\t#{port}
-        .
-        """
-
-      {:error, reason} ->
-        error_response("Failed to list polls: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp polls_view(id, ip, host, port) do
-    case Polls.get(id) do
-      {:ok, poll} ->
-        has_voted = Polls.has_voted?(id, ip)
-        status = if poll.closed, do: "CLOSED", else: "ACTIVE"
-
-        # Build option lines with vote counts
-        option_lines = poll.options
-          |> Enum.with_index()
-          |> Enum.map(fn {option, idx} ->
-            votes = Enum.at(poll.votes, idx, 0)
-            pct = if poll.total_votes > 0, do: round(votes / poll.total_votes * 100), else: 0
-            bar = String.duplicate("█", div(pct, 5)) <> String.duplicate("░", 20 - div(pct, 5))
-
-            if poll.closed or has_voted do
-              "i  #{idx + 1}. #{option}\t\t#{host}\t#{port}\r\n" <>
-              "i     #{bar} #{votes} votes (#{pct}%)\t\t#{host}\t#{port}"
-            else
-              "1  #{idx + 1}. #{option} [VOTE]\t/polls/vote/#{id}/#{idx}\t#{host}\t#{port}"
-            end
-          end)
-          |> Enum.join("\r\n")
-
-        vote_status = cond do
-          poll.closed -> "Poll is closed."
-          has_voted -> "You have already voted."
-          true -> "Click an option to vote!"
-        end
-
-        """
-        i=== Poll: #{status} ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i#{poll.question}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{option_lines}
-        i\t\t#{host}\t#{port}
-        iTotal votes: #{poll.total_votes}\t\t#{host}\t#{port}
-        i#{vote_status}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Polls\t/polls\t#{host}\t#{port}
-        .
-        """
-
-      {:error, :not_found} ->
-        error_response("Poll not found.")
-
-      {:error, reason} ->
-        error_response("Failed to get poll: #{sanitize_error(reason)}")
-    end
-  end
-
-  defp handle_polls_vote(rest, ip, host, port) do
-    case String.split(rest, "/") do
-      [poll_id, option_str] ->
-        case Integer.parse(option_str) do
-          {option_idx, ""} ->
-            case Polls.vote(poll_id, option_idx, ip) do
-              {:ok, poll} ->
-                """
-                i=== Vote Recorded! ===\t\t#{host}\t#{port}
-                i\t\t#{host}\t#{port}
-                iThank you for voting!\t\t#{host}\t#{port}
-                iYou voted for: #{Enum.at(poll.options, option_idx)}\t\t#{host}\t#{port}
-                i\t\t#{host}\t#{port}
-                1View Results\t/polls/#{poll_id}\t#{host}\t#{port}
-                1Back to Polls\t/polls\t#{host}\t#{port}
-                .
-                """
-
-              {:error, :already_voted} ->
-                error_response("You have already voted on this poll.")
-
-              {:error, :poll_closed} ->
-                error_response("This poll is closed.")
-
-              {:error, :invalid_option} ->
-                error_response("Invalid option.")
-
-              {:error, :not_found} ->
-                error_response("Poll not found.")
-
-              {:error, reason} ->
-                error_response("Failed to vote: #{sanitize_error(reason)}")
-            end
-
-          _ ->
-            error_response("Invalid vote format.")
-        end
-
-      _ ->
-        error_response("Invalid vote URL.")
-    end
-  end
-
-  # === User Profiles Functions ===
-
-  defp users_menu(host, port) do
-    %{total_profiles: total, total_views: views} = UserProfiles.stats()
-
-    """
-    i=== User Profiles ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iCreate your own homepage on the Gopher network!\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Browse All Users\t/users/list\t#{host}\t#{port}
-    7Search Users\t/users/search\t#{host}\t#{port}
-    7Create Your Profile\t/users/create\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Stats ---\t\t#{host}\t#{port}
-    iTotal profiles: #{total}\t\t#{host}\t#{port}
-    iTotal profile views: #{views}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Home\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp users_create_prompt(host, port) do
-    """
-    i=== Create Your Profile ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter: username:passphrase\t\t#{host}\t#{port}
-    i(e.g., myname:mysecretpassword123)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iUsername: 3-20 chars, letters/numbers/underscores\t\t#{host}\t#{port}
-    iPassphrase: 8+ characters (keep this secret!)\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iYou'll need your passphrase to:\t\t#{host}\t#{port}
-    i- Edit your profile\t\t#{host}\t#{port}
-    i- Write phlog posts\t\t#{host}\t#{port}
-    i- Send messages\t\t#{host}\t#{port}
-    i- Manage bookmarks\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_users_create(input, ip, host, port) do
-    case String.split(String.trim(input), ":", parts: 2) do
-      [username, passphrase] when byte_size(passphrase) > 0 ->
-        username = String.trim(username)
-        passphrase = String.trim(passphrase)
-
-        case UserProfiles.create(username, passphrase, ip) do
-          {:ok, _} ->
-            """
-            i=== Profile Created! ===\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            iWelcome, #{username}!\t\t#{host}\t#{port}
-            iYour profile has been created.\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            iIMPORTANT: Remember your passphrase!\t\t#{host}\t#{port}
-            iYou'll need it to edit your profile and post.\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            1View Your Profile\t/users/~#{username}\t#{host}\t#{port}
-            1Write Your First Phlog Post\t/phlog/user/#{username}/write\t#{host}\t#{port}
-            1Back to Users\t/users\t#{host}\t#{port}
-            .
-            """
-
-          {:error, :rate_limited} ->
-            error_response("You can only create one profile per day from this connection.")
-
-          {:error, :invalid_username} ->
-            error_response("Invalid username. Use letters, numbers, underscores. Must start with a letter.")
-
-          {:error, :username_too_short} ->
-            error_response("Username too short. Minimum 3 characters.")
-
-          {:error, :username_too_long} ->
-            error_response("Username too long. Maximum 20 characters.")
-
-          {:error, :passphrase_too_short} ->
-            error_response("Passphrase too short. Minimum 8 characters.")
-
-          {:error, :username_taken} ->
-            error_response("That username is already taken.")
-
-          {:error, reason} ->
-            error_response("Failed to create profile: #{sanitize_error(reason)}")
-        end
-
-      _ ->
-        error_response("Invalid format. Use: username:passphrase")
-    end
-  end
-
-  defp users_search_prompt(host, port) do
-    """
-    i=== Search Users ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iEnter username or interest to search:\t\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_users_search(query, host, port) do
-    case UserProfiles.search(query) do
-      {:ok, []} ->
-        format_text_response("""
-        === Search Results ===
-
-        No users found matching "#{query}".
-        """, host, port)
-
-      {:ok, results} ->
-        user_lines = results
-          |> Enum.map(fn u ->
-            interests = Enum.take(u.interests, 3) |> Enum.join(", ")
-            interests_text = if interests == "", do: "", else: " (#{interests})"
-            "1~#{u.username}#{interests_text}\t/users/~#{u.username}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
-
-        """
-        i=== Search Results for \"#{query}\" ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{user_lines}
-        i\t\t#{host}\t#{port}
-        7Search Again\t/users/search\t#{host}\t#{port}
-        1Back to Users\t/users\t#{host}\t#{port}
-        .
-        """
-    end
-  end
-
-  defp users_list(host, port, page) do
-    per_page = 20
-    offset = (page - 1) * per_page
-
-    case UserProfiles.list(limit: per_page, offset: offset) do
-      {:ok, users, total} ->
-        total_pages = div(total + per_page - 1, per_page)
-
-        user_lines = if Enum.empty?(users) do
-          "iNo profiles yet. Be the first to create one!\t\t#{host}\t#{port}"
-        else
-          users
-          |> Enum.map(fn u ->
-            interests = Enum.take(u.interests, 3) |> Enum.join(", ")
-            interests_text = if interests == "", do: "", else: " (#{interests})"
-            "1~#{u.username}#{interests_text}\t/users/~#{u.username}\t#{host}\t#{port}"
-          end)
-          |> Enum.join("\r\n")
-        end
-
-        pagination = []
-        pagination = if page > 1, do: ["1Previous Page\t/users/list/page/#{page - 1}\t#{host}\t#{port}" | pagination], else: pagination
-        pagination = if page < total_pages, do: ["1Next Page\t/users/list/page/#{page + 1}\t#{host}\t#{port}" | pagination], else: pagination
-        pagination_text = if pagination == [], do: "", else: Enum.join(pagination, "\r\n") <> "\r\n"
-
-        """
-        i=== User Profiles (Page #{page}/#{total_pages}) ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{user_lines}
-        i\t\t#{host}\t#{port}
-        #{pagination_text}7Search Users\t/users/search\t#{host}\t#{port}
-        1Back to Users\t/users\t#{host}\t#{port}
-        .
-        """
-
-      {:error, _} ->
-        error_response("Failed to load users.")
-    end
-  end
-
-  defp users_view(username, host, port) do
-    case UserProfiles.get(username) do
-      {:ok, profile} ->
-        bio_lines = if profile.bio != "" do
-          profile.bio
-          |> String.split("\n")
-          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
-          |> Enum.join("\r\n")
-        else
-          "iNo bio yet.\t\t#{host}\t#{port}"
-        end
-
-        links_lines = if Enum.empty?(profile.links) do
-          "iNo links yet.\t\t#{host}\t#{port}"
-        else
-          profile.links
-          |> Enum.map(fn {title, url} ->
-            if String.starts_with?(url, "gopher://") do
-              "1#{title}\t#{String.replace(url, "gopher://", "")}\t#{host}\t#{port}"
-            else
-              "h#{title}\tURL:#{url}\t#{host}\t#{port}"
-            end
-          end)
-          |> Enum.join("\r\n")
-        end
-
-        interests_text = if Enum.empty?(profile.interests) do
-          "iNone listed.\t\t#{host}\t#{port}"
-        else
-          profile.interests
-          |> Enum.map(fn i -> "i  * #{i}\t\t#{host}\t#{port}" end)
-          |> Enum.join("\r\n")
-        end
-
-        created = format_date(profile.created_at)
-
-        """
-        i=========================================\t\t#{host}\t#{port}
-        i   ~#{profile.username}'s Homepage\t\t#{host}\t#{port}
-        i=========================================\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i--- About Me ---\t\t#{host}\t#{port}
-        #{bio_lines}
-        i\t\t#{host}\t#{port}
-        i--- Interests ---\t\t#{host}\t#{port}
-        #{interests_text}
-        i\t\t#{host}\t#{port}
-        i--- Links ---\t\t#{host}\t#{port}
-        #{links_lines}
-        i\t\t#{host}\t#{port}
-        i--- Stats ---\t\t#{host}\t#{port}
-        iMember since: #{created}\t\t#{host}\t#{port}
-        iProfile views: #{profile.views}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Users\t/users\t#{host}\t#{port}
-        .
-        """
-
-      {:error, :not_found} ->
-        error_response("User not found: #{username}")
     end
   end
 
@@ -8292,261 +5596,6 @@ defmodule PureGopherAi.GopherHandler do
 
   defp format_date(_), do: "unknown"
 
-  # === Admin Functions ===
-
-  # Handle admin routes
-  defp handle_admin(path, host, port) do
-    if not Admin.enabled?() do
-      error_response("Admin interface not configured")
-    else
-      # Parse token and command from path
-      case String.split(path, "/", parts: 2) do
-        [token] ->
-          # Just token, show admin menu
-          if Admin.valid_token?(token) do
-            admin_menu(token, host, port)
-          else
-            error_response("Invalid admin token")
-          end
-
-        [token, command] ->
-          if Admin.valid_token?(token) do
-            handle_admin_command(token, command, host, port)
-          else
-            error_response("Invalid admin token")
-          end
-
-        _ ->
-          error_response("Invalid admin path")
-      end
-    end
-  end
-
-  # Admin menu
-  defp admin_menu(token, host, port) do
-    system_stats = Admin.system_stats()
-    cache_stats = Admin.cache_stats()
-    rate_stats = Admin.rate_limiter_stats()
-    telemetry = Telemetry.format_stats()
-
-    """
-    i=== Admin Panel ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- System Status ---\t\t#{host}\t#{port}
-    iUptime: #{system_stats.uptime_hours} hours\t\t#{host}\t#{port}
-    iProcesses: #{system_stats.processes}\t\t#{host}\t#{port}
-    iMemory: #{system_stats.memory.total_mb} MB total\t\t#{host}\t#{port}
-    i  Processes: #{system_stats.memory.processes_mb} MB\t\t#{host}\t#{port}
-    i  ETS: #{system_stats.memory.ets_mb} MB\t\t#{host}\t#{port}
-    i  Binary: #{system_stats.memory.binary_mb} MB\t\t#{host}\t#{port}
-    iSchedulers: #{system_stats.schedulers}\t\t#{host}\t#{port}
-    iOTP: #{system_stats.otp_version} | Elixir: #{system_stats.elixir_version}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Request Stats ---\t\t#{host}\t#{port}
-    iTotal Requests: #{telemetry.total_requests}\t\t#{host}\t#{port}
-    iRequests/Hour: #{telemetry.requests_per_hour}\t\t#{host}\t#{port}
-    iErrors: #{telemetry.total_errors} (#{telemetry.error_rate}%)\t\t#{host}\t#{port}
-    iAvg Latency: #{telemetry.avg_latency_ms}ms\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Cache ---\t\t#{host}\t#{port}
-    iSize: #{cache_stats.size}/#{cache_stats.max_size}\t\t#{host}\t#{port}
-    iHit Rate: #{cache_stats.hit_rate}%\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Rate Limiter ---\t\t#{host}\t#{port}
-    iTracked IPs: #{rate_stats.tracked_ips}\t\t#{host}\t#{port}
-    iBanned IPs: #{rate_stats.banned_ips}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i--- Actions ---\t\t#{host}\t#{port}
-    0Clear Cache\t/admin/#{token}/clear-cache\t#{host}\t#{port}
-    0Clear Sessions\t/admin/#{token}/clear-sessions\t#{host}\t#{port}
-    0Reset Metrics\t/admin/#{token}/reset-metrics\t#{host}\t#{port}
-    1View Bans\t/admin/#{token}/bans\t#{host}\t#{port}
-    1Manage Documents (RAG)\t/admin/#{token}/docs\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Main Menu\t/\t#{host}\t#{port}
-    .
-    """
-  end
-
-  # Handle admin commands
-  defp handle_admin_command(token, "clear-cache", host, port) do
-    Admin.clear_cache()
-    admin_action_result(token, "Cache cleared successfully", host, port)
-  end
-
-  defp handle_admin_command(token, "clear-sessions", host, port) do
-    Admin.clear_sessions()
-    admin_action_result(token, "All sessions cleared", host, port)
-  end
-
-  defp handle_admin_command(token, "reset-metrics", host, port) do
-    Admin.reset_metrics()
-    admin_action_result(token, "Metrics reset", host, port)
-  end
-
-  defp handle_admin_command(token, "bans", host, port) do
-    bans = Admin.list_bans()
-
-    ban_lines =
-      if Enum.empty?(bans) do
-        "iNo banned IPs\t\t#{host}\t#{port}\r\n"
-      else
-        bans
-        |> Enum.map(fn {ip, _timestamp} ->
-          "i  #{ip}\t\t#{host}\t#{port}\r\n0Unban #{ip}\t/admin/#{token}/unban/#{ip}\t#{host}\t#{port}\r\n"
-        end)
-        |> Enum.join("")
-      end
-
-    """
-    i=== Banned IPs ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    #{ban_lines}i\t\t#{host}\t#{port}
-    7Ban IP\t/admin/#{token}/ban\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Admin\t/admin/#{token}\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_admin_command(token, "ban\t" <> ip, host, port) do
-    handle_ban(token, ip, host, port)
-  end
-
-  defp handle_admin_command(token, "ban " <> ip, host, port) do
-    handle_ban(token, ip, host, port)
-  end
-
-  defp handle_admin_command(token, "unban/" <> ip, host, port) do
-    case Admin.unban_ip(ip) do
-      :ok ->
-        admin_action_result(token, "Unbanned IP: #{ip}", host, port)
-      {:error, :invalid_ip} ->
-        admin_action_result(token, "Invalid IP address: #{ip}", host, port)
-    end
-  end
-
-  # RAG admin commands
-  defp handle_admin_command(token, "docs", host, port) do
-    stats = Rag.stats()
-    docs = Rag.list_documents()
-
-    doc_list =
-      if docs == [] do
-        "iNo documents ingested\t\t#{host}\t#{port}\n"
-      else
-        docs
-        |> Enum.map(fn doc ->
-          "i  - #{doc.filename} (#{doc.chunk_count} chunks)\t\t#{host}\t#{port}"
-        end)
-        |> Enum.join("\n")
-      end
-
-    """
-    i=== RAG Document Status ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iDocuments: #{stats.documents}\t\t#{host}\t#{port}
-    iChunks: #{stats.chunks}\t\t#{host}\t#{port}
-    iEmbedding Coverage: #{stats.embedding_coverage}%\t\t#{host}\t#{port}
-    iDocs Directory: #{Rag.docs_dir()}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    #{doc_list}
-    i\t\t#{host}\t#{port}
-    7Ingest file path\t/admin/#{token}/ingest\t#{host}\t#{port}
-    7Ingest URL\t/admin/#{token}/ingest-url\t#{host}\t#{port}
-    0Clear all documents\t/admin/#{token}/clear-docs\t#{host}\t#{port}
-    0Re-embed all chunks\t/admin/#{token}/reembed\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Admin Menu\t/admin/#{token}\t#{host}\t#{port}
-    .
-    """
-  end
-
-  defp handle_admin_command(token, "ingest\t" <> path, host, port) do
-    handle_admin_ingest(token, path, host, port)
-  end
-
-  defp handle_admin_command(token, "ingest " <> path, host, port) do
-    handle_admin_ingest(token, path, host, port)
-  end
-
-  defp handle_admin_command(token, "ingest-url\t" <> url, host, port) do
-    handle_admin_ingest_url(token, url, host, port)
-  end
-
-  defp handle_admin_command(token, "ingest-url " <> url, host, port) do
-    handle_admin_ingest_url(token, url, host, port)
-  end
-
-  defp handle_admin_command(token, "clear-docs", host, port) do
-    PureGopherAi.Rag.DocumentStore.clear_all()
-    admin_action_result(token, "Cleared all documents and chunks", host, port)
-  end
-
-  defp handle_admin_command(token, "reembed", host, port) do
-    # Clear existing embeddings and re-embed
-    PureGopherAi.Rag.Embeddings.embed_all_chunks()
-    admin_action_result(token, "Re-embedding all chunks (running in background)", host, port)
-  end
-
-  defp handle_admin_command(token, "remove-doc/" <> doc_id, host, port) do
-    case Rag.remove(doc_id) do
-      :ok ->
-        admin_action_result(token, "Removed document: #{doc_id}", host, port)
-    end
-  end
-
-  defp handle_admin_command(_token, command, _host, _port) do
-    error_response("Unknown admin command: #{command}")
-  end
-
-  defp handle_admin_ingest(token, path, host, port) do
-    path = String.trim(path)
-    case Rag.ingest(path) do
-      {:ok, doc} ->
-        admin_action_result(token, "Ingested: #{doc.filename} (#{doc.chunk_count} chunks)", host, port)
-      {:error, :file_not_found} ->
-        admin_action_result(token, "File not found: #{path}", host, port)
-      {:error, :already_ingested} ->
-        admin_action_result(token, "Already ingested: #{path}", host, port)
-      {:error, reason} ->
-        admin_action_result(token, "Ingest failed: #{sanitize_error(reason)}", host, port)
-    end
-  end
-
-  defp handle_admin_ingest_url(token, url, host, port) do
-    url = String.trim(url)
-    case Rag.ingest_url(url) do
-      {:ok, doc} ->
-        admin_action_result(token, "Ingested from URL: #{doc.filename} (#{doc.chunk_count} chunks)", host, port)
-      {:error, {:http_error, status}} ->
-        admin_action_result(token, "HTTP error: #{status}", host, port)
-      {:error, reason} ->
-        admin_action_result(token, "Ingest failed: #{sanitize_error(reason)}", host, port)
-    end
-  end
-
-  defp handle_ban(token, ip, host, port) do
-    ip = String.trim(ip)
-    case Admin.ban_ip(ip) do
-      :ok ->
-        admin_action_result(token, "Banned IP: #{ip}", host, port)
-      {:error, :invalid_ip} ->
-        admin_action_result(token, "Invalid IP address: #{ip}", host, port)
-    end
-  end
-
-  defp admin_action_result(token, message, host, port) do
-    """
-    i=== Admin Action ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i#{message}\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1Back to Admin\t/admin/#{token}\t#{host}\t#{port}
-    .
-    """
-  end
-
   # Format as Gopher text response (type 0)
   # Escapes dangerous characters that could break Gopher protocol
   defp format_text_response(text, host, port) do
@@ -8558,90 +5607,6 @@ defmodule PureGopherAi.GopherHandler do
       |> Enum.join("\r\n")
 
     lines <> "\r\n.\r\n"
-  end
-
-  # Stream AI response for /ask (no context)
-  defp stream_ai_response(socket, query, _context, host, port, start_time) do
-    # Send header
-    header = format_gopher_lines(["Query: #{query}", "", "Response:"], host, port)
-    ThousandIsland.Socket.send(socket, header)
-
-    # Stream the AI response with proper escaping and output sanitization
-    _response = PureGopherAi.AiEngine.generate_stream(query, nil, fn chunk ->
-      # Format each chunk as Gopher info line and send
-      if String.length(chunk) > 0 do
-        # Sanitize output to prevent sensitive data leakage, then escape for protocol
-        sanitized = OutputSanitizer.sanitize(chunk)
-        escaped = InputSanitizer.escape_gopher(sanitized)
-        lines = String.split(escaped, "\r\n", trim: false)
-        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-        ThousandIsland.Socket.send(socket, Enum.join(formatted))
-      end
-    end)
-
-    elapsed = System.monotonic_time(:millisecond) - start_time
-    Logger.info("AI Response streamed in #{elapsed}ms")
-
-    # Send footer
-    footer = format_gopher_lines(["", "---", "Generated in #{elapsed}ms using GPU acceleration (streamed)"], host, port)
-    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-
-    # Return :streamed to indicate we've already sent the response
-    :streamed
-  end
-
-  # Stream chat response for /chat (with context and session)
-  defp stream_chat_response(socket, query, context, session_id, host, port, start_time) do
-    # Send header
-    header = format_gopher_lines(["You: #{query}", "", "AI:"], host, port)
-    ThousandIsland.Socket.send(socket, header)
-
-    # Collect full response for conversation history
-    response_chunks = Agent.start_link(fn -> [] end)
-    {:ok, response_agent} = response_chunks
-
-    # Stream the AI response with proper escaping and output sanitization
-    _response = PureGopherAi.AiEngine.generate_stream(query, context, fn chunk ->
-      Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
-      if String.length(chunk) > 0 do
-        # Sanitize output to prevent sensitive data leakage, then escape for protocol
-        sanitized = OutputSanitizer.sanitize(chunk)
-        escaped = InputSanitizer.escape_gopher(sanitized)
-        lines = String.split(escaped, "\r\n", trim: false)
-        formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-        ThousandIsland.Socket.send(socket, Enum.join(formatted))
-      end
-    end)
-
-    # Get full response for conversation store
-    full_response =
-      response_agent
-      |> Agent.get(& &1)
-      |> Enum.reverse()
-      |> Enum.join("")
-
-    Agent.stop(response_agent)
-
-    # Add assistant response to history
-    ConversationStore.add_message(session_id, :assistant, full_response)
-
-    # Get updated history for display
-    history = ConversationStore.get_history(session_id)
-    history_count = length(history)
-
-    elapsed = System.monotonic_time(:millisecond) - start_time
-    Logger.info("Chat response streamed in #{elapsed}ms, history: #{history_count} messages")
-
-    # Send footer
-    footer = format_gopher_lines([
-      "",
-      "---",
-      "Session: #{session_id} | Messages: #{history_count}",
-      "Generated in #{elapsed}ms (streamed)"
-    ], host, port)
-    ThousandIsland.Socket.send(socket, footer <> ".\r\n")
-
-    :streamed
   end
 
   # Format lines as Gopher info lines with proper escaping
@@ -9015,31 +5980,5 @@ defmodule PureGopherAi.GopherHandler do
       # Unknown errors - generic message
       _ -> "An error occurred"
     end
-  end
-
-  # Rate limit response
-  defp rate_limit_response(retry_after_ms) do
-    retry_seconds = div(retry_after_ms, 1000) + 1
-
-    """
-    3Rate limit exceeded. Please wait #{retry_seconds} seconds.\t\terror.host\t1
-    .
-    """
-  end
-
-  # Banned IP response
-  defp banned_response do
-    """
-    3Access denied. Your IP has been banned.\t\terror.host\t1
-    .
-    """
-  end
-
-  # Blocklisted IP response
-  defp blocklisted_response do
-    """
-    3Access denied. Your IP is on a public blocklist.\t\terror.host\t1
-    .
-    """
   end
 end

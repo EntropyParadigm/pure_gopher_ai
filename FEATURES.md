@@ -1645,6 +1645,436 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+---
+
+## Performance Optimizations TODO
+
+### P1. Handler Module Split
+**Status:** Completed
+**Priority:** High
+**Description:** Split the 9000+ line gopher_handler.ex into focused modules for faster compilation and better maintainability.
+
+**Implementation:**
+- [x] Create `lib/pure_gopher_ai/handlers/` directory structure
+- [x] Create `handlers/shared.ex` with common utilities (iodata formatting, error handling, streaming)
+- [x] Extract AI handlers (`/ask`, `/chat`, `/models`, `/personas`) to `handlers/ai.ex`
+- [x] Extract community handlers (`/guestbook`, `/paste`, `/polls`, `/users`) to `handlers/community.ex`
+- [x] Extract tool handlers (`/docs`, `/search`, `/art`, `/code`, summarizer, translate) to `handlers/tools.ex`
+- [x] Extract admin handlers (`/admin/*`) to `handlers/admin.ex`
+- [x] Create thin routing dispatcher in main gopher_handler.ex
+- [x] Verify compilation succeeds
+
+**Handler Module Structure:**
+```
+lib/pure_gopher_ai/handlers/
+  shared.ex      - Common utilities (iodata formatting, error responses)
+  ai.ex          - AI query/chat handlers (700+ lines)
+  community.ex   - Community features (paste, polls, users, guestbook)
+  tools.ex       - Tool handlers (docs, search, art, code, translate)
+  admin.ex       - Admin interface handlers
+```
+
+**Benefits:**
+- Faster incremental compilation (only changed modules recompile)
+- Better code organization and readability
+- Easier testing of individual handlers
+- Parallel compilation across modules
+
+---
+
+### P2. IOData Optimization
+**Status:** Partially Complete (in handlers/shared.ex)
+**Priority:** Medium
+**Description:** Replace string concatenation in response formatting with iodata lists for zero-copy operations.
+
+**Implementation:**
+- [x] Update `format_gopher_lines/3` to return iodata instead of strings (in shared.ex)
+- [x] Update `format_text_response/1` to use iodata (in shared.ex)
+- [x] Update `menu_item/5`, `info_line/3`, `link_line/4` to use iodata
+- [x] Ensure socket sends accept iodata (ThousandIsland supports this)
+- [ ] Migrate remaining handler functions in gopher_handler.ex
+- [ ] Benchmark before/after to measure improvement
+
+**Benefits:**
+- Reduced memory allocations
+- Faster response generation
+- Lower GC pressure under load
+
+---
+
+### P3. Persistent Terms for Config
+**Status:** Completed
+**Priority:** Medium
+**Description:** Move frequently-accessed read-only configuration to `:persistent_term` for faster access than Application.get_env.
+
+**Implementation:**
+- [x] Identify hot-path config reads (port, host, feature flags)
+- [x] Create `PureGopherAi.Config` module to manage persistent terms
+- [x] Initialize persistent terms on application start
+- [x] Replace `Application.get_env` calls with `Config.get` for hot paths
+- [x] Keep Application.get_env for rarely-accessed config
+
+**Config Module Features:**
+```elixir
+# Fast accessor functions
+PureGopherAi.Config.clearnet_host()
+PureGopherAi.Config.clearnet_port()
+PureGopherAi.Config.onion_address()
+PureGopherAi.Config.host_port(:tor | :clearnet)
+PureGopherAi.Config.streaming_enabled?()
+PureGopherAi.Config.content_dir()
+PureGopherAi.Config.admin_token()
+# ... and more
+```
+
+**Benefits:**
+- ~10x faster config reads on hot paths
+- No ETS lookup overhead for read-only data
+- Automatic sharing across all processes
+
+---
+
+---
+
+## Phase 10: Security Enhancements & Advanced Features
+
+### 10.1 Session Token System
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Token-based authentication to reduce passphrase exposure.
+
+**Implementation:**
+- [x] Create `Session` GenServer with ETS storage
+- [x] 30-minute token TTL with automatic expiry
+- [x] Token creation on login
+- [x] Token refresh functionality
+- [x] Token invalidation (logout)
+- [x] Session statistics
+
+**Selectors:**
+- `/auth` - Session menu
+- `/auth/login` - Get session token
+- `/auth/logout/<token>` - Invalidate session
+- `/auth/validate/<token>` - Check token validity
+- `/auth/refresh/<token>` - Extend session
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/session.ex` (new)
+- `lib/pure_gopher_ai/handlers/security.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (auth routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.2 Audit Logging
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Comprehensive audit logging for security and admin events.
+
+**Implementation:**
+- [x] Create `AuditLog` GenServer with DETS storage
+- [x] Event categories: auth, admin, security, content, system
+- [x] Event severities: info, warning, error, critical
+- [x] 30-day retention with automatic cleanup
+- [x] Query functions with filters
+- [x] Admin viewing via `/admin/<token>/audit`
+
+**Events Logged:**
+- Authentication success/failure
+- Session creation/invalidation
+- Admin actions (bans, cache clears)
+- Security events (rate limits, injection attempts)
+- Content moderation blocks
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/audit_log.ex` (new)
+- `lib/pure_gopher_ai/handlers/admin.ex` (audit routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.3 Private Message Encryption
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** AES-256-GCM encryption at rest for private messages.
+
+**Implementation:**
+- [x] Create `Crypto` module with encryption utilities
+- [x] AES-256-GCM symmetric encryption
+- [x] Auto-generated server encryption key
+- [x] Encrypt message subject and body on storage
+- [x] Transparent decryption on read
+- [x] Backward compatibility with unencrypted messages
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/crypto.ex` (new)
+- `lib/pure_gopher_ai/mailbox.ex` (encryption integration)
+
+---
+
+### 10.4 CAPTCHA for Tor
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Text-based CAPTCHA challenges for high-risk actions on Tor.
+
+**Implementation:**
+- [x] Create `Captcha` GenServer with ETS storage
+- [x] 15 text-based challenges (math, text, trivia)
+- [x] 5-minute challenge TTL
+- [x] Automatic cleanup of expired challenges
+- [x] Integration with high-risk actions (registration, messaging)
+
+**Selectors:**
+- `/captcha/verify/<action>/<id>/<return>` - Verify challenge
+- `/captcha/new/<action>/<return>` - Get new challenge
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/captcha.ex` (new)
+- `lib/pure_gopher_ai/handlers/security.ex` (CAPTCHA handlers)
+- `lib/pure_gopher_ai/gopher_handler.ex` (CAPTCHA routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.5 Password Strength Validation
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Passphrase strength validation with common password detection.
+
+**Implementation:**
+- [x] Create `PasswordValidator` module
+- [x] Minimum 8 character requirement
+- [x] Common password dictionary (40+ entries)
+- [x] Sequential character detection (abc, 123)
+- [x] Repeated pattern detection
+- [x] Strength scoring (0-100)
+- [x] Human-readable strength labels
+
+**Validation Checks:**
+- Minimum/maximum length
+- Common password list
+- All same character
+- Sequential patterns
+- Repeated patterns
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/password_validator.ex` (new)
+- `lib/pure_gopher_ai/user_profiles.ex` (validation integration)
+
+---
+
+### 10.6 Account Recovery
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** 12-word mnemonic recovery phrases for account recovery.
+
+**Implementation:**
+- [x] Create `Recovery` module
+- [x] BIP39-style 256-word dictionary
+- [x] 12-word recovery phrase generation
+- [x] Phrase hashing with SHA256
+- [x] Phrase verification
+- [x] New recovery phrase on each recovery
+- [x] Recovery generates new passphrase and phrase
+
+**Recovery Flow:**
+1. User provides username + recovery phrase + new passphrase
+2. System verifies recovery phrase hash
+3. System updates passphrase and generates new recovery phrase
+4. User receives new recovery phrase (one-time display)
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/recovery.ex` (new)
+- `lib/pure_gopher_ai/user_profiles.ex` (recovery integration)
+
+---
+
+### 10.7 IP Reputation Scoring
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Behavioral IP scoring with decay over time.
+
+**Implementation:**
+- [x] Create `IpReputation` GenServer with DETS storage
+- [x] Score range 0-100 (higher = more risky)
+- [x] Default score: 25
+- [x] Automatic score decay toward default
+- [x] Thresholds: 50 suspicious, 75 high-risk, 90 auto-block
+- [x] 30-day cleanup of old entries
+
+**Score Adjustments:**
+- Auth failure: +5
+- Rate limit: +10
+- Content block: +15
+- Spam behavior: +20
+- Successful auth: -2
+- Successful post: -1
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/ip_reputation.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.8 User Notifications
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** In-app notification system for user events.
+
+**Implementation:**
+- [x] Create `Notifications` GenServer with DETS storage
+- [x] Notification types: message, reply, mention, comment, system, announcement
+- [x] 100 notifications per user limit
+- [x] 30-day TTL with automatic cleanup
+- [x] Read/unread tracking
+- [x] Mark all read functionality
+- [x] Announcement broadcast to all users
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/notifications.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.9 Content Reporting
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** User reporting system for inappropriate content.
+
+**Implementation:**
+- [x] Create `ContentReports` GenServer with DETS storage
+- [x] Content types: guestbook, message, phlog, comment, profile, bulletin, poll, paste
+- [x] Report reasons: spam, harassment, illegal, inappropriate, copyright, other
+- [x] Priority scoring based on severity
+- [x] Pending/resolved status workflow
+- [x] Rate limiting (10 reports per IP per day)
+- [x] Duplicate report prevention
+- [x] Admin escalate/resolve functions
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/content_reports.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.10 User Blocking
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Block/mute users for messaging and interactions.
+
+**Implementation:**
+- [x] Create `UserBlocks` GenServer with DETS storage
+- [x] Block users from messaging
+- [x] Mute users (hide content without blocking)
+- [x] 100 blocks per user limit
+- [x] `can_message?/2` check function
+- [x] `can_comment?/2` check function
+- [x] List blocked/muted users
+- [x] View who has blocked a user
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/user_blocks.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.11 Scheduled Posts
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Schedule phlog posts for future publication.
+
+**Implementation:**
+- [x] Create `ScheduledPosts` GenServer with DETS storage
+- [x] 10 scheduled posts per user limit
+- [x] Minimum 5 minutes ahead scheduling
+- [x] Automatic publication when scheduled time arrives
+- [x] Cancel/reschedule functionality
+- [x] Status tracking: pending, published, cancelled, failed
+- [x] 1-minute check interval
+
+**Selectors:**
+- Schedule, list, cancel, reschedule via UserPhlog integration
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/scheduled_posts.ex` (new)
+- `lib/pure_gopher_ai/user_phlog.ex` (internal post creation)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 10.12 User Data Export
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Export all user data in portable format.
+
+**Implementation:**
+- [x] Create `UserExport` module
+- [x] Export profile, phlog posts, messages, bookmarks, notifications
+- [x] Text format for Gopher viewing
+- [x] JSON format for data portability
+- [x] Passphrase authentication required
+- [x] Formatted sections with headers
+
+**Export Includes:**
+- Profile (bio, links, interests)
+- All phlog posts
+- Inbox and sent messages
+- Bookmarks with folders
+- Notifications
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/user_export.ex` (new)
+
+---
+
+### 10.13 Enhanced Search
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Fuzzy matching, filters, and advanced query syntax.
+
+**Implementation:**
+- [x] Create `SearchEnhanced` module
+- [x] Fuzzy/typo-tolerant matching with edit distance
+- [x] Content type filters: all, phlog, files, users, guestbook, bulletin
+- [x] Phrase search with quotes ("exact phrase")
+- [x] Exclude terms with minus (-exclude)
+- [x] Author/username filter
+- [x] Date range filters (since/until)
+- [x] Common typo substitutions
+
+**Advanced Query Syntax:**
+- `"exact phrase"` - Match exact phrase
+- `-exclude` - Exclude term
+- Automatic typo variants
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/search_enhanced.ex` (new)
+
+---
+
+### 10.14 User Phlog RSS/Atom Feeds
+**Status:** 🟢 Complete
+**Priority:** Low
+**Description:** Individual RSS/Atom feeds for user phlogs.
+
+**Implementation:**
+- [x] Create `UserPhlogFeed` module
+- [x] Atom feed generation per user
+- [x] RSS 2.0 feed generation per user
+- [x] Combined feed for all user phlogs
+- [x] Proper XML escaping
+- [x] Author attribution
+
+**Feed Endpoints:**
+- Per-user Atom feed
+- Per-user RSS feed
+- Combined all-users feed
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/user_phlog_feed.ex` (new)
+
+---
+
 ## Notes
 
 - Implement features in order of priority
