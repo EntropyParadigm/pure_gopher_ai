@@ -1390,6 +1390,51 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.10 Trivia / Quiz Game
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Interactive trivia quiz game with categories and leaderboard.
+
+**Implementation:**
+- [x] Create `Trivia` GenServer with DETS for leaderboard
+- [x] 25 questions across 5 categories
+- [x] `/trivia` - Main trivia menu
+- [x] `/trivia/play` - Random question from all categories
+- [x] `/trivia/play/<category>` - Question from specific category
+- [x] `/trivia/answer/<id>/<answer>` - Submit answer
+- [x] `/trivia/score` - View current session score
+- [x] `/trivia/reset` - Reset session score
+- [x] `/trivia/leaderboard` - High scores
+- [x] `/trivia/save/<nickname>` - Save score to leaderboard
+- [x] Session-based scoring with ETS
+- [x] Score persistence in DETS
+- [x] Categories: science, technology, history, geography, entertainment
+
+**Categories:**
+- Science (5 questions)
+- Technology (5 questions)
+- History (5 questions)
+- Geography (5 questions)
+- Entertainment (5 questions)
+
+**Selectors:**
+- `/trivia` - Main menu
+- `/trivia/play` - Play (random)
+- `/trivia/play/<category>` - Play category
+- `/trivia/answer/<id>/<answer>` - Answer
+- `/trivia/score` - Current score
+- `/trivia/reset` - Reset score
+- `/trivia/leaderboard` - High scores
+- `/trivia/save` - Save to leaderboard
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/trivia.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (trivia routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `lib/pure_gopher_ai/sitemap.ex` (updated)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

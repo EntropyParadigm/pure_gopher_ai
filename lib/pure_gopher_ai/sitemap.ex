@@ -64,7 +64,8 @@ defmodule PureGopherAi.Sitemap do
           %{selector: "/calendar", type: 1, description: "Calendar & events"},
           %{selector: "/short", type: 1, description: "URL shortener"},
           %{selector: "/utils", type: 1, description: "Quick utilities"},
-          %{selector: "/mail", type: 1, description: "Mailbox / Private messaging"}
+          %{selector: "/mail", type: 1, description: "Mailbox / Private messaging"},
+          %{selector: "/trivia", type: 1, description: "Trivia quiz game"}
         ]
       },
       %{

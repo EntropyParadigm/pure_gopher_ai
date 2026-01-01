@@ -87,6 +87,9 @@ defmodule PureGopherAi.Application do
       # Mailbox / Messaging
       PureGopherAi.Mailbox,
 
+      # Trivia / Quiz Game
+      PureGopherAi.Trivia,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

@@ -139,6 +139,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/utilities.ex` | Quick utilities (dice, 8ball, hash, etc) |
 | `lib/pure_gopher_ai/sitemap.ex` | Full server sitemap and endpoint registry |
 | `lib/pure_gopher_ai/mailbox.ex` | Internal messaging system |
+| `lib/pure_gopher_ai/trivia.ex` | Trivia quiz game with leaderboard |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -257,6 +258,11 @@ end
 | `/mail/inbox/<user>` | View inbox |
 | `/mail/sent/<user>` | View sent messages |
 | `/mail/compose/<user>` | Compose message |
+| `/trivia` | Trivia quiz game |
+| `/trivia/play` | Play random question |
+| `/trivia/play/<category>` | Play from category |
+| `/trivia/score` | View session score |
+| `/trivia/leaderboard` | High scores |
 
 ### Response Format
 ```

@@ -43,6 +43,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Utilities
   alias PureGopherAi.Sitemap
   alias PureGopherAi.Mailbox
+  alias PureGopherAi.Trivia
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -564,6 +565,43 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
+  # Trivia / Quiz Game routes
+  defp route_selector("/trivia", host, port, _network, ip, _socket),
+    do: trivia_menu(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/trivia/play", host, port, _network, ip, _socket),
+    do: trivia_play(session_id_from_ip(ip), nil, host, port)
+
+  defp route_selector("/trivia/play/" <> category, host, port, _network, ip, _socket),
+    do: trivia_play(session_id_from_ip(ip), category, host, port)
+
+  defp route_selector("/trivia/answer/" <> rest, host, port, _network, ip, _socket) do
+    # Handle both /trivia/answer/id/answer and /trivia/answer/id\tanswer formats
+    rest = String.replace(rest, "\t", "/")
+    case String.split(rest, "/", parts: 2) do
+      [question_id, answer] -> trivia_answer(session_id_from_ip(ip), question_id, answer, host, port)
+      [question_id] -> trivia_answer_prompt(question_id, host, port)
+    end
+  end
+
+  defp route_selector("/trivia/score", host, port, _network, ip, _socket),
+    do: trivia_score(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/trivia/reset", host, port, _network, ip, _socket),
+    do: trivia_reset(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/trivia/leaderboard", host, port, _network, _ip, _socket),
+    do: trivia_leaderboard(host, port)
+
+  defp route_selector("/trivia/save", host, port, _network, _ip, _socket),
+    do: trivia_save_prompt(host, port)
+
+  defp route_selector("/trivia/save\t" <> nickname, host, port, _network, ip, _socket),
+    do: trivia_save(session_id_from_ip(ip), nickname, host, port)
+
+  defp route_selector("/trivia/save " <> nickname, host, port, _network, ip, _socket),
+    do: trivia_save(session_id_from_ip(ip), nickname, host, port)
+
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
     do: phlog_index(host, port, network, 1)
@@ -1083,6 +1121,7 @@ defmodule PureGopherAi.GopherHandler do
     1URL Shortener\t/short\t#{host}\t#{port}
     1Quick Utilities\t/utils\t#{host}\t#{port}
     1Mailbox\t/mail\t#{host}\t#{port}
+    1Trivia Quiz\t/trivia\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -6461,6 +6500,251 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :not_found} ->
         error_response("Message not found.")
+    end
+  end
+
+  # === Trivia Functions ===
+
+  defp trivia_menu(session_id, host, port) do
+    stats = Trivia.stats()
+    score = Trivia.get_score(session_id)
+    categories = Trivia.categories()
+
+    category_lines = categories
+      |> Enum.map(fn cat ->
+        "1Play #{String.capitalize(cat)}\t/trivia/play/#{cat}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    score_line = if score.total > 0 do
+      pct = round(score.correct / score.total * 100)
+      "iCurrent Score: #{score.correct}/#{score.total} (#{pct}%)\t\t#{host}\t#{port}"
+    else
+      "iNo score yet - start playing!\t\t#{host}\t#{port}"
+    end
+
+    """
+    i=== Trivia Quiz ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTest your knowledge!\t\t#{host}\t#{port}
+    i#{stats.total_questions} questions in #{stats.total_categories} categories.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{score_line}
+    i\t\t#{host}\t#{port}
+    i--- Play by Category ---\t\t#{host}\t#{port}
+    1Play Random (All Categories)\t/trivia/play\t#{host}\t#{port}
+    #{category_lines}
+    i\t\t#{host}\t#{port}
+    i--- Your Stats ---\t\t#{host}\t#{port}
+    0View Your Score\t/trivia/score\t#{host}\t#{port}
+    7Save Score to Leaderboard\t/trivia/save\t#{host}\t#{port}
+    0Reset Score\t/trivia/reset\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Leaderboard\t/trivia/leaderboard\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp trivia_play(session_id, category, host, port) do
+    case Trivia.get_question(category) do
+      {:ok, question} ->
+        score = Trivia.get_score(session_id)
+
+        option_lines = question.options
+          |> Enum.with_index(1)
+          |> Enum.map(fn {opt, idx} ->
+            "1#{idx}. #{opt}\t/trivia/answer/#{question.id}/#{idx}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        score_line = if score.total > 0 do
+          "iScore: #{score.correct}/#{score.total}\t\t#{host}\t#{port}"
+        else
+          "iScore: 0/0\t\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Trivia: #{String.capitalize(question.category)} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{score_line}
+        i\t\t#{host}\t#{port}
+        iQuestion:\t\t#{host}\t#{port}
+        i#{question.question}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Select Your Answer ---\t\t#{host}\t#{port}
+        #{option_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_questions} ->
+        error_response("No questions available for this category.")
+    end
+  end
+
+  defp trivia_answer_prompt(question_id, host, port) do
+    """
+    i=== Answer Question ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your answer (1-4):\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp trivia_answer(session_id, question_id, answer, host, port) do
+    case Trivia.check_answer(session_id, question_id, answer) do
+      {:ok, result} ->
+        score = Trivia.get_score(session_id)
+        pct = if score.total > 0, do: round(score.correct / score.total * 100), else: 0
+
+        result_text = if result.correct do
+          "iCorrect!\t\t#{host}\t#{port}"
+        else
+          "iWrong! The answer was: #{result.correct_answer}\t\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Answer Result ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{result_text}
+        i\t\t#{host}\t#{port}
+        iYour Score: #{score.correct}/#{score.total} (#{pct}%)\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Next Question\t/trivia/play\t#{host}\t#{port}
+        7Save Score to Leaderboard\t/trivia/save\t#{host}\t#{port}
+        1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :question_not_found} ->
+        error_response("Question expired or invalid. Please try a new question.")
+    end
+  end
+
+  defp trivia_score(session_id, host, port) do
+    score = Trivia.get_score(session_id)
+
+    if score.total == 0 do
+      """
+      i=== Your Trivia Score ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iNo score yet!\t\t#{host}\t#{port}
+      iStart playing to build your score.\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Play Trivia\t/trivia/play\t#{host}\t#{port}
+      1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+      .
+      """
+    else
+      pct = round(score.correct / score.total * 100)
+
+      grade = cond do
+        pct >= 90 -> "A - Excellent!"
+        pct >= 80 -> "B - Great!"
+        pct >= 70 -> "C - Good"
+        pct >= 60 -> "D - Keep trying"
+        true -> "F - Study more!"
+      end
+
+      """
+      i=== Your Trivia Score ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iCorrect: #{score.correct}\t\t#{host}\t#{port}
+      iTotal Questions: #{score.total}\t\t#{host}\t#{port}
+      iAccuracy: #{pct}%\t\t#{host}\t#{port}
+      iGrade: #{grade}\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Continue Playing\t/trivia/play\t#{host}\t#{port}
+      7Save to Leaderboard\t/trivia/save\t#{host}\t#{port}
+      0Reset Score\t/trivia/reset\t#{host}\t#{port}
+      1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+      .
+      """
+    end
+  end
+
+  defp trivia_reset(session_id, host, port) do
+    Trivia.reset_score(session_id)
+
+    """
+    i=== Score Reset ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iYour score has been reset to 0/0.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Play Again\t/trivia/play\t#{host}\t#{port}
+    1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp trivia_leaderboard(host, port) do
+    case Trivia.leaderboard(10) do
+      {:ok, []} ->
+        """
+        i=== Trivia Leaderboard ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo scores saved yet!\t\t#{host}\t#{port}
+        iBe the first to save your score.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Play Trivia\t/trivia/play\t#{host}\t#{port}
+        1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+        .
+        """
+
+      {:ok, scores} ->
+        score_lines = scores
+          |> Enum.with_index(1)
+          |> Enum.map(fn {s, rank} ->
+            "i#{rank}. #{s.nickname} - #{s.correct}/#{s.total} (#{s.percentage}%)\t\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Trivia Leaderboard ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Top 10 Scores ---\t\t#{host}\t#{port}
+        #{score_lines}
+        i\t\t#{host}\t#{port}
+        1Play Trivia\t/trivia/play\t#{host}\t#{port}
+        1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp trivia_save_prompt(host, port) do
+    """
+    i=== Save Your Score ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your nickname to save to leaderboard:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp trivia_save(session_id, nickname, host, port) do
+    case Trivia.save_score(session_id, nickname) do
+      {:ok, entry} ->
+        """
+        i=== Score Saved! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNickname: #{entry.nickname}\t\t#{host}\t#{port}
+        iScore: #{entry.correct}/#{entry.total} (#{entry.percentage}%)\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iYour score has been added to the leaderboard!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Leaderboard\t/trivia/leaderboard\t#{host}\t#{port}
+        1Play Again\t/trivia/play\t#{host}\t#{port}
+        1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_score} ->
+        error_response("No score to save. Play some trivia first!")
+
+      {:error, :invalid_nickname} ->
+        error_response("Invalid nickname. Use letters, numbers, and spaces only.")
     end
   end
 
