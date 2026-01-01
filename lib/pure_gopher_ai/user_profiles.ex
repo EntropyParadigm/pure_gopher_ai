@@ -15,6 +15,7 @@ defmodule PureGopherAi.UserProfiles do
 
   alias PureGopherAi.PasswordValidator
   alias PureGopherAi.Recovery
+  alias PureGopherAi.Totp
 
   @table_name :user_profiles
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
@@ -110,6 +111,43 @@ defmodule PureGopherAi.UserProfiles do
   """
   def stats do
     GenServer.call(__MODULE__, :stats)
+  end
+
+  @doc """
+  Initiates TOTP setup for a user. Returns secret and backup codes.
+  TOTP is not active until confirmed with a valid code.
+  """
+  def setup_totp(username, passphrase) do
+    GenServer.call(__MODULE__, {:setup_totp, username, passphrase})
+  end
+
+  @doc """
+  Confirms TOTP setup with a valid code. Activates 2FA for the account.
+  """
+  def confirm_totp(username, passphrase, code) do
+    GenServer.call(__MODULE__, {:confirm_totp, username, passphrase, code})
+  end
+
+  @doc """
+  Disables TOTP for a user. Requires passphrase and valid TOTP code.
+  """
+  def disable_totp(username, passphrase, code) do
+    GenServer.call(__MODULE__, {:disable_totp, username, passphrase, code})
+  end
+
+  @doc """
+  Checks if a user has TOTP enabled.
+  """
+  def totp_enabled?(username) do
+    GenServer.call(__MODULE__, {:totp_enabled, username})
+  end
+
+  @doc """
+  Verifies a TOTP code for a user (used during login).
+  Also accepts backup codes.
+  """
+  def verify_totp(username, code) do
+    GenServer.call(__MODULE__, {:verify_totp, username, code})
   end
 
   # Server callbacks
@@ -404,6 +442,176 @@ defmodule PureGopherAi.UserProfiles do
       total_profiles: total,
       total_views: total_views
     }, state}
+  end
+
+  @impl true
+  def handle_call({:setup_totp, username, passphrase}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+
+    case :dets.lookup(@table_name, username_lower) do
+      [{^username_lower, profile}] ->
+        # Verify passphrase
+        expected_hash = hash_passphrase(passphrase, profile.salt)
+
+        if secure_compare(expected_hash, profile.passphrase_hash) do
+          # Check if TOTP already enabled
+          if Map.get(profile, :totp_enabled, false) do
+            {:reply, {:error, :totp_already_enabled}, state}
+          else
+            # Generate new TOTP secret and backup codes
+            secret = Totp.generate_secret()
+            backup_codes = Totp.generate_backup_codes()
+            hashed_backups = Totp.hash_backup_codes(backup_codes)
+
+            # Store pending TOTP (not active until confirmed)
+            updated = Map.merge(profile, %{
+              totp_pending_secret: secret,
+              totp_pending_backups: hashed_backups,
+              updated_at: DateTime.utc_now() |> DateTime.to_iso8601()
+            })
+
+            :dets.insert(@table_name, {username_lower, updated})
+            :dets.sync(@table_name)
+
+            setup_text = Totp.setup_text(secret, username)
+            {:reply, {:ok, secret, backup_codes, setup_text}, state}
+          end
+        else
+          {:reply, {:error, :invalid_credentials}, state}
+        end
+
+      [] ->
+        {:reply, {:error, :not_found}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:confirm_totp, username, passphrase, code}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+
+    case :dets.lookup(@table_name, username_lower) do
+      [{^username_lower, profile}] ->
+        # Verify passphrase
+        expected_hash = hash_passphrase(passphrase, profile.salt)
+
+        cond do
+          not secure_compare(expected_hash, profile.passphrase_hash) ->
+            {:reply, {:error, :invalid_credentials}, state}
+
+          is_nil(Map.get(profile, :totp_pending_secret)) ->
+            {:reply, {:error, :no_pending_totp}, state}
+
+          not Totp.validate(profile.totp_pending_secret, code) ->
+            {:reply, {:error, :invalid_totp_code}, state}
+
+          true ->
+            # Activate TOTP
+            updated = profile
+              |> Map.put(:totp_secret, profile.totp_pending_secret)
+              |> Map.put(:totp_backup_codes, profile.totp_pending_backups)
+              |> Map.put(:totp_enabled, true)
+              |> Map.delete(:totp_pending_secret)
+              |> Map.delete(:totp_pending_backups)
+              |> Map.put(:updated_at, DateTime.utc_now() |> DateTime.to_iso8601())
+
+            :dets.insert(@table_name, {username_lower, updated})
+            :dets.sync(@table_name)
+
+            Logger.info("[UserProfiles] TOTP enabled for: #{username}")
+            {:reply, :ok, state}
+        end
+
+      [] ->
+        {:reply, {:error, :not_found}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:disable_totp, username, passphrase, code}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+
+    case :dets.lookup(@table_name, username_lower) do
+      [{^username_lower, profile}] ->
+        # Verify passphrase
+        expected_hash = hash_passphrase(passphrase, profile.salt)
+
+        cond do
+          not secure_compare(expected_hash, profile.passphrase_hash) ->
+            {:reply, {:error, :invalid_credentials}, state}
+
+          not Map.get(profile, :totp_enabled, false) ->
+            {:reply, {:error, :totp_not_enabled}, state}
+
+          not Totp.validate(profile.totp_secret, code) ->
+            {:reply, {:error, :invalid_totp_code}, state}
+
+          true ->
+            # Disable TOTP
+            updated = profile
+              |> Map.delete(:totp_secret)
+              |> Map.delete(:totp_backup_codes)
+              |> Map.put(:totp_enabled, false)
+              |> Map.put(:updated_at, DateTime.utc_now() |> DateTime.to_iso8601())
+
+            :dets.insert(@table_name, {username_lower, updated})
+            :dets.sync(@table_name)
+
+            Logger.info("[UserProfiles] TOTP disabled for: #{username}")
+            {:reply, :ok, state}
+        end
+
+      [] ->
+        {:reply, {:error, :not_found}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:totp_enabled, username}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+
+    case :dets.lookup(@table_name, username_lower) do
+      [{^username_lower, profile}] ->
+        {:reply, Map.get(profile, :totp_enabled, false), state}
+
+      [] ->
+        {:reply, false, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:verify_totp, username, code}, _from, state) do
+    username_lower = String.downcase(String.trim(username))
+
+    case :dets.lookup(@table_name, username_lower) do
+      [{^username_lower, profile}] ->
+        cond do
+          not Map.get(profile, :totp_enabled, false) ->
+            {:reply, {:error, :totp_not_enabled}, state}
+
+          # Try TOTP code first
+          Totp.validate(profile.totp_secret, code) ->
+            {:reply, :ok, state}
+
+          # Try backup code
+          true ->
+            backup_codes = Map.get(profile, :totp_backup_codes, [])
+            case Totp.validate_backup_code(code, backup_codes) do
+              {:ok, remaining} ->
+                # Update remaining backup codes
+                updated = %{profile | totp_backup_codes: remaining}
+                :dets.insert(@table_name, {username_lower, updated})
+                :dets.sync(@table_name)
+                Logger.info("[UserProfiles] Backup code used for: #{username}")
+                {:reply, {:ok, :backup_code_used, length(remaining)}, state}
+
+              {:error, :invalid_code} ->
+                {:reply, {:error, :invalid_totp_code}, state}
+            end
+        end
+
+      [] ->
+        {:reply, {:error, :not_found}, state}
+    end
   end
 
   @impl true

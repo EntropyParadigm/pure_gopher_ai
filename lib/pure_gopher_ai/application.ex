@@ -68,6 +68,45 @@ defmodule PureGopherAi.Application do
       # Scheduled Posts
       PureGopherAi.ScheduledPosts,
 
+      # API Tokens
+      PureGopherAi.ApiTokens,
+
+      # Reactions/Voting
+      PureGopherAi.Reactions,
+
+      # Tags
+      PureGopherAi.Tags,
+
+      # Follows/Subscribe
+      PureGopherAi.Follows,
+
+      # Threaded Comments
+      PureGopherAi.Comments,
+
+      # Content Versioning
+      PureGopherAi.Versioning,
+
+      # Related Content/Recommendations
+      PureGopherAi.RelatedContent,
+
+      # Trending/Popular
+      PureGopherAi.Trending,
+
+      # User Analytics
+      PureGopherAi.UserAnalytics,
+
+      # Federation
+      PureGopherAi.Federation,
+
+      # Webhooks
+      PureGopherAi.Webhooks,
+
+      # Backup/Restore
+      PureGopherAi.Backup,
+
+      # Plugin System
+      PureGopherAi.Plugins,
+
       # RAG (Retrieval Augmented Generation)
       PureGopherAi.Rag.DocumentStore,
       PureGopherAi.Rag.Embeddings,

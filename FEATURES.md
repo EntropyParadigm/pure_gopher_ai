@@ -2075,6 +2075,342 @@ PureGopherAi.Config.admin_token()
 
 ---
 
+## Phase 11: Community & Infrastructure Enhancements
+
+### 11.1 Two-Factor Authentication (TOTP)
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Time-based one-time passwords for additional security.
+
+**Implementation:**
+- [x] Create `Totp` module with RFC 6238 implementation
+- [x] Compatible with Google Authenticator, Authy, etc.
+- [x] Base32 secret generation
+- [x] Backup codes (8 codes) with hashing
+- [x] Clock drift tolerance (±1 window)
+- [x] Setup text display for Gopher clients
+- [x] Enable/disable/verify TOTP in UserProfiles
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/totp.ex` (new)
+- `lib/pure_gopher_ai/user_profiles.ex` (TOTP integration)
+
+---
+
+### 11.2 API Tokens
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Programmatic access tokens for scripts and bots.
+
+**Implementation:**
+- [x] Create `ApiTokens` GenServer with DETS storage
+- [x] Named tokens with permissions (read, write, phlog, mail, etc.)
+- [x] Token expiration (default 365 days)
+- [x] Usage tracking (last_used, use_count)
+- [x] Max 10 tokens per user
+- [x] Revoke individual or all tokens
+- [x] Tokens hashed before storage
+
+**Permissions:** read, write, phlog, mail, bookmarks, search
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/api_tokens.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.3 Reactions/Voting
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Upvote/downvote system for content.
+
+**Implementation:**
+- [x] Create `Reactions` GenServer with DETS storage
+- [x] Upvote/downvote on phlog, bulletin, guestbook, comments
+- [x] One vote per user per item
+- [x] Change or remove votes
+- [x] Aggregate score calculation
+- [x] ETS cache for scores
+- [x] Top content by score
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/reactions.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.4 Tagging System
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** User-defined tags for content discovery.
+
+**Implementation:**
+- [x] Create `Tags` GenServer with DETS storage
+- [x] Add/remove/set tags on content
+- [x] Max 10 tags per item, 30 chars per tag
+- [x] Tag cloud with popularity counts
+- [x] Browse content by tag
+- [x] Related tags (co-occurrence)
+- [x] Tag search by prefix
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/tags.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.5 Follow/Subscribe
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Follow users and get notifications of new posts.
+
+**Implementation:**
+- [x] Create `Follows` GenServer with DETS storage
+- [x] Follow/unfollow users
+- [x] Max 500 following per user
+- [x] Followers/following lists
+- [x] Follow counts
+- [x] Suggested users based on mutual follows
+- [x] Notify followers on new content
+- [x] Follow notification to target user
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/follows.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.6 Threaded Comments
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Reply to comments on phlog posts.
+
+**Implementation:**
+- [x] Create `Comments` GenServer with DETS storage
+- [x] Add/edit/delete comments
+- [x] Threaded replies (max depth 5)
+- [x] Max 500 comments per item
+- [x] Content moderation integration
+- [x] Soft delete (preserve thread structure)
+- [x] Tree building for display
+- [x] Reply notifications
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/comments.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.7 Content Versioning
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Edit history for posts.
+
+**Implementation:**
+- [x] Create `Versioning` GenServer with DETS storage
+- [x] Save version on edit
+- [x] Max 50 versions per item
+- [x] View version history
+- [x] Get specific version
+- [x] Diff between versions
+- [x] Content hash for change detection
+- [x] Word/character change stats
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/versioning.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.8 Related Content (AI-Powered)
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** AI-powered "you might also like" recommendations.
+
+**Implementation:**
+- [x] Create `RelatedContent` GenServer
+- [x] Related posts based on tags and keywords
+- [x] Personalized recommendations based on reaction history
+- [x] AI-powered theme extraction
+- [x] Caching with 1-hour TTL
+- [x] Similarity scoring (tags, keywords, author, reactions)
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/related_content.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.9 Trending/Popular
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Surface active and popular content.
+
+**Implementation:**
+- [x] Create `Trending` GenServer
+- [x] Trending posts (recency + engagement weighted)
+- [x] All-time popular posts
+- [x] Trending tags
+- [x] Hot discussions (most commented)
+- [x] Rising posts (new posts gaining traction)
+- [x] Activity stats (posts, comments, users per period)
+- [x] Caching with 5-minute TTL
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/trending.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.10 User Analytics
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Views and engagement stats for authors.
+
+**Implementation:**
+- [x] Create `UserAnalytics` GenServer with DETS storage
+- [x] Event recording (views, upvotes, comments, follows)
+- [x] Summary stats (total views, upvotes, comments, followers)
+- [x] Post analytics (per-post engagement)
+- [x] Engagement over time (daily breakdown)
+- [x] Top performing content
+- [x] Audience insights (top engagers, frequent commenters)
+- [x] Engagement rate calculation
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/user_analytics.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.11 Federation
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Connect to and aggregate content from other Gopher servers.
+
+**Implementation:**
+- [x] Create `Federation` GenServer with DETS storage
+- [x] Add/remove peer servers
+- [x] Peer health monitoring (ping, status tracking)
+- [x] Fetch content from peers
+- [x] Aggregated feed from all healthy peers
+- [x] Federated search across peers
+- [x] Periodic sync (hourly)
+- [x] Content caching
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/federation.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.12 Webhooks
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Notify external services (Discord, Matrix, etc.) of events.
+
+**Implementation:**
+- [x] Create `Webhooks` GenServer with DETS storage
+- [x] Register webhooks with URL and events
+- [x] Event types: new_post, new_comment, new_user, new_follow, etc.
+- [x] HMAC-SHA256 signature for verification
+- [x] Retry with exponential backoff (3 attempts)
+- [x] Delivery logging
+- [x] Test webhook functionality
+- [x] Enable/disable webhooks
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/webhooks.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.13 Full Backup/Restore
+**Status:** 🟢 Complete
+**Priority:** High
+**Description:** Admin-level server snapshots.
+
+**Implementation:**
+- [x] Create `Backup` GenServer
+- [x] Full backup of all DETS files
+- [x] Manifest with metadata (files, sizes, timestamp)
+- [x] Restore from backup (with confirmation)
+- [x] Scheduled automatic backups
+- [x] Max 10 backups (auto-cleanup)
+- [x] Export as tar.gz archive
+- [x] Delete old backups
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/backup.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.14 Plugin System
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Extensible architecture for custom functionality.
+
+**Implementation:**
+- [x] Create `Plugins` GenServer with DETS storage
+- [x] Load/unload plugins at runtime
+- [x] Plugin hooks for various events
+- [x] Plugin configuration storage
+- [x] Sandboxed execution
+- [x] Enable/disable plugins
+- [x] Plugin metadata (name, version, author)
+
+**Hook Points:** before_request, after_request, on_new_post, on_new_user, on_login, on_ai_query, content_filter, custom_selector
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/plugins.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+
+---
+
+### 11.15 Gopher+ Support
+**Status:** 🟢 Complete
+**Priority:** Low
+**Description:** Extended metadata and attributes.
+
+**Implementation:**
+- [x] Create `GopherPlus` module
+- [x] Gopher+ request detection
+- [x] +INFO block generation
+- [x] +ADMIN block (admin email, mod date)
+- [x] +VIEWS block (alternative representations)
+- [x] +ABSTRACT block (summary text)
+- [x] +ASK block (form fields)
+- [x] Item attributes inline
+- [x] Directory+ listings
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/gopher_plus.ex` (new)
+
+---
+
+### 11.16 CAPS.txt (Capability Discovery)
+**Status:** 🟢 Complete
+**Priority:** Low
+**Description:** Machine-readable server capabilities.
+
+**Implementation:**
+- [x] Create `Caps` module
+- [x] Server info section
+- [x] Protocol support (Gopher, Gopher+, Gemini, Tor)
+- [x] Feature list (all enabled features)
+- [x] API endpoints
+- [x] Rate limits
+- [x] Content types and selectors
+- [x] Programmatic access via capabilities/0
+
+**Served at:** /caps.txt
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/caps.ex` (new)
+
+---
+
 ## Notes
 
 - Implement features in order of priority
