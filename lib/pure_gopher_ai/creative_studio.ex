@@ -15,25 +15,30 @@ defmodule PureGopherAi.CreativeStudio do
   @genres [:noir, :fantasy, :scifi, :romance, :horror, :mystery, :comedy, :drama]
   @poem_types [:haiku, :sonnet, :limerick, :free_verse, :acrostic, :ballad]
   @moods [:happy, :sad, :angry, :peaceful, :mysterious, :romantic, :energetic, :melancholic]
+  @max_story_context 2000
 
   @doc """
   Returns available story genres.
   """
+  @spec genres() :: list(atom())
   def genres, do: @genres
 
   @doc """
   Returns available poem types.
   """
+  @spec poem_types() :: list(atom())
   def poem_types, do: @poem_types
 
   @doc """
   Returns available moods for lyrics.
   """
+  @spec moods() :: list(atom())
   def moods, do: @moods
 
   @doc """
   Generate a short story from a prompt.
   """
+  @spec story(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def story(prompt, opts \\ []) do
     genre = Keyword.get(opts, :genre, :general)
     length = Keyword.get(opts, :length, :short)
@@ -63,8 +68,9 @@ defmodule PureGopherAi.CreativeStudio do
     Write the story directly without any preamble.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 1200) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 1200) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -72,6 +78,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Generate poetry of various types.
   """
+  @spec poem(String.t(), atom(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def poem(topic, type \\ :free_verse, opts \\ []) when type in @poem_types do
     mood = Keyword.get(opts, :mood, nil)
 
@@ -112,8 +119,9 @@ defmodule PureGopherAi.CreativeStudio do
     Write only the poem, no explanations.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 400) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -121,6 +129,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Generate song lyrics.
   """
+  @spec lyrics(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def lyrics(theme, opts \\ []) do
     mood = Keyword.get(opts, :mood, :general)
     style = Keyword.get(opts, :style, :pop)
@@ -154,8 +163,9 @@ defmodule PureGopherAi.CreativeStudio do
     Write only the lyrics.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -163,6 +173,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Continue a story from where it left off.
   """
+  @spec continue_story(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def continue_story(story_so_far, opts \\ []) do
     direction = Keyword.get(opts, :direction, nil)
     length = Keyword.get(opts, :length, :medium)
@@ -185,7 +196,7 @@ defmodule PureGopherAi.CreativeStudio do
 
     Story so far:
     ---
-    #{String.slice(story_so_far, -2000, 2000)}
+    #{String.slice(story_so_far, -@max_story_context, @max_story_context)}
     ---
 
     #{direction_instruction}
@@ -195,8 +206,9 @@ defmodule PureGopherAi.CreativeStudio do
     Write only the continuation, starting right where the story left off.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -204,6 +216,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Rewrite content in a different genre/style.
   """
+  @spec rewrite(String.t(), atom(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def rewrite(content, target_style, _opts \\ []) when target_style in @genres do
     style_description = case target_style do
       :noir -> "dark, cynical film noir with hard-boiled narration"
@@ -228,8 +241,9 @@ defmodule PureGopherAi.CreativeStudio do
     Write only the rewritten version.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -237,6 +251,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Generate writing prompts for inspiration.
   """
+  @spec generate_prompts(atom(), pos_integer()) :: {:ok, list(String.t())} | {:error, term()}
   def generate_prompts(category \\ :general, count \\ 5) do
     category_instruction = case category do
       :fantasy -> "fantasy and magic themed"
@@ -259,7 +274,7 @@ defmodule PureGopherAi.CreativeStudio do
     List each prompt on its own line, numbered 1-#{count}.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 300) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 300) do
       {:ok, result} ->
         prompts = result
         |> String.trim()
@@ -271,6 +286,7 @@ defmodule PureGopherAi.CreativeStudio do
 
         {:ok, prompts}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -278,6 +294,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Generate a character profile.
   """
+  @spec character(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def character(traits, opts \\ []) do
     genre = Keyword.get(opts, :genre, :general)
     role = Keyword.get(opts, :role, nil)
@@ -310,8 +327,9 @@ defmodule PureGopherAi.CreativeStudio do
     - A memorable quirk or habit
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 500) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 500) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -319,6 +337,7 @@ defmodule PureGopherAi.CreativeStudio do
   @doc """
   Generate a world/setting description.
   """
+  @spec worldbuild(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def worldbuild(concept, opts \\ []) do
     genre = Keyword.get(opts, :genre, :fantasy)
     focus = Keyword.get(opts, :focus, nil)
@@ -346,8 +365,9 @@ defmodule PureGopherAi.CreativeStudio do
     Write the description in an engaging, narrative style.
     """
 
-    case AiEngine.generate(ai_prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(ai_prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end

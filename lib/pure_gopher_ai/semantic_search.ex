@@ -113,8 +113,9 @@ defmodule PureGopherAi.SemanticSearch do
     Write 1-2 sentences explaining the connection. Be concise.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 100) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 100) do
       {:ok, explanation} -> {:ok, String.trim(explanation)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -358,7 +359,7 @@ defmodule PureGopherAi.SemanticSearch do
     List each topic on its own line, just the topic name (2-4 words).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 100) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 100) do
       {:ok, result} ->
         topics = result
         |> String.trim()
@@ -381,6 +382,7 @@ defmodule PureGopherAi.SemanticSearch do
 
         {:ok, clusters}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -403,7 +405,7 @@ defmodule PureGopherAi.SemanticSearch do
     Format: Topic - Brief description
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
       {:ok, result} ->
         topics = result
         |> String.trim()
@@ -420,6 +422,7 @@ defmodule PureGopherAi.SemanticSearch do
 
         {:ok, topics}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end

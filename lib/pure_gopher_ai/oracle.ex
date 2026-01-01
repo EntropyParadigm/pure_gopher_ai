@@ -55,11 +55,13 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Returns zodiac signs.
   """
+  @spec zodiac_signs() :: list(atom())
   def zodiac_signs, do: @zodiac_signs
 
   @doc """
   Generate daily fortune/wisdom.
   """
+  @spec daily_fortune(keyword()) :: {:ok, String.t()} | {:error, term()}
   def daily_fortune(opts \\ []) do
     theme = Keyword.get(opts, :theme, :general)
 
@@ -87,8 +89,9 @@ defmodule PureGopherAi.Oracle do
     Write only the fortune, in an oracular style.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 150) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 150) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -96,6 +99,7 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Give situational advice.
   """
+  @spec advice(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def advice(situation, opts \\ []) do
     tone = Keyword.get(opts, :tone, :wise)
 
@@ -124,8 +128,9 @@ defmodule PureGopherAi.Oracle do
     Keep it concise but meaningful (3-5 sentences).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 300) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 300) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -133,54 +138,13 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Perform a tarot reading.
   """
+  @spec tarot_reading(String.t() | nil, keyword()) :: {:ok, map()} | {:error, term()}
   def tarot_reading(question \\ nil, opts \\ []) do
     spread = Keyword.get(opts, :spread, :three_card)
-
-    # Draw cards based on spread
-    cards = case spread do
-      :single -> draw_tarot_cards(1)
-      :three_card -> draw_tarot_cards(3)
-      :celtic_cross -> draw_tarot_cards(10)
-      _ -> draw_tarot_cards(3)
-    end
-
-    spread_description = case spread do
-      :single -> "Single Card Reading"
-      :three_card -> "Past, Present, Future Spread"
-      :celtic_cross -> "Celtic Cross Spread"
-      _ -> "Three Card Spread"
-    end
-
-    card_descriptions = cards
-    |> Enum.with_index()
-    |> Enum.map(fn {{name, meaning}, idx} ->
-      reversed = :rand.uniform() > 0.7
-      position = case {spread, idx} do
-        {:three_card, 0} -> "Past"
-        {:three_card, 1} -> "Present"
-        {:three_card, 2} -> "Future"
-        {:celtic_cross, 0} -> "Present Situation"
-        {:celtic_cross, 1} -> "Challenge"
-        {:celtic_cross, 2} -> "Distant Past"
-        {:celtic_cross, 3} -> "Recent Past"
-        {:celtic_cross, 4} -> "Possible Future"
-        {:celtic_cross, 5} -> "Immediate Future"
-        {:celtic_cross, 6} -> "Self"
-        {:celtic_cross, 7} -> "Environment"
-        {:celtic_cross, 8} -> "Hopes/Fears"
-        {:celtic_cross, 9} -> "Outcome"
-        {_, idx} -> "Card #{idx + 1}"
-      end
-      reversed_text = if reversed, do: " (Reversed)", else: ""
-      "#{position}: #{name}#{reversed_text} - #{meaning}"
-    end)
-    |> Enum.join("\n")
-
-    question_text = if question do
-      "The querent asks: \"#{question}\""
-    else
-      "This is a general reading with no specific question."
-    end
+    cards = draw_cards_for_spread(spread)
+    spread_description = spread_name(spread)
+    card_descriptions = describe_cards(cards, spread)
+    question_text = format_question(question)
 
     prompt = """
     You are a wise tarot reader. Interpret this #{spread_description}:
@@ -199,22 +163,66 @@ defmodule PureGopherAi.Oracle do
     Write the interpretation (about 4-6 sentences).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
       {:ok, interpretation} ->
-        {:ok, %{
-          spread: spread_description,
-          cards: cards,
-          question: question,
-          interpretation: String.trim(interpretation)
-        }}
+        format_tarot_result(spread_description, cards, question, interpretation)
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
 
+  # Returns position names for a spread type
+  defp spread_positions(:three_card), do: ["Past", "Present", "Future"]
+  defp spread_positions(:celtic_cross) do
+    ["Present Situation", "Challenge", "Distant Past", "Recent Past",
+     "Possible Future", "Immediate Future", "Self", "Environment",
+     "Hopes/Fears", "Outcome"]
+  end
+  defp spread_positions(_), do: nil
+
+  # Formats cards with positions and reversal status
+  defp describe_cards(cards, spread) do
+    positions = spread_positions(spread)
+
+    cards
+    |> Enum.with_index()
+    |> Enum.map(fn {{name, meaning}, idx} ->
+      reversed = :rand.uniform() > 0.7
+      position = if positions, do: Enum.at(positions, idx), else: "Card #{idx + 1}"
+      reversed_text = if reversed, do: " (Reversed)", else: ""
+      "#{position}: #{name}#{reversed_text} - #{meaning}"
+    end)
+    |> Enum.join("\n")
+  end
+
+  # Builds the final result map
+  defp format_tarot_result(spread_description, cards, question, interpretation) do
+    {:ok, %{
+      spread: spread_description,
+      cards: cards,
+      question: question,
+      interpretation: String.trim(interpretation)
+    }}
+  end
+
+  defp draw_cards_for_spread(:single), do: draw_tarot_cards(1)
+  defp draw_cards_for_spread(:three_card), do: draw_tarot_cards(3)
+  defp draw_cards_for_spread(:celtic_cross), do: draw_tarot_cards(10)
+  defp draw_cards_for_spread(_), do: draw_tarot_cards(3)
+
+  defp spread_name(:single), do: "Single Card Reading"
+  defp spread_name(:three_card), do: "Past, Present, Future Spread"
+  defp spread_name(:celtic_cross), do: "Celtic Cross Spread"
+  defp spread_name(_), do: "Three Card Spread"
+
+  defp format_question(nil), do: "This is a general reading with no specific question."
+  defp format_question(question), do: "The querent asks: \"#{question}\""
+
   @doc """
   Consult the I Ching.
   """
+  @spec i_ching(String.t() | nil) :: {:ok, map()} | {:error, term()}
   def i_ching(question \\ nil) do
     # Generate two trigrams to form a hexagram
     [lower, upper] = Enum.take_random(@i_ching_trigrams, 2)
@@ -247,7 +255,7 @@ defmodule PureGopherAi.Oracle do
     Write the interpretation (about 4-5 sentences).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 350) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 350) do
       {:ok, interpretation} ->
         {:ok, %{
           hexagram: hexagram_number,
@@ -257,6 +265,7 @@ defmodule PureGopherAi.Oracle do
           interpretation: String.trim(interpretation)
         }}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -264,6 +273,7 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Interpret a dream.
   """
+  @spec dream_interpretation(String.t()) :: {:ok, String.t()} | {:error, term()}
   def dream_interpretation(dream) do
     prompt = """
     You are a dream interpreter with knowledge of symbolism and psychology.
@@ -281,8 +291,9 @@ defmodule PureGopherAi.Oracle do
     Write a thoughtful interpretation (about 4-6 sentences).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -290,6 +301,7 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Generate a horoscope.
   """
+  @spec horoscope(atom(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def horoscope(sign, opts \\ []) when sign in @zodiac_signs do
     period = Keyword.get(opts, :period, :daily)
     focus = Keyword.get(opts, :focus, :general)
@@ -325,8 +337,9 @@ defmodule PureGopherAi.Oracle do
     Write the horoscope (about 3-5 sentences). Address the reader as "you".
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 250) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 250) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -334,6 +347,7 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Answer a yes/no question with oracular wisdom.
   """
+  @spec yes_no_oracle(String.t()) :: {:ok, map()} | {:error, term()}
   def yes_no_oracle(question) do
     # Randomly determine the answer tendency
     tendency = Enum.random([:yes, :no, :maybe])
@@ -353,8 +367,9 @@ defmodule PureGopherAi.Oracle do
     Do not simply say "yes" or "no" - speak as an oracle would.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 150) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 150) do
       {:ok, result} -> {:ok, %{tendency: tendency, response: String.trim(result)}}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -362,6 +377,7 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Generate a daily affirmation.
   """
+  @spec affirmation(atom()) :: {:ok, String.t()} | {:error, term()}
   def affirmation(theme \\ :general) do
     theme_instruction = case theme do
       :confidence -> "about self-confidence and self-worth"
@@ -386,8 +402,9 @@ defmodule PureGopherAi.Oracle do
     Write only the affirmation (1-2 sentences).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 80) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 80) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -395,6 +412,7 @@ defmodule PureGopherAi.Oracle do
   @doc """
   Provide life path guidance.
   """
+  @spec life_path_reading(String.t()) :: {:ok, map()} | {:error, term()}
   def life_path_reading(birth_date) do
     # Calculate life path number (simplified numerology)
     life_path = calculate_life_path(birth_date)
@@ -411,8 +429,9 @@ defmodule PureGopherAi.Oracle do
     Write a thoughtful reading (about 4-5 sentences).
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 300) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 300) do
       {:ok, result} -> {:ok, %{life_path: life_path, reading: String.trim(result)}}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end

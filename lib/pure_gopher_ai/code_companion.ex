@@ -19,25 +19,24 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Returns supported programming languages.
   """
+  @spec languages() :: list(atom())
   def languages, do: @languages
 
   @doc """
   Returns algorithm categories.
   """
+  @spec algorithms() :: list(atom())
   def algorithms, do: @algorithms
 
   @doc """
   Explain what a piece of code does.
   """
+  @spec explain(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def explain(code, opts \\ []) do
     language = Keyword.get(opts, :language, nil)
     detail = Keyword.get(opts, :detail, :normal)
 
-    language_hint = if language do
-      "This code is written in #{language}."
-    else
-      "Detect the programming language from the code."
-    end
+    lang_hint = language_hint(language, "This code is written in", "Detect the programming language from the code.")
 
     detail_instruction = case detail do
       :brief -> "Give a brief 2-3 sentence explanation."
@@ -49,7 +48,7 @@ defmodule PureGopherAi.CodeCompanion do
     prompt = """
     You are a programming tutor. Explain what this code does.
 
-    #{language_hint}
+    #{lang_hint}
     #{detail_instruction}
 
     Code:
@@ -65,8 +64,9 @@ defmodule PureGopherAi.CodeCompanion do
     Write the explanation clearly for someone learning to code.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -74,15 +74,12 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Review code and suggest improvements.
   """
+  @spec review(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def review(code, opts \\ []) do
     language = Keyword.get(opts, :language, nil)
     focus = Keyword.get(opts, :focus, :all)
 
-    language_hint = if language do
-      "This is #{language} code."
-    else
-      ""
-    end
+    lang_hint = language_hint(language)
 
     focus_instruction = case focus do
       :bugs -> "Focus on potential bugs and errors."
@@ -96,7 +93,7 @@ defmodule PureGopherAi.CodeCompanion do
     prompt = """
     You are a senior code reviewer. Review this code and suggest improvements.
 
-    #{language_hint}
+    #{lang_hint}
     #{focus_instruction}
 
     Code:
@@ -113,8 +110,9 @@ defmodule PureGopherAi.CodeCompanion do
     Be constructive and educational in your feedback.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -122,6 +120,7 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Convert pseudocode to real code.
   """
+  @spec pseudocode_to_code(String.t(), atom()) :: {:ok, String.t()} | {:error, term()}
   def pseudocode_to_code(pseudocode, target_language \\ :python) do
     prompt = """
     You are a skilled programmer. Convert this pseudocode to #{target_language}.
@@ -140,8 +139,9 @@ defmodule PureGopherAi.CodeCompanion do
     Write only the code, no additional explanation.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -149,6 +149,7 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Build a regex pattern from natural language description.
   """
+  @spec build_regex(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def build_regex(description, opts \\ []) do
     flavor = Keyword.get(opts, :flavor, :pcre)
 
@@ -176,8 +177,9 @@ defmodule PureGopherAi.CodeCompanion do
     Format your response clearly with the pattern first.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -185,6 +187,7 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Generate SQL query from natural language.
   """
+  @spec generate_sql(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def generate_sql(description, opts \\ []) do
     dialect = Keyword.get(opts, :dialect, :standard)
     tables = Keyword.get(opts, :tables, nil)
@@ -220,8 +223,9 @@ defmodule PureGopherAi.CodeCompanion do
     Write clean, readable SQL with proper formatting.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 500) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 500) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -229,6 +233,7 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Explain an algorithm.
   """
+  @spec explain_algorithm(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def explain_algorithm(algorithm, opts \\ []) do
     language = Keyword.get(opts, :language, :python)
     include_code = Keyword.get(opts, :include_code, true)
@@ -255,8 +260,9 @@ defmodule PureGopherAi.CodeCompanion do
     Explain clearly for someone learning data structures and algorithms.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -264,14 +270,11 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Debug code and suggest fixes.
   """
+  @spec debug(String.t(), String.t() | nil, keyword()) :: {:ok, String.t()} | {:error, term()}
   def debug(code, error_message \\ nil, opts \\ []) do
     language = Keyword.get(opts, :language, nil)
 
-    language_hint = if language do
-      "This is #{language} code."
-    else
-      ""
-    end
+    lang_hint = language_hint(language)
 
     error_info = if error_message do
       "Error message: #{error_message}"
@@ -282,7 +285,7 @@ defmodule PureGopherAi.CodeCompanion do
     prompt = """
     You are a debugging expert. Help fix this code.
 
-    #{language_hint}
+    #{lang_hint}
     #{error_info}
 
     Code:
@@ -299,8 +302,9 @@ defmodule PureGopherAi.CodeCompanion do
     Be specific about line numbers and exact fixes needed.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 700) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 700) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -308,15 +312,12 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Refactor code for better quality.
   """
+  @spec refactor(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def refactor(code, opts \\ []) do
     language = Keyword.get(opts, :language, nil)
     goal = Keyword.get(opts, :goal, :readability)
 
-    language_hint = if language do
-      "This is #{language} code."
-    else
-      ""
-    end
+    lang_hint = language_hint(language)
 
     goal_instruction = case goal do
       :readability -> "Improve readability and maintainability."
@@ -330,7 +331,7 @@ defmodule PureGopherAi.CodeCompanion do
     prompt = """
     You are a code refactoring expert. Refactor this code.
 
-    #{language_hint}
+    #{lang_hint}
     Goal: #{goal_instruction}
 
     Original code:
@@ -346,8 +347,9 @@ defmodule PureGopherAi.CodeCompanion do
     Keep the same functionality while improving the code.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -355,6 +357,7 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Generate code from a description.
   """
+  @spec generate_code(String.t(), atom()) :: {:ok, String.t()} | {:error, term()}
   def generate_code(description, language \\ :python) do
     prompt = """
     You are an expert #{language} programmer. Write code based on this description:
@@ -370,8 +373,9 @@ defmodule PureGopherAi.CodeCompanion do
     Write only the code with comments. No additional explanation.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -379,19 +383,16 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Compare two code snippets.
   """
+  @spec compare(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def compare(code1, code2, opts \\ []) do
     language = Keyword.get(opts, :language, nil)
 
-    language_hint = if language do
-      "Both snippets are in #{language}."
-    else
-      ""
-    end
+    lang_hint = language_hint(language, "Both snippets are in")
 
     prompt = """
     You are a code analysis expert. Compare these two code snippets.
 
-    #{language_hint}
+    #{lang_hint}
 
     Code A:
     ```
@@ -412,8 +413,9 @@ defmodule PureGopherAi.CodeCompanion do
     Be objective and explain trade-offs.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -421,6 +423,7 @@ defmodule PureGopherAi.CodeCompanion do
   @doc """
   Generate test cases for code.
   """
+  @spec generate_tests(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def generate_tests(code, opts \\ []) do
     language = Keyword.get(opts, :language, :python)
     framework = Keyword.get(opts, :framework, nil)
@@ -455,9 +458,21 @@ defmodule PureGopherAi.CodeCompanion do
     Write complete, runnable test code.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 700) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 700) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
+
+  # Private helpers for language hint generation
+
+  defp language_hint(nil), do: ""
+  defp language_hint(language), do: "This is #{language} code."
+
+  defp language_hint(nil, _prefix), do: ""
+  defp language_hint(language, prefix), do: "#{prefix} #{language}."
+
+  defp language_hint(nil, _prefix, default), do: default
+  defp language_hint(language, prefix, _default), do: "#{prefix} #{language}."
 end

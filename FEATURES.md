@@ -588,9 +588,9 @@ en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, sv, da, fi, 
 ---
 
 ### 7.2 Code Assistant
-**Status:** 🟢 Complete
+**Status:** 🟢 Complete (Superseded by Phase 12.7 Code Companion)
 **Priority:** High
-**Description:** AI-powered code generation and explanation.
+**Description:** AI-powered code generation and explanation. Note: This feature has been superseded by the more comprehensive AI Code Companion in Phase 12.7.
 
 **Implementation:**
 - [x] Create `CodeAssistant` module with 24 programming languages
@@ -1055,6 +1055,13 @@ Elixir, Python, JavaScript, TypeScript, Ruby, Go, Rust, C, C++, Java, Kotlin, Sw
 | 2025-12-31 | User Profiles / Homepages | Complete | (pending) |
 | 2025-12-31 | Calendar / Events | Complete | (pending) |
 | 2025-12-31 | URL Shortener | Complete | (pending) |
+| 2026-01-01 | Terminal Slides | Complete | (pending) |
+| 2026-01-01 | AI Writing Assistant | Complete | (pending) |
+| 2026-01-01 | AI Semantic Search | Complete | (pending) |
+| 2026-01-01 | AI Creative Writing Studio | Complete | (pending) |
+| 2026-01-01 | AI Code Companion | Complete | (pending) |
+| 2026-01-01 | AI Oracle & Advisor | Complete | (pending) |
+| 2026-01-01 | AI Learning Tools | Complete | (pending) |
 
 ---
 
@@ -2546,7 +2553,18 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - Speaker notes support
 - Navigation controls and progress indicator
 
-**Routes:** `/slides`, `/slides/new`, `/slides/list`, `/slides/view/<id>`, `/slides/present/<id>/<n>`, `/slides/edit/<id>`, `/slides/add/<id>`, `/slides/export/<id>`, `/slides/delete/<id>`, `/slides/themes`, `/slides/templates`
+**Routes:**
+- `/slides` - Slides menu
+- `/slides/new` - Create new presentation
+- `/slides/list` - List all presentations
+- `/slides/view/<id>` - View presentation
+- `/slides/present/<id>/<n>` - Present slide n
+- `/slides/edit/<id>` - Edit presentation
+- `/slides/add/<id>` - Add slide to presentation
+- `/slides/export/<id>` - Export presentation
+- `/slides/delete/<id>` - Delete presentation
+- `/slides/themes` - List available themes
+- `/slides/templates` - List slide templates
 
 **Files:** `slides.ex`, `slide_renderer.ex`
 
@@ -2563,7 +2581,21 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - Content expansion/compression
 - Generate outlines, introductions, conclusions
 
-**Routes:** `/write`, `/write/draft`, `/write/improve`, `/write/proofread`, `/write/titles`, `/write/tags`, `/write/expand`, `/write/compress`, `/write/outline`, `/write/intro`, `/write/conclusion`, `/write/tones`, `/write/styles`
+**Routes:**
+- `/write` - Writing assistant menu
+- `/write/draft` - Generate draft from topic/outline
+- `/write/improve` - Improve writing style
+- `/write/proofread` - Grammar and spelling check
+- `/write/tone/<tone>` - Adjust content tone (formal, casual, technical, friendly, professional, creative)
+- `/write/titles` - Generate title suggestions
+- `/write/tags` - Generate tags/keywords
+- `/write/expand` - Expand content with more detail
+- `/write/compress` - Compress content to be more concise
+- `/write/outline` - Generate article outline
+- `/write/intro` - Generate introduction paragraph
+- `/write/conclusion` - Generate conclusion paragraph
+- `/write/tones` - List available tones
+- `/write/styles` - List available writing styles
 
 **Files:** `writing_assistant.ex`
 
@@ -2579,7 +2611,12 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - Trending topics discovery
 - Content type filtering
 
-**Routes:** `/semantic`, `/semantic/search`, `/semantic/similar/<type>/<id>`, `/semantic/trending`, `/semantic/types`
+**Routes:**
+- `/semantic` - Semantic search menu
+- `/semantic/search` - Natural language search prompt
+- `/semantic/similar/<path>` - Find similar content
+- `/semantic/trending` - View trending topics
+- `/semantic/types` - List searchable content types
 
 **Files:** `semantic_search.ex`
 
@@ -2635,10 +2672,11 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - `/creative/poem` - Write poetry
 - `/creative/lyrics` - Write song lyrics
 - `/creative/continue` - Continue a story
-- `/creative/rewrite/<style>` - Rewrite in genre style
+- `/creative/rewrite/<style>` - Rewrite in genre style (noir, fantasy, scifi, romance, horror, mystery, comedy, drama)
 - `/creative/character` - Create character profile
 - `/creative/world` - Build a world/setting
-- `/creative/prompts` - Get writing prompts
+- `/creative/prompts` - Writing prompts menu
+- `/creative/prompts/<category>` - Prompts by category (fantasy, scifi, romance, horror, mystery, slice_of_life)
 - `/creative/genres` - List story genres
 - `/creative/poem-types` - List poem types
 - `/creative/moods` - List available moods
@@ -2668,10 +2706,11 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - `/code/convert` - Pseudocode to code
 - `/code/regex` - Build regex from description
 - `/code/sql` - Generate SQL queries
-- `/code/algorithm` - Algorithm explanations
+- `/code/algorithm` - Algorithm menu
+- `/code/algorithm/<name>` - Explain specific algorithm
 - `/code/debug` - Debug and fix code
 - `/code/refactor` - Refactor code
-- `/code/generate` - Generate code
+- `/code/generate` - Generate code from description
 - `/code/tests` - Generate test cases
 - `/code/languages` - List supported languages
 
@@ -2714,11 +2753,10 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 **Features:**
 - Flashcard generation from text (question/answer, term/definition, concept/example styles)
 - Quiz generation (multiple choice, true/false, fill in blank, short answer)
-- ELI5 explanations (child, teen, adult, expert levels)
+- ELI5 explanations (default: child level, simple language)
 - Enhanced dictionary definitions with pronunciation, synonyms, usage
 - Etymology and word history
 - Concept mapping with hierarchical visualization
-- Study summaries (bullet points, outline, paragraph, key facts)
 - Compare and contrast two concepts
 - Mnemonic device generation (acronym, acrostic, rhyme, story, visual)
 - Topic breakdown into simpler parts
@@ -2728,12 +2766,10 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - `/learn` - Learning tools menu
 - `/learn/flashcards` - Generate flashcards from content
 - `/learn/quiz` - Generate quiz questions from content
-- `/learn/eli5` - ELI5 explanation (child level)
-- `/learn/explain/<level>` - Explanation at specific level
+- `/learn/eli5` - ELI5 explanation (child level by default)
 - `/learn/define` - Enhanced dictionary definition
 - `/learn/etymology` - Word origin and history
 - `/learn/map` - Concept mapping
-- `/learn/summary` - Study summary generation
 - `/learn/compare` - Compare and contrast concepts
 - `/learn/mnemonic` - Mnemonic device generation
 - `/learn/breakdown` - Break down complex topics
@@ -2795,3 +2831,28 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 - Commit after each feature
 - Update this file as progress is made
 - Test both clearnet and Tor after each feature
+
+---
+
+## Code Quality & Security Remediation (Complete)
+
+### Security Fixes
+
+| Task | Status | Files |
+|------|--------|-------|
+| Switch AI modules to `generate_safe` | ✅ Complete | learning_tools.ex, oracle.ex, code_companion.ex, creative_studio.ex, writing_assistant.ex, semantic_search.ex |
+| Add atom error handling | ✅ Complete | gopher_handler.ex |
+| Sanitize error messages | ✅ Complete | gopher_handler.ex |
+| Add input length validation | ✅ Complete | gopher_handler.ex (10KB limit) |
+| Add AI-specific rate limiting | ⏭️ Deferred | Existing rate limiting sufficient for now |
+
+### Code Structure Refactoring
+
+| Task | Status | Files |
+|------|--------|-------|
+| Extract shared instruction helpers | ✅ Complete | prompt_helpers.ex (new) |
+| Create `generate_trimmed` helper | ✅ Complete | ai_engine.ex |
+| Refactor `Oracle.tarot_reading/2` | ✅ Complete | oracle.ex (78 → ~30 lines) |
+| Add @spec type specifications | ✅ Complete | learning_tools.ex, oracle.ex, code_companion.ex, creative_studio.ex, writing_assistant.ex |
+| Extract `language_hint` helper | ✅ Complete | code_companion.ex |
+| Define magic numbers as module attributes | ✅ Complete | creative_studio.ex (@max_story_context)

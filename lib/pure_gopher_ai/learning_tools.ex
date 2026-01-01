@@ -19,16 +19,19 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Returns available quiz types.
   """
+  @spec quiz_types() :: list(atom())
   def quiz_types, do: @quiz_types
 
   @doc """
   Returns available explanation levels.
   """
+  @spec age_levels() :: list(atom())
   def age_levels, do: @age_levels
 
   @doc """
   Generate flashcards from text content.
   """
+  @spec flashcards(String.t(), keyword()) :: {:ok, list(map())} | {:error, term()}
   def flashcards(content, opts \\ []) do
     count = Keyword.get(opts, :count, 10)
     style = Keyword.get(opts, :style, :question_answer)
@@ -59,11 +62,12 @@ defmodule PureGopherAi.LearningTools do
     Make them clear and useful for studying.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} ->
         cards = parse_flashcards(result)
         {:ok, cards}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -71,6 +75,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Generate quiz questions from content.
   """
+  @spec quiz(String.t(), keyword()) :: {:ok, list(map())} | {:error, term()}
   def quiz(content, opts \\ []) do
     count = Keyword.get(opts, :count, 5)
     type = Keyword.get(opts, :type, :multiple_choice)
@@ -131,11 +136,12 @@ defmodule PureGopherAi.LearningTools do
     Separate each question with ---
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} ->
         questions = parse_quiz(result, type)
         {:ok, questions}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -143,6 +149,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Explain a concept at a specific level (ELI5, etc).
   """
+  @spec explain(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def explain(concept, opts \\ []) do
     level = Keyword.get(opts, :level, :child)
     include_examples = Keyword.get(opts, :examples, true)
@@ -176,8 +183,9 @@ defmodule PureGopherAi.LearningTools do
     Write a clear, engaging explanation.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 500) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 500) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -185,6 +193,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Get an enhanced dictionary definition.
   """
+  @spec define(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def define(word, opts \\ []) do
     include_usage = Keyword.get(opts, :usage, true)
     include_synonyms = Keyword.get(opts, :synonyms, true)
@@ -206,8 +215,9 @@ defmodule PureGopherAi.LearningTools do
     Be accurate and thorough.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -215,6 +225,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Get the etymology (word origin and history).
   """
+  @spec etymology(String.t()) :: {:ok, String.t()} | {:error, term()}
   def etymology(word) do
     prompt = """
     Explain the etymology of the word: "#{word}"
@@ -229,8 +240,9 @@ defmodule PureGopherAi.LearningTools do
     Be historically accurate and interesting.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -238,6 +250,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Create a concept map from content.
   """
+  @spec concept_map(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def concept_map(topic, opts \\ []) do
     depth = Keyword.get(opts, :depth, 2)
 
@@ -262,8 +275,9 @@ defmodule PureGopherAi.LearningTools do
     Include the most important concepts and relationships.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -271,6 +285,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Summarize content for studying.
   """
+  @spec study_summary(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def study_summary(content, opts \\ []) do
     format = Keyword.get(opts, :format, :bullet_points)
 
@@ -301,8 +316,9 @@ defmodule PureGopherAi.LearningTools do
     Keep it concise but comprehensive.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -310,6 +326,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Compare and contrast two concepts.
   """
+  @spec compare(String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
   def compare(concept1, concept2) do
     prompt = """
     Compare and contrast these two concepts:
@@ -325,8 +342,9 @@ defmodule PureGopherAi.LearningTools do
     Be clear and educational.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 500) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 500) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -334,6 +352,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Generate mnemonic devices for memorization.
   """
+  @spec mnemonic(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def mnemonic(content, opts \\ []) do
     type = Keyword.get(opts, :type, :acronym)
 
@@ -357,8 +376,9 @@ defmodule PureGopherAi.LearningTools do
     Explain how to use it.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 300) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 300) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -366,6 +386,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Break down a complex topic into simpler parts.
   """
+  @spec breakdown(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def breakdown(topic, opts \\ []) do
     steps = Keyword.get(opts, :steps, 5)
 
@@ -382,8 +403,9 @@ defmodule PureGopherAi.LearningTools do
     Start from the basics and build up to the full understanding.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 600) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 600) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -391,6 +413,7 @@ defmodule PureGopherAi.LearningTools do
   @doc """
   Generate practice problems.
   """
+  @spec practice_problems(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def practice_problems(topic, opts \\ []) do
     count = Keyword.get(opts, :count, 5)
     difficulty = Keyword.get(opts, :difficulty, :medium)
@@ -418,8 +441,9 @@ defmodule PureGopherAi.LearningTools do
     Make problems that build understanding progressively.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end

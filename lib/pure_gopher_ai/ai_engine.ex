@@ -68,6 +68,16 @@ defmodule PureGopherAi.AiEngine do
   end
 
   @doc """
+  Generate AI response and trim the result.
+  """
+  def generate_trimmed(prompt, opts \\ []) do
+    case generate_safe(prompt, opts) do
+      {:ok, result} -> {:ok, String.trim(result)}
+      error -> error
+    end
+  end
+
+  @doc """
   Generates text with injection protection.
 
   This is the recommended function for user-provided prompts.

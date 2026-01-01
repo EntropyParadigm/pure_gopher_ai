@@ -19,16 +19,19 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Returns available writing tones.
   """
+  @spec tones() :: list(atom())
   def tones, do: @tones
 
   @doc """
   Returns available writing styles.
   """
+  @spec styles() :: list(atom())
   def styles, do: @styles
 
   @doc """
   Generate a draft from a topic or outline.
   """
+  @spec draft(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def draft(topic, opts \\ []) do
     style = Keyword.get(opts, :style, :blog)
     tone = Keyword.get(opts, :tone, :casual)
@@ -54,8 +57,9 @@ defmodule PureGopherAi.WritingAssistant do
     Focus on engaging, well-structured content.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -63,6 +67,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Improve the style and flow of existing content.
   """
+  @spec improve(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def improve(content, opts \\ []) do
     focus = Keyword.get(opts, :focus, :all)
 
@@ -89,8 +94,9 @@ defmodule PureGopherAi.WritingAssistant do
     Maintain the original meaning and key points.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -98,6 +104,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Proofread content for grammar, spelling, and punctuation.
   """
+  @spec proofread(String.t()) :: {:ok, String.t()} | {:error, term()}
   def proofread(content) do
     prompt = """
     You are a professional proofreader. Review the following text for:
@@ -114,8 +121,9 @@ defmodule PureGopherAi.WritingAssistant do
     Return the corrected text directly. If there are significant issues, briefly note them at the end.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -123,6 +131,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Adjust the tone of content.
   """
+  @spec adjust_tone(String.t(), atom()) :: {:ok, String.t()} | {:error, term()}
   def adjust_tone(content, target_tone) when target_tone in @tones do
     tone_description = case target_tone do
       :formal -> "formal, professional, and polished"
@@ -145,8 +154,9 @@ defmodule PureGopherAi.WritingAssistant do
     Provide only the rewritten content.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -156,6 +166,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Generate title suggestions for content.
   """
+  @spec generate_titles(String.t(), keyword()) :: {:ok, list(String.t())} | {:error, term()}
   def generate_titles(content, opts \\ []) do
     count = Keyword.get(opts, :count, 5)
     style = Keyword.get(opts, :style, :engaging)
@@ -181,7 +192,7 @@ defmodule PureGopherAi.WritingAssistant do
     List #{count} title options, one per line, numbered 1-#{count}.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
       {:ok, result} ->
         titles = result
         |> String.trim()
@@ -193,6 +204,7 @@ defmodule PureGopherAi.WritingAssistant do
 
         {:ok, titles}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -200,6 +212,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Generate tags/keywords for content.
   """
+  @spec generate_tags(String.t(), keyword()) :: {:ok, list(String.t())} | {:error, term()}
   def generate_tags(content, opts \\ []) do
     count = Keyword.get(opts, :count, 8)
 
@@ -215,7 +228,7 @@ defmodule PureGopherAi.WritingAssistant do
     Focus on topics, themes, and key concepts.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 150) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 150) do
       {:ok, result} ->
         tags = result
         |> String.trim()
@@ -227,6 +240,7 @@ defmodule PureGopherAi.WritingAssistant do
 
         {:ok, tags}
 
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -234,6 +248,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Expand content to be more detailed and comprehensive.
   """
+  @spec expand(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def expand(content, opts \\ []) do
     factor = Keyword.get(opts, :factor, 2)
     focus = Keyword.get(opts, :focus, nil)
@@ -262,8 +277,9 @@ defmodule PureGopherAi.WritingAssistant do
     Provide the expanded content directly.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 1000) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 1000) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -271,6 +287,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Compress content to be more concise.
   """
+  @spec compress(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def compress(content, opts \\ []) do
     target = Keyword.get(opts, :target, :half)
 
@@ -294,8 +311,9 @@ defmodule PureGopherAi.WritingAssistant do
     Provide the compressed content directly.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 500) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 500) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -303,6 +321,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Generate an outline from a topic.
   """
+  @spec outline(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def outline(topic, opts \\ []) do
     depth = Keyword.get(opts, :depth, 2)
     style = Keyword.get(opts, :style, :blog)
@@ -317,8 +336,9 @@ defmodule PureGopherAi.WritingAssistant do
     Include key points to cover under each section.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -326,6 +346,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Generate a conclusion for content.
   """
+  @spec conclude(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def conclude(content, opts \\ []) do
     style = Keyword.get(opts, :style, :summary)
 
@@ -350,8 +371,9 @@ defmodule PureGopherAi.WritingAssistant do
     Write only the conclusion paragraph.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end
@@ -359,6 +381,7 @@ defmodule PureGopherAi.WritingAssistant do
   @doc """
   Generate an introduction for content.
   """
+  @spec introduce(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def introduce(content, opts \\ []) do
     style = Keyword.get(opts, :style, :hook)
 
@@ -383,8 +406,9 @@ defmodule PureGopherAi.WritingAssistant do
     Write only the introduction paragraph.
     """
 
-    case AiEngine.generate(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
       {:ok, result} -> {:ok, String.trim(result)}
+      {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
     end
   end

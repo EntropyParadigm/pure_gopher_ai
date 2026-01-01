@@ -58,6 +58,28 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Handlers.Shared, as: SharedHandler
   alias PureGopherAi.Handlers.Security, as: SecurityHandler
 
+  # Maximum input length for AI endpoints (10KB)
+  @max_ai_input_length 10_000
+
+  # Validate AI input length to prevent abuse
+  defp validate_ai_input(content) when byte_size(content) > @max_ai_input_length do
+    {:error, :input_too_large}
+  end
+  defp validate_ai_input(content), do: {:ok, content}
+
+  # Error response for input too large
+  defp input_too_large_error(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    3Error: Input exceeds maximum length (10,000 bytes)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlease reduce your input size and try again.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
     # Extract network type and client IP
@@ -5894,31 +5916,43 @@ defmodule PureGopherAi.GopherHandler do
       [title, author | rest] when title != "" and author != "" ->
         description = Enum.at(rest, 0, "")
         theme_str = Enum.at(rest, 1, "default")
-        theme = String.to_existing_atom(theme_str)
 
-        case Slides.create_deck(title, author, description: description, theme: theme) do
-          {:ok, deck} ->
-            """
-            i\t\t#{host}\t#{port}
-            i=== Presentation Created! ===\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            iTitle: #{deck.title}\t\t#{host}\t#{port}
-            iAuthor: #{deck.author}\t\t#{host}\t#{port}
-            iTheme: #{deck.theme}\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            iNow add some slides!\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            1Add Slides\t/slides/edit/#{deck.id}\t#{host}\t#{port}
-            1View Presentation\t/slides/view/#{deck.id}\t#{host}\t#{port}
-            1Back to Slides Menu\t/slides\t#{host}\t#{port}
-            .
-            """
+        case safe_to_existing_atom(theme_str, SlideRenderer.themes()) do
+          {:ok, theme} ->
+            case Slides.create_deck(title, author, description: description, theme: theme) do
+              {:ok, deck} ->
+                """
+                i\t\t#{host}\t#{port}
+                i=== Presentation Created! ===\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                iTitle: #{deck.title}\t\t#{host}\t#{port}
+                iAuthor: #{deck.author}\t\t#{host}\t#{port}
+                iTheme: #{deck.theme}\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                iNow add some slides!\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                1Add Slides\t/slides/edit/#{deck.id}\t#{host}\t#{port}
+                1View Presentation\t/slides/view/#{deck.id}\t#{host}\t#{port}
+                1Back to Slides Menu\t/slides\t#{host}\t#{port}
+                .
+                """
 
-          {:error, reason} ->
+              {:error, reason} ->
+                """
+                i\t\t#{host}\t#{port}
+                iError: Failed to create - #{sanitize_error(reason)}\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                1Back to Slides Menu\t/slides\t#{host}\t#{port}
+                .
+                """
+            end
+
+          {:error, :invalid_atom} ->
             """
             i\t\t#{host}\t#{port}
-            iError: Failed to create - #{inspect(reason)}\t\t#{host}\t#{port}
+            iError: Invalid theme. Use: #{SlideRenderer.themes() |> Enum.join(", ")}\t\t#{host}\t#{port}
             i\t\t#{host}\t#{port}
+            7Try Again\t/slides/new\t#{host}\t#{port}
             1Back to Slides Menu\t/slides\t#{host}\t#{port}
             .
             """
@@ -5934,16 +5968,6 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
     end
-  rescue
-    ArgumentError ->
-      """
-      i\t\t#{host}\t#{port}
-      iError: Invalid theme. Use: #{SlideRenderer.themes() |> Enum.join(", ")}\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      7Try Again\t/slides/new\t#{host}\t#{port}
-      1Back to Slides Menu\t/slides\t#{host}\t#{port}
-      .
-      """
   end
 
   defp slides_view(id, host, port) do
@@ -6126,64 +6150,65 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp save_slide(id, type_str, content, host, port) do
-    type = String.to_existing_atom(type_str)
+    case safe_to_existing_atom(type_str, [:title, :content, :code, :quote, :list, :two_column, :image, :comparison]) do
+      {:ok, type} ->
+        {title, slide_content, notes} = case type do
+          :title ->
+            {content, content, ""}
 
-    {title, slide_content, notes} = case type do
-      :title ->
-        {content, content, ""}
+          :quote ->
+            case String.split(content, "|") do
+              [quote, attr] -> {attr, quote, ""}
+              [quote] -> {"", quote, ""}
+              _ -> {"", content, ""}
+            end
 
-      :quote ->
-        case String.split(content, "|") do
-          [quote, attr] -> {attr, quote, ""}
-          [quote] -> {"", quote, ""}
-          _ -> {"", content, ""}
+          :list ->
+            case String.split(content, "|") do
+              [title | items] -> {title, Enum.join(items, "\n"), ""}
+              _ -> {"", content, ""}
+            end
+
+          _ ->
+            case String.split(content, "|", parts: 2) do
+              [title, body] -> {title, body, ""}
+              [body] -> {"", body, ""}
+            end
         end
 
-      :list ->
-        case String.split(content, "|") do
-          [title | items] -> {title, Enum.join(items, "\n"), ""}
-          _ -> {"", content, ""}
+        case Slides.add_slide(id, type, slide_content, title: title, notes: notes) do
+          {:ok, deck} ->
+            """
+            i\t\t#{host}\t#{port}
+            i=== Slide Added! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iYour presentation now has #{length(deck.slides)} slides.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Add Another Slide\t/slides/edit/#{id}\t#{host}\t#{port}
+            1View Presentation\t/slides/view/#{id}\t#{host}\t#{port}
+            1Preview This Slide\t/slides/present/#{id}/#{length(deck.slides) - 1}\t#{host}\t#{port}
+            .
+            """
+
+          {:error, reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            iError: Failed to add slide - #{sanitize_error(reason)}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Edit\t/slides/edit/#{id}\t#{host}\t#{port}
+            .
+            """
         end
 
-      _ ->
-        case String.split(content, "|", parts: 2) do
-          [title, body] -> {title, body, ""}
-          [body] -> {"", body, ""}
-        end
-    end
-
-    case Slides.add_slide(id, type, slide_content, title: title, notes: notes) do
-      {:ok, deck} ->
+      {:error, :invalid_atom} ->
         """
         i\t\t#{host}\t#{port}
-        i=== Slide Added! ===\t\t#{host}\t#{port}
+        iError: Invalid slide type\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
-        iYour presentation now has #{length(deck.slides)} slides.\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Add Another Slide\t/slides/edit/#{id}\t#{host}\t#{port}
-        1View Presentation\t/slides/view/#{id}\t#{host}\t#{port}
-        1Preview This Slide\t/slides/present/#{id}/#{length(deck.slides) - 1}\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
         .
         """
-
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        iError: Failed to add slide - #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Edit\t/slides/edit/#{id}\t#{host}\t#{port}
-        .
-        """
     end
-  rescue
-    ArgumentError ->
-      """
-      i\t\t#{host}\t#{port}
-      iError: Invalid slide type\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      1Back to Slides Menu\t/slides\t#{host}\t#{port}
-      .
-      """
   end
 
   defp slides_export(path, host, port) do
@@ -6404,10 +6429,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating draft: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate draft\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6433,28 +6458,34 @@ defmodule PureGopherAi.GopherHandler do
   defp write_improve(content, host, port) do
     content = String.trim(content)
 
-    case WritingAssistant.improve(content) do
-      {:ok, improved} ->
-        formatted = format_text_as_info(improved, host, port)
-        """
-        i\t\t#{host}\t#{port}
-        i=== Improved Version ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{formatted}
-        i\t\t#{host}\t#{port}
-        7Improve More Text\t/write/improve\t#{host}\t#{port}
-        1Back to Writing Menu\t/write\t#{host}\t#{port}
-        .
-        """
+    case validate_ai_input(content) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error improving text: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Writing Menu\t/write\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case WritingAssistant.improve(content) do
+          {:ok, improved} ->
+            formatted = format_text_as_info(improved, host, port)
+            """
+            i\t\t#{host}\t#{port}
+            i=== Improved Version ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{formatted}
+            i\t\t#{host}\t#{port}
+            7Improve More Text\t/write/improve\t#{host}\t#{port}
+            1Back to Writing Menu\t/write\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to improve text\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Writing Menu\t/write\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -6479,28 +6510,34 @@ defmodule PureGopherAi.GopherHandler do
   defp write_proofread(content, host, port) do
     content = String.trim(content)
 
-    case WritingAssistant.proofread(content) do
-      {:ok, proofread} ->
-        formatted = format_text_as_info(proofread, host, port)
-        """
-        i\t\t#{host}\t#{port}
-        i=== Proofread Result ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{formatted}
-        i\t\t#{host}\t#{port}
-        7Proofread More Text\t/write/proofread\t#{host}\t#{port}
-        1Back to Writing Menu\t/write\t#{host}\t#{port}
-        .
-        """
+    case validate_ai_input(content) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error proofreading: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Writing Menu\t/write\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case WritingAssistant.proofread(content) do
+          {:ok, proofread} ->
+            formatted = format_text_as_info(proofread, host, port)
+            """
+            i\t\t#{host}\t#{port}
+            i=== Proofread Result ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{formatted}
+            i\t\t#{host}\t#{port}
+            7Proofread More Text\t/write/proofread\t#{host}\t#{port}
+            1Back to Writing Menu\t/write\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to proofread\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Writing Menu\t/write\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -6557,10 +6594,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating titles: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate titles\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6601,10 +6638,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating tags: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate tags\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6644,10 +6681,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error expanding content: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to expand content\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6687,10 +6724,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error compressing content: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to compress content\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6731,10 +6768,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating outline: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate outline\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6774,10 +6811,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating introduction: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate introduction\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6817,10 +6854,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating conclusion: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate conclusion\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Writing Menu\t/write\t#{host}\t#{port}
         .
@@ -6994,10 +7031,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to perform semantic search\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
         .
@@ -7009,49 +7046,59 @@ defmodule PureGopherAi.GopherHandler do
     # Parse type/id from path
     case String.split(path, "/", parts: 2) do
       [type_str, id] ->
-        type = String.to_existing_atom(type_str)
+        case safe_to_existing_atom(type_str, [:phlog, :document, :post, :guestbook, :user_phlog]) do
+          {:ok, type} ->
+            case SemanticSearch.find_similar(type, id, limit: 10) do
+              {:ok, []} ->
+                """
+                i\t\t#{host}\t#{port}
+                i=== Similar Content ===\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                iNo similar content found.\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+                .
+                """
 
-        case SemanticSearch.find_similar(type, id, limit: 10) do
-          {:ok, []} ->
+              {:ok, similar} ->
+                similar_lines = similar
+                |> Enum.with_index(1)
+                |> Enum.map(fn {item, idx} ->
+                  type_label = item.type |> Atom.to_string() |> String.capitalize()
+                  score_pct = Float.round(item.score * 100, 0) |> trunc()
+                  link = result_link(item, host, port)
+
+                  """
+                  i#{idx}. [#{type_label}] #{item.title} (#{score_pct}% similar)\t\t#{host}\t#{port}
+                  #{link}
+                  """
+                end)
+                |> Enum.join("")
+
+                """
+                i\t\t#{host}\t#{port}
+                i=== Similar Content ===\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                #{similar_lines}
+                i\t\t#{host}\t#{port}
+                1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+                .
+                """
+
+              {:error, _reason} ->
+                """
+                i\t\t#{host}\t#{port}
+                3Error: Unable to find similar content\t\t#{host}\t#{port}
+                i\t\t#{host}\t#{port}
+                1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+                .
+                """
+            end
+
+          {:error, :invalid_atom} ->
             """
             i\t\t#{host}\t#{port}
-            i=== Similar Content ===\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            iNo similar content found.\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
-            .
-            """
-
-          {:ok, similar} ->
-            similar_lines = similar
-            |> Enum.with_index(1)
-            |> Enum.map(fn {item, idx} ->
-              type_label = item.type |> Atom.to_string() |> String.capitalize()
-              score_pct = Float.round(item.score * 100, 0) |> trunc()
-              link = result_link(item, host, port)
-
-              """
-              i#{idx}. [#{type_label}] #{item.title} (#{score_pct}% similar)\t\t#{host}\t#{port}
-              #{link}
-              """
-            end)
-            |> Enum.join("")
-
-            """
-            i\t\t#{host}\t#{port}
-            i=== Similar Content ===\t\t#{host}\t#{port}
-            i\t\t#{host}\t#{port}
-            #{similar_lines}
-            i\t\t#{host}\t#{port}
-            1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
-            .
-            """
-
-          {:error, reason} ->
-            """
-            i\t\t#{host}\t#{port}
-            3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+            3Unknown content type\t\t#{host}\t#{port}
             i\t\t#{host}\t#{port}
             1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
             .
@@ -7067,15 +7114,6 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
     end
-  rescue
-    ArgumentError ->
-      """
-      i\t\t#{host}\t#{port}
-      3Unknown content type\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
-      .
-      """
   end
 
   defp semantic_trending(host, port) do
@@ -7111,10 +7149,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to get trending topics\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
         .
@@ -7247,10 +7285,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating story: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate story\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Creative Menu\t/creative\t#{host}\t#{port}
         .
@@ -7298,10 +7336,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating poem: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate poem\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Creative Menu\t/creative\t#{host}\t#{port}
         .
@@ -7349,10 +7387,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating lyrics: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate lyrics\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Creative Menu\t/creative\t#{host}\t#{port}
         .
@@ -7392,10 +7430,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error continuing story: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to continue story\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Creative Menu\t/creative\t#{host}\t#{port}
         .
@@ -7404,31 +7442,32 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp creative_rewrite_prompt(style, host, port) do
-    # Validate style exists as atom (will raise if invalid)
-    _style_atom = String.to_existing_atom(style)
-    """
-    i\t\t#{host}\t#{port}
-    i=== Rewrite in #{style} Style ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    iPaste your content and AI will rewrite it\t\t#{host}\t#{port}
-    iin the #{style} genre style.\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    7Enter Content to Rewrite\t/creative/rewrite/#{style}\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    1View All Genres\t/creative/genres\t#{host}\t#{port}
-    1Back to Creative Menu\t/creative\t#{host}\t#{port}
-    .
-    """
-  rescue
-    _ ->
-      """
-      i\t\t#{host}\t#{port}
-      3Unknown style: #{style}\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      1View Available Genres\t/creative/genres\t#{host}\t#{port}
-      1Back to Creative Menu\t/creative\t#{host}\t#{port}
-      .
-      """
+    case safe_to_existing_atom(style, CreativeStudio.genres()) do
+      {:ok, _style_atom} ->
+        """
+        i\t\t#{host}\t#{port}
+        i=== Rewrite in #{style} Style ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iPaste your content and AI will rewrite it\t\t#{host}\t#{port}
+        iin the #{style} genre style.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Enter Content to Rewrite\t/creative/rewrite/#{style}\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View All Genres\t/creative/genres\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_atom} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Unknown style: #{style}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Available Genres\t/creative/genres\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
   end
 
   defp creative_prompts(host, port) do
@@ -7458,43 +7497,45 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp creative_prompts_category(category, host, port) do
-    category_atom = String.to_existing_atom(category)
+    case safe_to_existing_atom(category, [:fantasy, :scifi, :romance, :horror, :mystery, :slice_of_life, :general]) do
+      {:ok, category_atom} ->
+        case CreativeStudio.generate_prompts(category_atom, 5) do
+          {:ok, prompts} ->
+            prompt_lines = prompts
+            |> Enum.with_index(1)
+            |> Enum.map(fn {prompt, idx} ->
+              "i  #{idx}. #{truncate(prompt, 65)}\t\t#{host}\t#{port}"
+            end)
+            |> Enum.join("\r\n")
 
-    case CreativeStudio.generate_prompts(category_atom, 5) do
-      {:ok, prompts} ->
-        prompt_lines = prompts
-        |> Enum.with_index(1)
-        |> Enum.map(fn {prompt, idx} ->
-          "i  #{idx}. #{truncate(prompt, 65)}\t\t#{host}\t#{port}"
-        end)
-        |> Enum.join("\r\n")
+            category_name = category |> String.replace("_", " ") |> String.capitalize()
 
-        category_name = category |> String.replace("_", " ") |> String.capitalize()
+            """
+            i\t\t#{host}\t#{port}
+            i=== #{category_name} Writing Prompts ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{prompt_lines}
+            i\t\t#{host}\t#{port}
+            1Generate More Prompts\t/creative/prompts/#{category}\t#{host}\t#{port}
+            1All Categories\t/creative/prompts\t#{host}\t#{port}
+            1Back to Creative Menu\t/creative\t#{host}\t#{port}
+            .
+            """
 
-        """
-        i\t\t#{host}\t#{port}
-        i=== #{category_name} Writing Prompts ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{prompt_lines}
-        i\t\t#{host}\t#{port}
-        1Generate More Prompts\t/creative/prompts/#{category}\t#{host}\t#{port}
-        1All Categories\t/creative/prompts\t#{host}\t#{port}
-        1Back to Creative Menu\t/creative\t#{host}\t#{port}
-        .
-        """
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error generating prompts\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Creative Menu\t/creative\t#{host}\t#{port}
+            .
+            """
+        end
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error generating prompts: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Creative Menu\t/creative\t#{host}\t#{port}
-        .
-        """
+      {:error, :invalid_atom} ->
+        # Fall back to general category for invalid input
+        creative_prompts_category("general", host, port)
     end
-  rescue
-    _ ->
-      creative_prompts_category("general", host, port)
   end
 
   defp creative_character_prompt(host, port) do
@@ -7536,10 +7577,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error creating character: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to create character\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Creative Menu\t/creative\t#{host}\t#{port}
         .
@@ -7586,10 +7627,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error building world: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to build world\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Creative Menu\t/creative\t#{host}\t#{port}
         .
@@ -7739,28 +7780,34 @@ defmodule PureGopherAi.GopherHandler do
   defp code_explain(code, host, port) do
     code = String.trim(code)
 
-    case CodeCompanion.explain(code) do
-      {:ok, explanation} ->
-        formatted = format_text_as_info(explanation, host, port)
-        """
-        i\t\t#{host}\t#{port}
-        i=== Code Explanation ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{formatted}
-        i\t\t#{host}\t#{port}
-        7Explain More Code\t/code/explain\t#{host}\t#{port}
-        1Back to Code Menu\t/code\t#{host}\t#{port}
-        .
-        """
+    case validate_ai_input(code) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error explaining code: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Code Menu\t/code\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case CodeCompanion.explain(code) do
+          {:ok, explanation} ->
+            formatted = format_text_as_info(explanation, host, port)
+            """
+            i\t\t#{host}\t#{port}
+            i=== Code Explanation ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{formatted}
+            i\t\t#{host}\t#{port}
+            7Explain More Code\t/code/explain\t#{host}\t#{port}
+            1Back to Code Menu\t/code\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to explain code\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Code Menu\t/code\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -7782,28 +7829,34 @@ defmodule PureGopherAi.GopherHandler do
   defp code_review(code, host, port) do
     code = String.trim(code)
 
-    case CodeCompanion.review(code) do
-      {:ok, review} ->
-        formatted = format_text_as_info(review, host, port)
-        """
-        i\t\t#{host}\t#{port}
-        i=== Code Review Results ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{formatted}
-        i\t\t#{host}\t#{port}
-        7Review More Code\t/code/review\t#{host}\t#{port}
-        1Back to Code Menu\t/code\t#{host}\t#{port}
-        .
-        """
+    case validate_ai_input(code) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error reviewing code: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Code Menu\t/code\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case CodeCompanion.review(code) do
+          {:ok, review} ->
+            formatted = format_text_as_info(review, host, port)
+            """
+            i\t\t#{host}\t#{port}
+            i=== Code Review Results ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{formatted}
+            i\t\t#{host}\t#{port}
+            7Review More Code\t/code/review\t#{host}\t#{port}
+            1Back to Code Menu\t/code\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to review code\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Code Menu\t/code\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -7842,10 +7895,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error converting pseudocode: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to convert pseudocode\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -7892,10 +7945,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error building regex: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to build regex\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -7942,10 +7995,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating SQL: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate SQL\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -8001,10 +8054,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error explaining algorithm: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to explain algorithm\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -8032,28 +8085,34 @@ defmodule PureGopherAi.GopherHandler do
   defp code_debug(code, host, port) do
     code = String.trim(code)
 
-    case CodeCompanion.debug(code) do
-      {:ok, debug_result} ->
-        formatted = format_text_as_info(debug_result, host, port)
-        """
-        i\t\t#{host}\t#{port}
-        i=== Debug Results ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{formatted}
-        i\t\t#{host}\t#{port}
-        7Debug More Code\t/code/debug\t#{host}\t#{port}
-        1Back to Code Menu\t/code\t#{host}\t#{port}
-        .
-        """
+    case validate_ai_input(code) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error debugging: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Code Menu\t/code\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case CodeCompanion.debug(code) do
+          {:ok, debug_result} ->
+            formatted = format_text_as_info(debug_result, host, port)
+            """
+            i\t\t#{host}\t#{port}
+            i=== Debug Results ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{formatted}
+            i\t\t#{host}\t#{port}
+            7Debug More Code\t/code/debug\t#{host}\t#{port}
+            1Back to Code Menu\t/code\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to debug code\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Code Menu\t/code\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -8089,10 +8148,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error refactoring: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to refactor code\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -8139,10 +8198,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating code: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate code\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -8182,10 +8241,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error generating tests: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate tests\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Code Menu\t/code\t#{host}\t#{port}
         .
@@ -8273,10 +8332,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error consulting the oracle: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to consult the oracle\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8321,10 +8380,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to provide advice\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8389,10 +8448,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error drawing cards: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to draw cards\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8451,10 +8510,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error casting: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to cast I Ching\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8499,10 +8558,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to interpret dream\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8535,53 +8594,44 @@ defmodule PureGopherAi.GopherHandler do
 
   defp oracle_horoscope(sign, host, port) do
     sign = String.trim(sign)
-    sign_atom = String.to_existing_atom(sign)
 
-    if Enum.member?(Oracle.zodiac_signs(), sign_atom) do
-      case Oracle.horoscope(sign_atom) do
-        {:ok, horoscope} ->
-          formatted = format_text_as_info(horoscope, host, port)
-          sign_name = sign |> String.capitalize()
-          """
-          i\t\t#{host}\t#{port}
-          i  ✦ #{sign_name} Horoscope ✦\t\t#{host}\t#{port}
-          i\t\t#{host}\t#{port}
-          #{formatted}
-          i\t\t#{host}\t#{port}
-          1All Signs\t/oracle/horoscope\t#{host}\t#{port}
-          1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
-          .
-          """
+    case safe_to_existing_atom(sign, Oracle.zodiac_signs()) do
+      {:ok, sign_atom} ->
+        case Oracle.horoscope(sign_atom) do
+          {:ok, horoscope} ->
+            formatted = format_text_as_info(horoscope, host, port)
+            sign_name = sign |> String.capitalize()
+            """
+            i\t\t#{host}\t#{port}
+            i  ✦ #{sign_name} Horoscope ✦\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{formatted}
+            i\t\t#{host}\t#{port}
+            1All Signs\t/oracle/horoscope\t#{host}\t#{port}
+            1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+            .
+            """
 
-        {:error, reason} ->
-          """
-          i\t\t#{host}\t#{port}
-          3Error: #{inspect(reason)}\t\t#{host}\t#{port}
-          i\t\t#{host}\t#{port}
-          1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
-          .
-          """
-      end
-    else
-      """
-      i\t\t#{host}\t#{port}
-      3Unknown zodiac sign: #{sign}\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      1View All Signs\t/oracle/horoscope\t#{host}\t#{port}
-      1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
-      .
-      """
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to generate horoscope\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+            .
+            """
+        end
+
+      {:error, :invalid_atom} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Unknown zodiac sign: #{sign}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View All Signs\t/oracle/horoscope\t#{host}\t#{port}
+        1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
     end
-  rescue
-    _ ->
-      """
-      i\t\t#{host}\t#{port}
-      3Unknown zodiac sign: #{sign}\t\t#{host}\t#{port}
-      i\t\t#{host}\t#{port}
-      1View All Signs\t/oracle/horoscope\t#{host}\t#{port}
-      1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
-      .
-      """
   end
 
   defp oracle_yesno_prompt(host, port) do
@@ -8628,10 +8678,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to consult the oracle\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8656,10 +8706,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate affirmation\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8702,10 +8752,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to calculate life path\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
         .
@@ -8773,40 +8823,46 @@ defmodule PureGopherAi.GopherHandler do
   defp learn_flashcards(content, host, port) do
     content = String.trim(content)
 
-    case LearningTools.flashcards(content) do
-      {:ok, cards} ->
-        card_lines = cards
-        |> Enum.with_index(1)
-        |> Enum.map(fn {card, idx} ->
-          """
-          i--- Card #{idx} ---\t\t#{host}\t#{port}
-          iFront: #{truncate(card.front, 60)}\t\t#{host}\t#{port}
-          iBack: #{truncate(card.back, 60)}\t\t#{host}\t#{port}
-          """
-        end)
-        |> Enum.join("")
+    case validate_ai_input(content) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-        """
-        i\t\t#{host}\t#{port}
-        i=== Generated Flashcards ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        i#{length(cards)} cards generated:\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{card_lines}
-        i\t\t#{host}\t#{port}
-        7Generate More Flashcards\t/learn/flashcards\t#{host}\t#{port}
-        1Back to Learn Menu\t/learn\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case LearningTools.flashcards(content) do
+          {:ok, cards} ->
+            card_lines = cards
+            |> Enum.with_index(1)
+            |> Enum.map(fn {card, idx} ->
+              """
+              i--- Card #{idx} ---\t\t#{host}\t#{port}
+              iFront: #{truncate(card.front, 60)}\t\t#{host}\t#{port}
+              iBack: #{truncate(card.back, 60)}\t\t#{host}\t#{port}
+              """
+            end)
+            |> Enum.join("")
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Learn Menu\t/learn\t#{host}\t#{port}
-        .
-        """
+            """
+            i\t\t#{host}\t#{port}
+            i=== Generated Flashcards ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            i#{length(cards)} cards generated:\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{card_lines}
+            i\t\t#{host}\t#{port}
+            7Generate More Flashcards\t/learn/flashcards\t#{host}\t#{port}
+            1Back to Learn Menu\t/learn\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to generate flashcards\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Learn Menu\t/learn\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -8828,44 +8884,50 @@ defmodule PureGopherAi.GopherHandler do
   defp learn_quiz(content, host, port) do
     content = String.trim(content)
 
-    case LearningTools.quiz(content) do
-      {:ok, questions} ->
-        quiz_lines = questions
-        |> Enum.with_index(1)
-        |> Enum.map(fn {q, idx} ->
-          options_text = if q.options != [] do
-            q.options |> Enum.map(fn opt -> "i  #{opt}\t\t#{host}\t#{port}" end) |> Enum.join("\r\n")
-          else
-            ""
-          end
-          """
-          i\t\t#{host}\t#{port}
-          iQ#{idx}: #{truncate(q.question, 60)}\t\t#{host}\t#{port}
-          #{options_text}
-          iAnswer: #{truncate(q.answer, 50)}\t\t#{host}\t#{port}
-          """
-        end)
-        |> Enum.join("")
+    case validate_ai_input(content) do
+      {:error, :input_too_large} ->
+        input_too_large_error(host, port)
 
-        """
-        i\t\t#{host}\t#{port}
-        i=== Generated Quiz ===\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{quiz_lines}
-        i\t\t#{host}\t#{port}
-        7Generate Another Quiz\t/learn/quiz\t#{host}\t#{port}
-        1Back to Learn Menu\t/learn\t#{host}\t#{port}
-        .
-        """
+      {:ok, _} ->
+        case LearningTools.quiz(content) do
+          {:ok, questions} ->
+            quiz_lines = questions
+            |> Enum.with_index(1)
+            |> Enum.map(fn {q, idx} ->
+              options_text = if q.options != [] do
+                q.options |> Enum.map(fn opt -> "i  #{opt}\t\t#{host}\t#{port}" end) |> Enum.join("\r\n")
+              else
+                ""
+              end
+              """
+              i\t\t#{host}\t#{port}
+              iQ#{idx}: #{truncate(q.question, 60)}\t\t#{host}\t#{port}
+              #{options_text}
+              iAnswer: #{truncate(q.answer, 50)}\t\t#{host}\t#{port}
+              """
+            end)
+            |> Enum.join("")
 
-      {:error, reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Learn Menu\t/learn\t#{host}\t#{port}
-        .
-        """
+            """
+            i\t\t#{host}\t#{port}
+            i=== Generated Quiz ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{quiz_lines}
+            i\t\t#{host}\t#{port}
+            7Generate Another Quiz\t/learn/quiz\t#{host}\t#{port}
+            1Back to Learn Menu\t/learn\t#{host}\t#{port}
+            .
+            """
+
+          {:error, _reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: Unable to generate quiz\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Learn Menu\t/learn\t#{host}\t#{port}
+            .
+            """
+        end
     end
   end
 
@@ -8906,10 +8968,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to explain concept\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -8950,10 +9012,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to define word\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -8993,10 +9055,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to retrieve etymology\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -9041,10 +9103,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate concept map\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -9106,10 +9168,10 @@ defmodule PureGopherAi.GopherHandler do
           .
           """
 
-        {:error, reason} ->
+        {:error, _reason} ->
           """
           i\t\t#{host}\t#{port}
-          3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+          3Error: Unable to compare concepts\t\t#{host}\t#{port}
           i\t\t#{host}\t#{port}
           1Back to Learn Menu\t/learn\t#{host}\t#{port}
           .
@@ -9155,10 +9217,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to create mnemonic\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -9198,10 +9260,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to break down topic\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -9246,10 +9308,10 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
 
-      {:error, reason} ->
+      {:error, _reason} ->
         """
         i\t\t#{host}\t#{port}
-        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        3Error: Unable to generate practice problems\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
@@ -10170,37 +10232,39 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp phlog_art_theme(theme_str, host, port) do
-    theme = String.to_existing_atom(theme_str)
-    arts = PhlogArt.get_all_art(theme)
+    case safe_to_existing_atom(theme_str, PhlogArt.themes()) do
+      {:ok, theme} ->
+        arts = PhlogArt.get_all_art(theme)
 
-    art_displays = arts
-      |> Enum.with_index(1)
-      |> Enum.map(fn {art, idx} ->
-        art_lines = art
-          |> String.trim()
-          |> String.split("\n")
-          |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
-          |> Enum.join("\r\n")
+        art_displays = arts
+          |> Enum.with_index(1)
+          |> Enum.map(fn {art, idx} ->
+            art_lines = art
+              |> String.trim()
+              |> String.split("\n")
+              |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+              |> Enum.join("\r\n")
 
-        "i--- Option #{idx} ---\t\t#{host}\t#{port}\r\n#{art_lines}"
-      end)
-      |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
+            "i--- Option #{idx} ---\t\t#{host}\t#{port}\r\n#{art_lines}"
+          end)
+          |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
 
-    """
-    i\t\t#{host}\t#{port}
-    i=== #{String.upcase(theme_str)} Art ===\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i#{length(arts)} variations available:\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    #{art_displays}
-    i\t\t#{host}\t#{port}
-    1Back to Gallery\t/phlog/format/art\t#{host}\t#{port}
-    1Back to Formatting\t/phlog/format\t#{host}\t#{port}
-    .
-    """
-  rescue
-    ArgumentError ->
-      error_response("Unknown theme: #{theme_str}")
+        """
+        i\t\t#{host}\t#{port}
+        i=== #{String.upcase(theme_str)} Art ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{length(arts)} variations available:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{art_displays}
+        i\t\t#{host}\t#{port}
+        1Back to Gallery\t/phlog/format/art\t#{host}\t#{port}
+        1Back to Formatting\t/phlog/format\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_atom} ->
+        error_response("Unknown theme: #{theme_str}")
+    end
   end
 
   # === Color (ANSI) Art Functions ===
@@ -10276,37 +10340,39 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp phlog_color_art_theme(theme_str, host, port) do
-    theme = String.to_existing_atom(theme_str)
-    arts = AnsiArt.get_all_art(theme)
+    case safe_to_existing_atom(theme_str, AnsiArt.themes()) do
+      {:ok, theme} ->
+        arts = AnsiArt.get_all_art(theme)
 
-    art_displays = arts
-      |> Enum.with_index(1)
-      |> Enum.map(fn {art, idx} ->
-        art_lines = art
-          |> String.trim()
-          |> String.split("\n")
-          |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
-          |> Enum.join("\r\n")
+        art_displays = arts
+          |> Enum.with_index(1)
+          |> Enum.map(fn {art, idx} ->
+            art_lines = art
+              |> String.trim()
+              |> String.split("\n")
+              |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+              |> Enum.join("\r\n")
 
-        "i\e[93m--- Option #{idx} ---\e[0m\t\t#{host}\t#{port}\r\n#{art_lines}"
-      end)
-      |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
+            "i\e[93m--- Option #{idx} ---\e[0m\t\t#{host}\t#{port}\r\n#{art_lines}"
+          end)
+          |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
 
-    """
-    i\t\t#{host}\t#{port}
-    i\e[93m=== \e[91m#{String.upcase(theme_str)}\e[93m Color Art ===\e[0m\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    i#{length(arts)} color variations available:\t\t#{host}\t#{port}
-    i\t\t#{host}\t#{port}
-    #{art_displays}
-    i\t\t#{host}\t#{port}
-    1Back to Color Gallery\t/phlog/format/color/gallery\t#{host}\t#{port}
-    1Back to Color Menu\t/phlog/format/color\t#{host}\t#{port}
-    .
-    """
-  rescue
-    ArgumentError ->
-      error_response("Unknown theme: #{theme_str}")
+        """
+        i\t\t#{host}\t#{port}
+        i\e[93m=== \e[91m#{String.upcase(theme_str)}\e[93m Color Art ===\e[0m\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{length(arts)} color variations available:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{art_displays}
+        i\t\t#{host}\t#{port}
+        1Back to Color Gallery\t/phlog/format/color/gallery\t#{host}\t#{port}
+        1Back to Color Menu\t/phlog/format/color\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :invalid_atom} ->
+        error_response("Unknown theme: #{theme_str}")
+    end
   end
 
   defp phlog_color_borders(host, port) do
@@ -10464,6 +10530,27 @@ defmodule PureGopherAi.GopherHandler do
 
       # Unknown errors - generic message
       _ -> "An error occurred"
+    end
+  end
+
+  # Safe atom conversion helpers to prevent ArgumentError crashes
+  # from String.to_existing_atom/1 when user provides invalid input
+
+  @doc false
+  defp safe_to_existing_atom(string, valid_atoms) when is_list(valid_atoms) do
+    valid_strings = Enum.map(valid_atoms, &Atom.to_string/1)
+    if string in valid_strings do
+      {:ok, String.to_existing_atom(string)}
+    else
+      {:error, :invalid_atom}
+    end
+  end
+
+  defp safe_to_existing_atom(string, default) when is_atom(default) do
+    try do
+      {:ok, String.to_existing_atom(string)}
+    rescue
+      ArgumentError -> {:ok, default}
     end
   end
 end
