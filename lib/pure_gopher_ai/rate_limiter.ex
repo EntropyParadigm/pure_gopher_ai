@@ -132,7 +132,7 @@ defmodule PureGopherAi.RateLimiter do
 
   def ban(ip) when is_binary(ip) do
     :ets.insert(@bans_table, {ip, System.monotonic_time(:second)})
-    Logger.warning("Banned IP: #{ip}")
+    Logger.warning("Banned IP: #{hash_ip_for_log(ip)}")
     :ok
   end
 
@@ -145,7 +145,7 @@ defmodule PureGopherAi.RateLimiter do
 
   def unban(ip) when is_binary(ip) do
     :ets.delete(@bans_table, ip)
-    Logger.info("Unbanned IP: #{ip}")
+    Logger.info("Unbanned IP: #{hash_ip_for_log(ip)}")
     :ok
   end
 
@@ -344,7 +344,7 @@ defmodule PureGopherAi.RateLimiter do
 
     # Check for auto-ban
     if auto_ban_enabled?() and new_count >= ban_threshold() do
-      Logger.warning("Auto-banning IP #{ip} after #{new_count} violations")
+      Logger.warning("Auto-banning IP #{hash_ip_for_log(ip)} after #{new_count} violations")
       ban(ip)
     end
 
@@ -407,4 +407,12 @@ defmodule PureGopherAi.RateLimiter do
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
   defp format_ip(ip) when is_binary(ip), do: ip
+
+  # Hash IP for privacy-friendly logging (first 8 chars of SHA256)
+  defp hash_ip_for_log(ip) do
+    ip_str = format_ip(ip)
+    :crypto.hash(:sha256, ip_str)
+    |> Base.encode16(case: :lower)
+    |> String.slice(0, 8)
+  end
 end

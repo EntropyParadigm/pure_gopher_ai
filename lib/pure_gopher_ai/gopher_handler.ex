@@ -80,7 +80,7 @@ defmodule PureGopherAi.GopherHandler do
           |> String.trim_trailing("\r\n")
 
         network_label = if network == :tor, do: "[Tor]", else: "[Clearnet]"
-        Logger.info("#{network_label} Gopher request: #{inspect(selector)} from #{format_ip(client_ip)}")
+        Logger.info("#{network_label} Gopher request: #{inspect(selector)} from #{hash_ip_for_log(client_ip)}")
 
         # Record telemetry
         Telemetry.record_request(selector, network: network)
@@ -96,19 +96,19 @@ defmodule PureGopherAi.GopherHandler do
         end
 
       {:error, :rate_limited, retry_after} ->
-        Logger.warning("Rate limited: #{format_ip(client_ip)}, retry after #{retry_after}ms")
+        Logger.warning("Rate limited: #{hash_ip_for_log(client_ip)}, retry after #{retry_after}ms")
         # Record violation for abuse detection (may trigger auto-ban)
         RateLimiter.record_violation(client_ip)
         response = rate_limit_response(retry_after)
         ThousandIsland.Socket.send(socket, response)
 
       {:error, :banned} ->
-        Logger.warning("Banned IP attempted access: #{format_ip(client_ip)}")
+        Logger.warning("Banned IP attempted access: #{hash_ip_for_log(client_ip)}")
         response = banned_response()
         ThousandIsland.Socket.send(socket, response)
 
       {:error, :blocklisted} ->
-        Logger.warning("Blocklisted IP attempted access: #{format_ip(client_ip)}")
+        Logger.warning("Blocklisted IP attempted access: #{hash_ip_for_log(client_ip)}")
         response = blocklisted_response()
         ThousandIsland.Socket.send(socket, response)
     end
@@ -119,6 +119,14 @@ defmodule PureGopherAi.GopherHandler do
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
   defp format_ip(ip), do: inspect(ip)
+
+  # Hash IP for privacy-friendly logging (first 8 chars of SHA256)
+  defp hash_ip_for_log(ip) do
+    ip_str = format_ip(ip)
+    :crypto.hash(:sha256, ip_str)
+    |> Base.encode16(case: :lower)
+    |> String.slice(0, 8)
+  end
 
   defp parse_int(str, default) do
     case Integer.parse(str) do
