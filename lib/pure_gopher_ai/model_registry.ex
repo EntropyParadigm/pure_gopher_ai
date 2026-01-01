@@ -12,26 +12,46 @@ defmodule PureGopherAi.ModelRegistry do
 
   # Model configurations
   @models %{
+    # Default lightweight model - TinyLlama is much better than GPT-2
+    "tinyllama" => %{
+      name: "TinyLlama",
+      repo: "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+      description: "Fast, high-quality chat (1.1B params)",
+      default: true
+    },
+    # Qwen models - excellent for coding
+    "qwen-coder" => %{
+      name: "Qwen2.5 Coder",
+      repo: "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+      description: "Specialized for code (0.5B params)",
+      default: false
+    },
+    "qwen" => %{
+      name: "Qwen2.5",
+      repo: "Qwen/Qwen2.5-0.5B-Instruct",
+      description: "Compact, capable (0.5B params)",
+      default: false
+    },
+    "qwen-1.5b" => %{
+      name: "Qwen2.5 1.5B",
+      repo: "Qwen/Qwen2.5-1.5B-Instruct",
+      description: "Higher quality (1.5B params)",
+      default: false
+    },
+    # Microsoft Phi - very capable small model
+    "phi" => %{
+      name: "Phi-2",
+      repo: "microsoft/phi-2",
+      description: "Reasoning focused (2.7B params)",
+      default: false
+    },
+    # Keep GPT-2 as fallback
     "gpt2" => %{
       name: "GPT-2",
       repo: "openai-community/gpt2",
-      description: "Fast, lightweight (124M params)",
-      default: true
-    },
-    "gpt2-medium" => %{
-      name: "GPT-2 Medium",
-      repo: "openai-community/gpt2-medium",
-      description: "Balanced quality/speed (355M params)",
-      default: false
-    },
-    "gpt2-large" => %{
-      name: "GPT-2 Large",
-      repo: "openai-community/gpt2-large",
-      description: "Higher quality (774M params)",
+      description: "Legacy fallback (124M params)",
       default: false
     }
-    # Llama and Mistral require additional setup (tokenizer config, etc.)
-    # They can be added when properly configured
   }
 
   # Client API

@@ -27,11 +27,12 @@ defmodule PureGopherAi.AiEngine do
   def setup_serving do
     Logger.info("Loading AI model... This may take a moment on first run.")
 
-    # Load GPT-2 as a lightweight default model
-    # For production, consider Llama 2 or similar: Bumblebee.load_model({:hf, "meta-llama/Llama-2-7b-hf"})
-    {:ok, model_info} = Bumblebee.load_model({:hf, "openai-community/gpt2"})
-    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, "openai-community/gpt2"})
-    {:ok, generation_config} = Bumblebee.load_generation_config({:hf, "openai-community/gpt2"})
+    # Load TinyLlama as a high-quality lightweight model
+    # Much better than GPT-2 while still being fast
+    default_model = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    {:ok, model_info} = Bumblebee.load_model({:hf, default_model})
+    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, default_model})
+    {:ok, generation_config} = Bumblebee.load_generation_config({:hf, default_model})
 
     # Configure generation parameters
     generation_config =
