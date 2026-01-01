@@ -46,8 +46,8 @@ defmodule PureGopherAi.Handlers.Tools do
       Shared.link_line("Statistics", "/docs/stats", host, port),
       Shared.info_line("", host, port),
       Shared.info_line("--- Stats ---", host, port),
-      Shared.info_line("Documents: #{stats.document_count}", host, port),
-      Shared.info_line("Chunks: #{stats.chunk_count}", host, port),
+      Shared.info_line("Documents: #{stats.documents}", host, port),
+      Shared.info_line("Chunks: #{stats.chunks}", host, port),
       Shared.info_line("", host, port),
       Shared.link_line("Back to Home", "/", host, port),
       ".\r\n"
@@ -268,8 +268,10 @@ defmodule PureGopherAi.Handlers.Tools do
   Handle search query.
   """
   def handle_search(query, host, port) do
-    case Search.search(query) do
-      {:ok, []} ->
+    results = Search.search(query)
+
+    case results do
+      [] ->
         Shared.format_text_response("""
         === Search Results ===
 
@@ -278,12 +280,12 @@ defmodule PureGopherAi.Handlers.Tools do
         Try different keywords or check spelling.
         """, host, port)
 
-      {:ok, results} ->
+      results when is_list(results) ->
         result_lines = results
           |> Enum.take(25)
-          |> Enum.map(fn r ->
-            type_char = search_result_type(r.type)
-            [type_char, r.title, "\t", r.selector, "\t", host, "\t", Integer.to_string(port), "\r\n"]
+          |> Enum.map(fn {type, title, selector, _snippet} ->
+            type_char = search_result_type(type)
+            [type_char, title, "\t", selector, "\t", host, "\t", Integer.to_string(port), "\r\n"]
           end)
 
         [
@@ -298,9 +300,6 @@ defmodule PureGopherAi.Handlers.Tools do
           ".\r\n"
         ]
         |> IO.iodata_to_binary()
-
-      {:error, reason} ->
-        Shared.error_response("Search failed: #{Shared.sanitize_error(reason)}")
     end
   end
 

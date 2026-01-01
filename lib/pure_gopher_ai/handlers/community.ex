@@ -451,8 +451,9 @@ defmodule PureGopherAi.Handlers.Community do
   Guestbook page with pagination.
   """
   def guestbook_page(host, port, page) do
-    case Guestbook.list_entries(page: page, per_page: 20) do
-      {:ok, result} ->
+    result = Guestbook.list_entries(page: page, per_page: 20)
+    case result do
+      %{entries: _entries} = result ->
         entries_text = if Enum.empty?(result.entries) do
           [Shared.info_line("No entries yet. Be the first to sign!", host, port)]
         else
@@ -479,7 +480,7 @@ defmodule PureGopherAi.Handlers.Community do
         [
           Shared.info_line("=== Guestbook ===", host, port),
           Shared.info_line("", host, port),
-          Shared.info_line("Page #{result.page} of #{result.total_pages} (#{result.total_entries} entries)", host, port),
+          Shared.info_line("Page #{result.page} of #{result.total_pages} (#{result.total} entries)", host, port),
           Shared.info_line("", host, port),
           Shared.search_line("Sign the Guestbook", "/guestbook/sign", host, port),
           Shared.info_line("", host, port),
@@ -490,9 +491,6 @@ defmodule PureGopherAi.Handlers.Community do
           ".\r\n"
         ]
         |> IO.iodata_to_binary()
-
-      {:error, reason} ->
-        Shared.error_response("Failed to load guestbook: #{Shared.sanitize_error(reason)}")
     end
   end
 

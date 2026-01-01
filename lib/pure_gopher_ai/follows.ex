@@ -139,12 +139,12 @@ defmodule PureGopherAi.Follows do
                       :dets.sync(@table_name)
 
                       # Notify the target user
-                      Notifications.create(
+                      Notifications.notify(
                         target_lower,
                         :follow,
                         "New follower",
                         "#{username} is now following you",
-                        %{follower: username}
+                        follower: username
                       )
 
                       Logger.info("[Follows] #{username} followed #{target_username}")
@@ -299,16 +299,14 @@ defmodule PureGopherAi.Follows do
     # Find all followers
     :dets.foldl(fn {{_follower, target}, data}, _acc ->
       if target == author_lower do
-        Notifications.create(
+        Notifications.notify(
           data.follower_lower,
           :new_content,
           "New #{content_type} from #{author}",
           title,
-          %{
-            author: author,
-            content_type: content_type,
-            content_id: content_id
-          }
+          author: author,
+          content_type: content_type,
+          content_id: content_id
         )
       end
       nil

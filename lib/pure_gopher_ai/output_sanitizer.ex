@@ -95,6 +95,43 @@ defmodule PureGopherAi.OutputSanitizer do
     ~r/my\s+system\s+prompt/i
   ]
 
+  # Chat template/instruction tags that may leak from the model
+  @chat_template_patterns [
+    # User/Assistant tags (complete)
+    ~r/<\/?user_input>/i,
+    ~r/<\/?user>/i,
+    ~r/<\/?User>/i,
+    ~r/<\/?assistant>/i,
+    ~r/<\/?Assistant>/i,
+    ~r/<\/?human>/i,
+    ~r/<\/?Human>/i,
+    ~r/<\/?bot>/i,
+    ~r/<\/?Bot>/i,
+    # Instruction markers
+    ~r/^User:\s*$/m,
+    ~r/^Assistant:\s*$/m,
+    ~r/^Human:\s*$/m,
+    ~r/^Bot:\s*$/m,
+    # Incomplete/partial tags
+    ~r/^\s*<\s*(user|assistant|human|bot)\s*$/mi,
+    ~r/^\s*<\/\s*(user|assistant|human|bot)\s*$/mi,
+    # Partial tag fragments that might appear
+    ~r/^sistant>\s*$/mi,
+    ~r/^ssistant>\s*$/mi,
+    ~r/^istant>\s*$/mi,
+    ~r/^stant>\s*$/mi,
+    ~r/^ant>\s*$/mi,
+    ~r/^nt>\s*$/mi,
+    ~r/^ser>\s*$/mi,
+    ~r/^uman>\s*$/mi,
+    ~r/^man>\s*$/mi,
+    ~r/^an>\s*$/mi,
+    # Lines that are just closing angle brackets
+    ~r/^\s*>\s*$/m,
+    # Lines that look like tag fragments
+    ~r/^\s*<\/?\s*$/m
+  ]
+
   defp maybe_redact_secrets(output, true) do
     output
     |> redact_patterns(@api_key_patterns, "[REDACTED_API_KEY]")
@@ -106,10 +143,21 @@ defmodule PureGopherAi.OutputSanitizer do
   defp maybe_redact_secrets(output, false), do: output
 
   defp maybe_redact_system_prompts(output, true) do
-    redact_patterns(output, @system_prompt_patterns, "[SYSTEM_CONTENT_REDACTED]")
+    output
+    |> redact_patterns(@system_prompt_patterns, "[SYSTEM_CONTENT_REDACTED]")
+    |> strip_chat_template_tags()
   end
 
   defp maybe_redact_system_prompts(output, false), do: output
+
+  defp strip_chat_template_tags(output) do
+    # Remove chat template tags entirely (don't redact, just strip)
+    Enum.reduce(@chat_template_patterns, output, fn pattern, acc ->
+      Regex.replace(pattern, acc, "")
+    end)
+    |> String.replace(~r/\n{3,}/, "\n\n")  # Clean up excessive newlines
+    |> String.trim()
+  end
 
   defp redact_patterns(text, patterns, replacement) do
     Enum.reduce(patterns, text, fn pattern, acc ->
@@ -129,9 +177,9 @@ defmodule PureGopherAi.OutputSanitizer do
   defp redact_private_ip(text) do
     # Redact private IP addresses
     text
-    |> Regex.replace(~r/\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/, "[PRIVATE_IP]")
-    |> Regex.replace(~r/\b172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b/, "[PRIVATE_IP]")
-    |> Regex.replace(~r/\b192\.168\.\d{1,3}\.\d{1,3}\b/, "[PRIVATE_IP]")
+    |> String.replace(~r/\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/, "[PRIVATE_IP]")
+    |> String.replace(~r/\b172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b/, "[PRIVATE_IP]")
+    |> String.replace(~r/\b192\.168\.\d{1,3}\.\d{1,3}\b/, "[PRIVATE_IP]")
   end
 
   defp has_api_keys?(text) do

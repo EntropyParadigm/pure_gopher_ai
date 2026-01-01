@@ -379,12 +379,12 @@ defmodule PureGopherAi.Comments do
     case :dets.lookup(@table_name, parent_id) do
       [{^parent_id, parent}] ->
         if parent.author_lower != String.downcase(replier) do
-          Notifications.create(
+          Notifications.notify(
             parent.author_lower,
             :reply,
             "Reply to your comment",
             "#{replier}: #{String.slice(body, 0, 100)}",
-            %{comment_id: parent_id, replier: replier}
+            comment_id: parent_id, replier: replier
           )
         end
 

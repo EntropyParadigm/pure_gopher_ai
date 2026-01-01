@@ -193,8 +193,7 @@ defmodule PureGopherAi.ModelRegistry do
 
           generation_config =
             Bumblebee.configure(generation_config,
-              max_new_tokens: 100,
-              no_repeat_ngram_size: 2
+              max_new_tokens: 100
             )
 
           streaming = Application.get_env(:pure_gopher_ai, :streaming_enabled, true)

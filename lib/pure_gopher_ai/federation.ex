@@ -312,7 +312,8 @@ defmodule PureGopherAi.Federation do
     start_time = System.monotonic_time(:millisecond)
 
     result = try do
-      case GopherProxy.fetch(host, port, "/") do
+      url = "gopher://#{host}:#{port}/"
+      case GopherProxy.fetch(url) do
         {:ok, _content} ->
           latency = System.monotonic_time(:millisecond) - start_time
           update_peer_status(host_lower, :healthy, latency)
@@ -363,10 +364,11 @@ defmodule PureGopherAi.Federation do
   end
 
   defp fetch_from_peer(peer, selector) do
-    case GopherProxy.fetch(peer.host, peer.port, selector) do
-      {:ok, content} ->
+    url = "gopher://#{peer.host}:#{peer.port}#{selector}"
+    case GopherProxy.fetch(url) do
+      {:ok, result} ->
         # Parse gophermap content
-        items = parse_gophermap(content, peer)
+        items = parse_gophermap(result.content, peer)
         {:ok, items}
 
       {:error, reason} ->
@@ -416,10 +418,11 @@ defmodule PureGopherAi.Federation do
 
   defp search_peer(peer, query) do
     selector = "/search\t#{query}"
+    url = "gopher://#{peer.host}:#{peer.port}#{selector}"
 
-    case GopherProxy.fetch(peer.host, peer.port, selector) do
-      {:ok, content} ->
-        items = parse_gophermap(content, peer)
+    case GopherProxy.fetch(url) do
+      {:ok, result} ->
+        items = parse_gophermap(result.content, peer)
         {:ok, items}
 
       {:error, _reason} ->
