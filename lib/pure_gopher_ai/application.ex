@@ -163,6 +163,9 @@ defmodule PureGopherAi.Application do
       # Simple Games (Hangman, Number Guess, Word Scramble)
       PureGopherAi.Games,
 
+      # Terminal Slides (Presentation System)
+      PureGopherAi.Slides,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

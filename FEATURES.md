@@ -2531,6 +2531,200 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 
 ---
 
+# Phase 12: Advanced AI Features
+
+### 12.1 Terminal Slides
+**Status:** ✅ Complete
+**Description:** Terminal-based presentation system with ASCII/ANSI art visuals and markdown export.
+
+**Features:**
+- Create/edit/view slide presentations in terminal
+- Rich visuals: ASCII art, ANSI colors, borders, animations
+- 8 templates: title, content, two-column, code, image, quote, list, comparison
+- 6 themes: default, minimal, retro, elegant, tech, fantasy
+- Markdown and plain text export for portability
+- Speaker notes support
+- Navigation controls and progress indicator
+
+**Routes:** `/slides`, `/slides/new`, `/slides/list`, `/slides/view/<id>`, `/slides/present/<id>/<n>`, `/slides/edit/<id>`, `/slides/add/<id>`, `/slides/export/<id>`, `/slides/delete/<id>`, `/slides/themes`, `/slides/templates`
+
+**Files:** `slides.ex`, `slide_renderer.ex`
+
+### 12.2 AI Writing Assistant
+**Status:** 🔴 Planned
+**Description:** Help users draft, improve, and polish phlog posts.
+
+**Features:**
+- Draft generation from topic/outline
+- Style improvement suggestions
+- Grammar and spelling check
+- Tone adjustment (formal, casual, technical)
+- Auto-generate titles and tags
+- Content expansion/compression
+
+**Routes:** `/write/draft`, `/write/improve`, `/write/proofread`, `/write/title`, `/write/tags`, `/write/expand`, `/write/compress`
+
+**Files:** `writing_assistant.ex`
+
+### 12.3 AI Semantic Search
+**Status:** 🔴 Planned
+**Description:** Meaning-based search using embeddings instead of keywords.
+
+**Features:**
+- Vector similarity search across all content
+- Cross-content type search (phlogs, docs, users, comments)
+- "Find similar" for any content item
+- Natural language queries
+- Relevance ranking with explanations
+
+**Routes:** `/semantic`, `/semantic/search`, `/semantic/similar/<type>/<id>`
+
+**Files:** `semantic_search.ex`
+
+### 12.4 AI Gopherverse Crawler
+**Status:** 🔴 Planned
+**Description:** Crawl, index, and summarize external Gopher servers.
+
+**Features:**
+- Automated crawling of gopherspace
+- AI-generated summaries and tags
+- Curated content feed
+- Interest-based discovery
+- Daily/weekly digests
+- Server health monitoring
+
+**Routes:** `/gopherverse`, `/gopherverse/discover`, `/gopherverse/digest`, `/gopherverse/servers`, `/gopherverse/submit`
+
+**Files:** `gopherverse.ex`, `gopher_crawler.ex`
+
+### 12.5 AI-Enhanced Text Adventure
+**Status:** 🔴 Planned
+**Description:** Upgrade adventure game with AI-driven NPCs and dynamic content.
+
+**Features:**
+- AI NPCs with dynamic dialogue and memory
+- Procedurally generated quests
+- Adaptive storytelling based on player choices
+- AI-generated room descriptions and lore
+- Player personality tracking
+- Emergent narrative events
+
+**Routes:** `/adventure/ai`, `/adventure/ai/npc/<name>`, `/adventure/ai/quest`
+
+**Files:** `adventure_ai.ex`
+
+### 12.6 AI Creative Writing Studio
+**Status:** 🔴 Planned
+**Description:** Generate creative content: stories, poems, lyrics.
+
+**Features:**
+- Short story generation from prompts
+- Poetry: haiku, sonnet, free verse, limerick
+- Song lyrics from themes/moods
+- Story continuation ("what happens next")
+- Style rewriting (noir, fantasy, sci-fi, romance)
+- Collaborative writing mode
+
+**Routes:** `/write/story`, `/write/poem`, `/write/lyrics`, `/write/continue`, `/write/rewrite`, `/write/collab`
+
+**Files:** `creative_studio.ex`
+
+### 12.7 AI Code Companion
+**Status:** 🔴 Planned
+**Description:** Code explanation, review, and assistance tools.
+
+**Features:**
+- Explain what code does (any language)
+- Basic code review with suggestions
+- Pseudocode to real code conversion
+- Regex builder from natural language
+- SQL query generation
+- Algorithm explanation
+
+**Routes:** `/code`, `/code/explain`, `/code/review`, `/code/convert`, `/code/regex`, `/code/sql`, `/code/algorithm`
+
+**Files:** `code_companion.ex`
+
+### 12.8 AI Oracle & Advisor
+**Status:** 🔴 Planned
+**Description:** Fun daily content with AI personality - fortunes, advice, readings.
+
+**Features:**
+- Daily wisdom/fortune
+- Situational advice
+- Tarot card readings with AI interpretation
+- I Ching consultation
+- Dream interpretation
+- Personality-based horoscopes
+
+**Routes:** `/oracle`, `/oracle/fortune`, `/oracle/advice`, `/oracle/tarot`, `/oracle/iching`, `/oracle/dreams`, `/oracle/horoscope`
+
+**Files:** `oracle.ex`
+
+### 12.9 AI Learning Tools
+**Status:** 🔴 Planned
+**Description:** Educational tools for studying and understanding.
+
+**Features:**
+- Flashcard generation from text
+- Quiz generation from content
+- ELI5 explanations
+- Enhanced dictionary definitions
+- Etymology and word history
+- Concept mapping
+
+**Routes:** `/learn`, `/learn/flashcards`, `/learn/quiz`, `/learn/explain`, `/learn/define`, `/learn/etymology`
+
+**Files:** `learning_tools.ex`
+
+### 12.10 AI Conversation Partner
+**Status:** 🔴 Planned
+**Description:** Interactive AI for debates, interviews, tutoring.
+
+**Features:**
+- Debate mode (AI takes opposing view)
+- Historical/fictional figure interviews
+- Socratic tutoring method
+- Brainstorming partner
+- Devil's advocate mode
+- Collaborative problem solving
+
+**Routes:** `/converse`, `/converse/debate`, `/converse/interview`, `/converse/tutor`, `/converse/brainstorm`
+
+**Files:** `conversation_partner.ex`
+
+### 12.11 AI ASCII Art Generator
+**Status:** 🔴 Planned
+**Description:** Generate ASCII art from text descriptions.
+
+**Features:**
+- Text-to-ASCII art generation
+- Logo/banner creation
+- Scene composition
+- Style options (simple, detailed, shaded)
+- ANSI color art generation
+- Animation frames
+
+**Routes:** `/art/generate`, `/art/logo`, `/art/scene`, `/art/animate`
+
+**Files:** `art_generator.ex`
+
+### 12.12 Quick AI Enhancements
+**Status:** 🔴 Planned
+**Description:** Small AI features that enhance existing functionality.
+
+**Features:**
+- Smart reply suggestions for guestbook/comments
+- Auto-tagging for all content types
+- On-demand TL;DR for any content
+- Mood/tone detection
+- "Related content" recommendations
+- Content quality scoring
+
+**Files:** `ai_enhancements.ex`
+
+---
+
 ## Notes
 
 - Implement features in order of priority

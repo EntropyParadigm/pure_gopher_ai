@@ -41,6 +41,8 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.PhlogFormatter
   alias PureGopherAi.PhlogArt
   alias PureGopherAi.AnsiArt
+  alias PureGopherAi.Slides
+  alias PureGopherAi.SlideRenderer
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -748,6 +750,49 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/games/scramble/guess " <> word, host, port, _network, ip, _socket),
     do: scramble_guess(session_id_from_ip(ip), word, host, port)
+
+  # Terminal Slides routes
+  defp route_selector("/slides", host, port, _network, _ip, _socket),
+    do: slides_menu(host, port)
+
+  defp route_selector("/slides/", host, port, _network, _ip, _socket),
+    do: slides_menu(host, port)
+
+  defp route_selector("/slides/list", host, port, _network, _ip, _socket),
+    do: slides_list(host, port)
+
+  defp route_selector("/slides/new", host, port, _network, _ip, _socket),
+    do: slides_new_prompt(host, port)
+
+  defp route_selector("/slides/new\t" <> input, host, port, _network, ip, _socket),
+    do: slides_create(input, ip, host, port)
+
+  defp route_selector("/slides/new " <> input, host, port, _network, ip, _socket),
+    do: slides_create(input, ip, host, port)
+
+  defp route_selector("/slides/view/" <> id, host, port, _network, _ip, _socket),
+    do: slides_view(id, host, port)
+
+  defp route_selector("/slides/present/" <> path, host, port, _network, _ip, _socket),
+    do: slides_present(path, host, port)
+
+  defp route_selector("/slides/edit/" <> path, host, port, _network, _ip, _socket),
+    do: slides_edit(path, host, port)
+
+  defp route_selector("/slides/add/" <> path, host, port, _network, _ip, _socket),
+    do: slides_add_slide(path, host, port)
+
+  defp route_selector("/slides/export/" <> path, host, port, _network, _ip, _socket),
+    do: slides_export(path, host, port)
+
+  defp route_selector("/slides/delete/" <> id, host, port, _network, _ip, _socket),
+    do: slides_delete(id, host, port)
+
+  defp route_selector("/slides/themes", host, port, _network, _ip, _socket),
+    do: slides_themes(host, port)
+
+  defp route_selector("/slides/templates", host, port, _network, _ip, _socket),
+    do: slides_templates(host, port)
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -5268,6 +5313,531 @@ defmodule PureGopherAi.GopherHandler do
         .
         """
     end
+  end
+
+  # === Terminal Slides Functions ===
+
+  defp slides_menu(host, port) do
+    recent = Slides.list_decks(limit: 5)
+
+    recent_items = if recent == [] do
+      "iNo presentations yet. Create one!\t\t#{host}\t#{port}"
+    else
+      recent
+      |> Enum.map(fn deck ->
+        slide_count = length(deck.slides)
+        "1#{deck.title} (#{slide_count} slides)\t/slides/view/#{deck.id}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+    end
+
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║           TERMINAL SLIDES                             ║\t\t#{host}\t#{port}
+    i  ║     Create Beautiful Terminal Presentations           ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Create slide decks with ASCII art, ANSI colors,\t\t#{host}\t#{port}
+    i  borders, and beautiful typography. Export to\t\t#{host}\t#{port}
+    i  Markdown for use anywhere.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  ACTIONS\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Create New Presentation\t/slides/new\t#{host}\t#{port}
+    1Browse All Presentations\t/slides/list\t#{host}\t#{port}
+    1View Themes\t/slides/themes\t#{host}\t#{port}
+    1View Templates\t/slides/templates\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  RECENT PRESENTATIONS\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    #{recent_items}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp slides_list(host, port) do
+    decks = Slides.list_decks(limit: 50)
+
+    deck_items = if decks == [] do
+      "iNo presentations found.\t\t#{host}\t#{port}"
+    else
+      decks
+      |> Enum.map(fn deck ->
+        slide_count = length(deck.slides)
+        date = DateTime.to_date(deck.created_at) |> Date.to_string()
+        "1#{deck.title} by #{deck.author} (#{slide_count} slides) - #{date}\t/slides/view/#{deck.id}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+    end
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== All Presentations ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{deck_items}
+    i\t\t#{host}\t#{port}
+    7Create New\t/slides/new\t#{host}\t#{port}
+    1Back to Slides Menu\t/slides\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp slides_new_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Create New Presentation ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter: title|author|description|theme\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable themes: #{SlideRenderer.themes() |> Enum.join(", ")}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample: My Talk|John Doe|A great presentation|tech\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter presentation details\t/slides/new\t#{host}\t#{port}
+    1Back to Slides Menu\t/slides\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp slides_create(input, _ip, host, port) do
+    parts = String.split(input, "|") |> Enum.map(&String.trim/1)
+
+    case parts do
+      [title, author | rest] when title != "" and author != "" ->
+        description = Enum.at(rest, 0, "")
+        theme_str = Enum.at(rest, 1, "default")
+        theme = String.to_existing_atom(theme_str)
+
+        case Slides.create_deck(title, author, description: description, theme: theme) do
+          {:ok, deck} ->
+            """
+            i\t\t#{host}\t#{port}
+            i=== Presentation Created! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iTitle: #{deck.title}\t\t#{host}\t#{port}
+            iAuthor: #{deck.author}\t\t#{host}\t#{port}
+            iTheme: #{deck.theme}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iNow add some slides!\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Add Slides\t/slides/edit/#{deck.id}\t#{host}\t#{port}
+            1View Presentation\t/slides/view/#{deck.id}\t#{host}\t#{port}
+            1Back to Slides Menu\t/slides\t#{host}\t#{port}
+            .
+            """
+
+          {:error, reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            iError: Failed to create - #{inspect(reason)}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Slides Menu\t/slides\t#{host}\t#{port}
+            .
+            """
+        end
+
+      _ ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Invalid format. Use: title|author|description|theme\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Again\t/slides/new\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  rescue
+    ArgumentError ->
+      """
+      i\t\t#{host}\t#{port}
+      iError: Invalid theme. Use: #{SlideRenderer.themes() |> Enum.join(", ")}\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      7Try Again\t/slides/new\t#{host}\t#{port}
+      1Back to Slides Menu\t/slides\t#{host}\t#{port}
+      .
+      """
+  end
+
+  defp slides_view(id, host, port) do
+    case Slides.get_deck(id) do
+      {:ok, deck} ->
+        slide_list = if deck.slides == [] do
+          "iNo slides yet. Add some!\t\t#{host}\t#{port}"
+        else
+          deck.slides
+          |> Enum.with_index()
+          |> Enum.map(fn {slide, idx} ->
+            title = if slide.title != "", do: slide.title, else: "Slide #{idx + 1}"
+            "1#{idx + 1}. #{title} (#{slide.type})\t/slides/present/#{id}/#{idx}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== #{deck.title} ===\t\t#{host}\t#{port}
+        iby #{deck.author}\t\t#{host}\t#{port}
+        i#{deck.description}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTheme: #{deck.theme} | Slides: #{length(deck.slides)} | Views: #{deck.view_count}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────────────────\t\t#{host}\t#{port}
+        i  SLIDES\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────────────────\t\t#{host}\t#{port}
+        #{slide_list}
+        i\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────────────────\t\t#{host}\t#{port}
+        i  ACTIONS\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────────────────\t\t#{host}\t#{port}
+        1Start Presentation\t/slides/present/#{id}/0\t#{host}\t#{port}
+        1Edit / Add Slides\t/slides/edit/#{id}\t#{host}\t#{port}
+        0Export as Markdown\t/slides/export/#{id}/md\t#{host}\t#{port}
+        0Export as Plain Text\t/slides/export/#{id}/txt\t#{host}\t#{port}
+        1Delete Presentation\t/slides/delete/#{id}\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Presentation not found\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp slides_present(path, host, port) do
+    case String.split(path, "/") do
+      [id, idx_str] ->
+        case {Slides.get_deck(id), Integer.parse(idx_str)} do
+          {{:ok, deck}, {idx, ""}} when idx >= 0 and idx < length(deck.slides) ->
+            SlideRenderer.render_for_gopher(deck, idx, host, port)
+
+          {{:ok, deck}, _} ->
+            """
+            i\t\t#{host}\t#{port}
+            iError: Invalid slide number. Deck has #{length(deck.slides)} slides.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Presentation\t/slides/view/#{id}\t#{host}\t#{port}
+            .
+            """
+
+          {{:error, :not_found}, _} ->
+            """
+            i\t\t#{host}\t#{port}
+            iError: Presentation not found\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Slides Menu\t/slides\t#{host}\t#{port}
+            .
+            """
+        end
+
+      [id] ->
+        # Start from first slide
+        slides_present("#{id}/0", host, port)
+
+      _ ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Invalid presentation path\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp slides_edit(id, host, port) do
+    case Slides.get_deck(id) do
+      {:ok, deck} ->
+        templates = Slides.templates()
+        |> Enum.map(&Atom.to_string/1)
+        |> Enum.join(", ")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Edit: #{deck.title} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i  Available slide types:\t\t#{host}\t#{port}
+        i  #{templates}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────────────────\t\t#{host}\t#{port}
+        i  ADD A SLIDE\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────────────────\t\t#{host}\t#{port}
+        7Add Title Slide\t/slides/add/#{id}/title\t#{host}\t#{port}
+        7Add Content Slide\t/slides/add/#{id}/content\t#{host}\t#{port}
+        7Add Code Slide\t/slides/add/#{id}/code\t#{host}\t#{port}
+        7Add Quote Slide\t/slides/add/#{id}/quote\t#{host}\t#{port}
+        7Add List Slide\t/slides/add/#{id}/list\t#{host}\t#{port}
+        7Add Two-Column Slide\t/slides/add/#{id}/two_column\t#{host}\t#{port}
+        7Add Image/Art Slide\t/slides/add/#{id}/image\t#{host}\t#{port}
+        7Add Comparison Slide\t/slides/add/#{id}/comparison\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Presentation\t/slides/view/#{id}\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Presentation not found\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp slides_add_slide(path, host, port) do
+    case String.split(path, "/") do
+      [id, type_str] ->
+        # Show prompt for content
+        type_info = case type_str do
+          "title" -> "Enter your main title (will be displayed large and centered)"
+          "content" -> "Enter: slide_title|content text"
+          "code" -> "Enter: slide_title|your code here"
+          "quote" -> "Enter: quote text|attribution"
+          "list" -> "Enter: slide_title|item1|item2|item3..."
+          "two_column" -> "Enter: slide_title|left content|||right content"
+          "image" -> "Enter: slide_title|theme_name (technology, nature, space, etc)"
+          "comparison" -> "Enter: slide_title|option1|||option2"
+          _ -> "Enter your content"
+        end
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Add #{String.capitalize(type_str)} Slide ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{type_info}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Enter slide content\t/slides/add/#{id}/#{type_str}/save\t#{host}\t#{port}
+        1Cancel\t/slides/edit/#{id}\t#{host}\t#{port}
+        .
+        """
+
+      [id, type_str, "save\t" <> content] ->
+        save_slide(id, type_str, content, host, port)
+
+      [id, type_str, "save " <> content] ->
+        save_slide(id, type_str, content, host, port)
+
+      _ ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Invalid path\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp save_slide(id, type_str, content, host, port) do
+    type = String.to_existing_atom(type_str)
+
+    {title, slide_content, notes} = case type do
+      :title ->
+        {content, content, ""}
+
+      :quote ->
+        case String.split(content, "|") do
+          [quote, attr] -> {attr, quote, ""}
+          [quote] -> {"", quote, ""}
+          _ -> {"", content, ""}
+        end
+
+      :list ->
+        case String.split(content, "|") do
+          [title | items] -> {title, Enum.join(items, "\n"), ""}
+          _ -> {"", content, ""}
+        end
+
+      _ ->
+        case String.split(content, "|", parts: 2) do
+          [title, body] -> {title, body, ""}
+          [body] -> {"", body, ""}
+        end
+    end
+
+    case Slides.add_slide(id, type, slide_content, title: title, notes: notes) do
+      {:ok, deck} ->
+        """
+        i\t\t#{host}\t#{port}
+        i=== Slide Added! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iYour presentation now has #{length(deck.slides)} slides.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Add Another Slide\t/slides/edit/#{id}\t#{host}\t#{port}
+        1View Presentation\t/slides/view/#{id}\t#{host}\t#{port}
+        1Preview This Slide\t/slides/present/#{id}/#{length(deck.slides) - 1}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Failed to add slide - #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Edit\t/slides/edit/#{id}\t#{host}\t#{port}
+        .
+        """
+    end
+  rescue
+    ArgumentError ->
+      """
+      i\t\t#{host}\t#{port}
+      iError: Invalid slide type\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Back to Slides Menu\t/slides\t#{host}\t#{port}
+      .
+      """
+  end
+
+  defp slides_export(path, host, port) do
+    case String.split(path, "/") do
+      [id, "md"] ->
+        case Slides.export_markdown(id) do
+          {:ok, markdown} ->
+            format_text_response(markdown, host, port)
+
+          {:error, :not_found} ->
+            """
+            i\t\t#{host}\t#{port}
+            iError: Presentation not found\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Slides Menu\t/slides\t#{host}\t#{port}
+            .
+            """
+        end
+
+      [id, "txt"] ->
+        case Slides.export_text(id) do
+          {:ok, text} ->
+            format_text_response(text, host, port)
+
+          {:error, :not_found} ->
+            """
+            i\t\t#{host}\t#{port}
+            iError: Presentation not found\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Slides Menu\t/slides\t#{host}\t#{port}
+            .
+            """
+        end
+
+      [id] ->
+        # Show export options
+        """
+        i\t\t#{host}\t#{port}
+        i=== Export Presentation ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        0Export as Markdown (.md)\t/slides/export/#{id}/md\t#{host}\t#{port}
+        0Export as Plain Text (.txt)\t/slides/export/#{id}/txt\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Presentation\t/slides/view/#{id}\t#{host}\t#{port}
+        .
+        """
+
+      _ ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Invalid export path\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp slides_delete(id, host, port) do
+    case Slides.delete_deck(id) do
+      :ok ->
+        """
+        i\t\t#{host}\t#{port}
+        i=== Presentation Deleted ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iThe presentation has been removed.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        """
+        i\t\t#{host}\t#{port}
+        iError: Presentation not found\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Slides Menu\t/slides\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp slides_themes(host, port) do
+    themes = SlideRenderer.themes()
+    |> Enum.map(fn theme ->
+      "i  - #{theme}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Presentation Themes ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable themes for your presentations:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{themes}
+    i\t\t#{host}\t#{port}
+    iThemes control colors, borders, and styling.\t\t#{host}\t#{port}
+    iSpecify theme when creating a presentation.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Slides Menu\t/slides\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp slides_templates(host, port) do
+    templates = [
+      {"title", "Large centered title slide"},
+      {"content", "Text content with optional title"},
+      {"code", "Code block with syntax styling"},
+      {"quote", "Blockquote with attribution"},
+      {"list", "Bulleted list items"},
+      {"two_column", "Side-by-side content"},
+      {"image", "ASCII/ANSI art display"},
+      {"comparison", "VS-style comparison"}
+    ]
+
+    template_items = templates
+    |> Enum.map(fn {name, desc} ->
+      "i  #{String.pad_trailing(name, 12)} - #{desc}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Slide Templates ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable slide types:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{template_items}
+    i\t\t#{host}\t#{port}
+    iEach template has its own input format.\t\t#{host}\t#{port}
+    iSee examples when adding slides.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Slides Menu\t/slides\t#{host}\t#{port}
+    .
+    """
   end
 
   # === Link Directory Functions ===
