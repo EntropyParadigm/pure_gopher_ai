@@ -43,6 +43,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.AnsiArt
   alias PureGopherAi.Slides
   alias PureGopherAi.SlideRenderer
+  alias PureGopherAi.WritingAssistant
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -750,6 +751,112 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/games/scramble/guess " <> word, host, port, _network, ip, _socket),
     do: scramble_guess(session_id_from_ip(ip), word, host, port)
+
+  # AI Writing Assistant routes
+  defp route_selector("/write", host, port, _network, _ip, _socket),
+    do: write_menu(host, port)
+
+  defp route_selector("/write/", host, port, _network, _ip, _socket),
+    do: write_menu(host, port)
+
+  defp route_selector("/write/draft", host, port, _network, _ip, _socket),
+    do: write_draft_prompt(host, port)
+
+  defp route_selector("/write/draft\t" <> input, host, port, _network, _ip, _socket),
+    do: write_draft(input, host, port)
+
+  defp route_selector("/write/draft " <> input, host, port, _network, _ip, _socket),
+    do: write_draft(input, host, port)
+
+  defp route_selector("/write/improve", host, port, _network, _ip, _socket),
+    do: write_improve_prompt(host, port)
+
+  defp route_selector("/write/improve\t" <> input, host, port, _network, _ip, _socket),
+    do: write_improve(input, host, port)
+
+  defp route_selector("/write/improve " <> input, host, port, _network, _ip, _socket),
+    do: write_improve(input, host, port)
+
+  defp route_selector("/write/proofread", host, port, _network, _ip, _socket),
+    do: write_proofread_prompt(host, port)
+
+  defp route_selector("/write/proofread\t" <> input, host, port, _network, _ip, _socket),
+    do: write_proofread(input, host, port)
+
+  defp route_selector("/write/proofread " <> input, host, port, _network, _ip, _socket),
+    do: write_proofread(input, host, port)
+
+  defp route_selector("/write/tone/" <> tone, host, port, _network, _ip, _socket),
+    do: write_tone_prompt(tone, host, port)
+
+  defp route_selector("/write/titles", host, port, _network, _ip, _socket),
+    do: write_titles_prompt(host, port)
+
+  defp route_selector("/write/titles\t" <> input, host, port, _network, _ip, _socket),
+    do: write_titles(input, host, port)
+
+  defp route_selector("/write/titles " <> input, host, port, _network, _ip, _socket),
+    do: write_titles(input, host, port)
+
+  defp route_selector("/write/tags", host, port, _network, _ip, _socket),
+    do: write_tags_prompt(host, port)
+
+  defp route_selector("/write/tags\t" <> input, host, port, _network, _ip, _socket),
+    do: write_tags(input, host, port)
+
+  defp route_selector("/write/tags " <> input, host, port, _network, _ip, _socket),
+    do: write_tags(input, host, port)
+
+  defp route_selector("/write/expand", host, port, _network, _ip, _socket),
+    do: write_expand_prompt(host, port)
+
+  defp route_selector("/write/expand\t" <> input, host, port, _network, _ip, _socket),
+    do: write_expand(input, host, port)
+
+  defp route_selector("/write/expand " <> input, host, port, _network, _ip, _socket),
+    do: write_expand(input, host, port)
+
+  defp route_selector("/write/compress", host, port, _network, _ip, _socket),
+    do: write_compress_prompt(host, port)
+
+  defp route_selector("/write/compress\t" <> input, host, port, _network, _ip, _socket),
+    do: write_compress(input, host, port)
+
+  defp route_selector("/write/compress " <> input, host, port, _network, _ip, _socket),
+    do: write_compress(input, host, port)
+
+  defp route_selector("/write/outline", host, port, _network, _ip, _socket),
+    do: write_outline_prompt(host, port)
+
+  defp route_selector("/write/outline\t" <> input, host, port, _network, _ip, _socket),
+    do: write_outline(input, host, port)
+
+  defp route_selector("/write/outline " <> input, host, port, _network, _ip, _socket),
+    do: write_outline(input, host, port)
+
+  defp route_selector("/write/intro", host, port, _network, _ip, _socket),
+    do: write_intro_prompt(host, port)
+
+  defp route_selector("/write/intro\t" <> input, host, port, _network, _ip, _socket),
+    do: write_intro(input, host, port)
+
+  defp route_selector("/write/intro " <> input, host, port, _network, _ip, _socket),
+    do: write_intro(input, host, port)
+
+  defp route_selector("/write/conclusion", host, port, _network, _ip, _socket),
+    do: write_conclusion_prompt(host, port)
+
+  defp route_selector("/write/conclusion\t" <> input, host, port, _network, _ip, _socket),
+    do: write_conclusion(input, host, port)
+
+  defp route_selector("/write/conclusion " <> input, host, port, _network, _ip, _socket),
+    do: write_conclusion(input, host, port)
+
+  defp route_selector("/write/tones", host, port, _network, _ip, _socket),
+    do: write_tones_list(host, port)
+
+  defp route_selector("/write/styles", host, port, _network, _ip, _socket),
+    do: write_styles_list(host, port)
 
   # Terminal Slides routes
   defp route_selector("/slides", host, port, _network, _ip, _socket),
@@ -5840,6 +5947,575 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
+  # === AI Writing Assistant Functions ===
+
+  defp write_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║           AI WRITING ASSISTANT                        ║\t\t#{host}\t#{port}
+    i  ║     Draft, Improve, and Polish Your Writing           ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Let AI help you with your writing! Generate drafts,\t\t#{host}\t#{port}
+    i  improve existing content, proofread, and more.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  CREATE & GENERATE\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Draft from Topic\t/write/draft\t#{host}\t#{port}
+    7Generate Outline\t/write/outline\t#{host}\t#{port}
+    7Generate Titles\t/write/titles\t#{host}\t#{port}
+    7Generate Tags\t/write/tags\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  IMPROVE & POLISH\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Improve Writing\t/write/improve\t#{host}\t#{port}
+    7Proofread\t/write/proofread\t#{host}\t#{port}
+    7Generate Introduction\t/write/intro\t#{host}\t#{port}
+    7Generate Conclusion\t/write/conclusion\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  RESIZE & TRANSFORM\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Expand Content\t/write/expand\t#{host}\t#{port}
+    7Compress Content\t/write/compress\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  REFERENCES\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    1Writing Tones\t/write/tones\t#{host}\t#{port}
+    1Writing Styles\t/write/styles\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_draft_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Draft from Topic ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic or outline to generate a draft.\t\t#{host}\t#{port}
+    iExample: "benefits of remote work"\t\t#{host}\t#{port}
+    iExample: "1. intro 2. history 3. benefits 4. conclusion"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Topic or Outline\t/write/draft\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_draft(topic, host, port) do
+    topic = String.trim(topic)
+
+    case WritingAssistant.draft(topic) do
+      {:ok, draft} ->
+        formatted = format_text_as_info(draft, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Draft ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTopic: #{truncate(topic, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate Another Draft\t/write/draft\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating draft: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_improve_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Improve Writing ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your text and AI will improve its style,\t\t#{host}\t#{port}
+    iclarity, flow, and engagement.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Text to Improve\t/write/improve\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_improve(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.improve(content) do
+      {:ok, improved} ->
+        formatted = format_text_as_info(improved, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Improved Version ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Improve More Text\t/write/improve\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error improving text: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_proofread_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Proofread ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your text and AI will check for:\t\t#{host}\t#{port}
+    i  - Grammar errors\t\t#{host}\t#{port}
+    i  - Spelling mistakes\t\t#{host}\t#{port}
+    i  - Punctuation issues\t\t#{host}\t#{port}
+    i  - Awkward phrasing\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Text to Proofread\t/write/proofread\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_proofread(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.proofread(content) do
+      {:ok, proofread} ->
+        formatted = format_text_as_info(proofread, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Proofread Result ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Proofread More Text\t/write/proofread\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error proofreading: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_tone_prompt(tone, host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Adjust Tone to: #{tone} ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your text and AI will rewrite it\t\t#{host}\t#{port}
+    iin a #{tone} tone.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Text to Adjust\t/write/tone/#{tone}\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Tones List\t/write/tones\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_titles_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Titles ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your content and AI will suggest\t\t#{host}\t#{port}
+    i5 compelling title options.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content\t/write/titles\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_titles(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.generate_titles(content) do
+      {:ok, titles} ->
+        title_lines = titles
+        |> Enum.with_index(1)
+        |> Enum.map(fn {title, idx} ->
+          "i  #{idx}. #{title}\t\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\r\n")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Title Suggestions ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{title_lines}
+        i\t\t#{host}\t#{port}
+        7Generate for Different Content\t/write/titles\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating titles: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_tags_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Tags ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your content and AI will suggest\t\t#{host}\t#{port}
+    irelevant tags and keywords.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content\t/write/tags\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_tags(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.generate_tags(content) do
+      {:ok, tags} ->
+        tag_line = tags |> Enum.join(", ")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Suggested Tags ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{tag_line}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Generate for Different Content\t/write/tags\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating tags: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_expand_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Expand Content ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your text and AI will expand it\t\t#{host}\t#{port}
+    iwith more details, examples, and context.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content to Expand\t/write/expand\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_expand(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.expand(content) do
+      {:ok, expanded} ->
+        formatted = format_text_as_info(expanded, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Expanded Version ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Expand More Content\t/write/expand\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error expanding content: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_compress_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Compress Content ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your text and AI will make it\t\t#{host}\t#{port}
+    imore concise while keeping key points.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content to Compress\t/write/compress\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_compress(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.compress(content) do
+      {:ok, compressed} ->
+        formatted = format_text_as_info(compressed, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Compressed Version ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Compress More Content\t/write/compress\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error compressing content: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_outline_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Outline ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic and AI will create\t\t#{host}\t#{port}
+    ia detailed outline for your article.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Topic\t/write/outline\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_outline(topic, host, port) do
+    topic = String.trim(topic)
+
+    case WritingAssistant.outline(topic) do
+      {:ok, outline} ->
+        formatted = format_text_as_info(outline, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Outline: #{truncate(topic, 40)} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate for Another Topic\t/write/outline\t#{host}\t#{port}
+        7Draft from This Topic\t/write/draft\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating outline: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_intro_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Introduction ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your content and AI will write\t\t#{host}\t#{port}
+    ian engaging introduction for it.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content\t/write/intro\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_intro(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.introduce(content) do
+      {:ok, intro} ->
+        formatted = format_text_as_info(intro, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Introduction ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate for Different Content\t/write/intro\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating introduction: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_conclusion_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Conclusion ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your content and AI will write\t\t#{host}\t#{port}
+    ia fitting conclusion for it.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content\t/write/conclusion\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_conclusion(content, host, port) do
+    content = String.trim(content)
+
+    case WritingAssistant.conclude(content) do
+      {:ok, conclusion} ->
+        formatted = format_text_as_info(conclusion, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Conclusion ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate for Different Content\t/write/conclusion\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating conclusion: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Writing Menu\t/write\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp write_tones_list(host, port) do
+    tones = WritingAssistant.tones()
+
+    tone_descriptions = %{
+      formal: "Professional, polished language",
+      casual: "Conversational, approachable style",
+      technical: "Precise, detailed explanations",
+      friendly: "Warm, personable communication",
+      professional: "Balanced, authoritative voice",
+      creative: "Expressive, unique writing"
+    }
+
+    tone_items = tones
+    |> Enum.map(fn tone ->
+      desc = Map.get(tone_descriptions, tone, "")
+      "i  #{String.pad_trailing(Atom.to_string(tone), 14)} #{desc}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Writing Tones ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable tones for adjusting your writing:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{tone_items}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp write_styles_list(host, port) do
+    styles = WritingAssistant.styles()
+
+    style_descriptions = %{
+      academic: "Scholarly, research-oriented",
+      blog: "Engaging web content",
+      news: "Journalistic, factual reporting",
+      story: "Narrative, storytelling style",
+      tutorial: "Step-by-step instructions",
+      review: "Evaluative, critical analysis"
+    }
+
+    style_items = styles
+    |> Enum.map(fn style ->
+      desc = Map.get(style_descriptions, style, "")
+      "i  #{String.pad_trailing(Atom.to_string(style), 14)} #{desc}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Writing Styles ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable styles for drafting content:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{style_items}
+    i\t\t#{host}\t#{port}
+    1Back to Writing Menu\t/write\t#{host}\t#{port}
+    .
+    """
+  end
+
   # === Link Directory Functions ===
 
   defp links_menu(host, port) do
@@ -6249,6 +6925,16 @@ defmodule PureGopherAi.GopherHandler do
       "i#{escaped}\t\t#{host}\t#{port}\r\n"
     end)
     |> Enum.join("")
+  end
+
+  # Format multi-line text as Gopher info lines (for embedding in menus)
+  defp format_text_as_info(text, host, port) do
+    text
+    |> InputSanitizer.escape_gopher()
+    |> String.split("\n")
+    |> Enum.map(&String.trim_trailing/1)
+    |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+    |> Enum.join("\r\n")
   end
 
   # === User Phlog Functions ===

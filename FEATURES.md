@@ -2551,18 +2551,19 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 **Files:** `slides.ex`, `slide_renderer.ex`
 
 ### 12.2 AI Writing Assistant
-**Status:** 🔴 Planned
+**Status:** ✅ Complete
 **Description:** Help users draft, improve, and polish phlog posts.
 
 **Features:**
 - Draft generation from topic/outline
 - Style improvement suggestions
 - Grammar and spelling check
-- Tone adjustment (formal, casual, technical)
+- Tone adjustment (formal, casual, technical, friendly, professional, creative)
 - Auto-generate titles and tags
 - Content expansion/compression
+- Generate outlines, introductions, conclusions
 
-**Routes:** `/write/draft`, `/write/improve`, `/write/proofread`, `/write/title`, `/write/tags`, `/write/expand`, `/write/compress`
+**Routes:** `/write`, `/write/draft`, `/write/improve`, `/write/proofread`, `/write/titles`, `/write/tags`, `/write/expand`, `/write/compress`, `/write/outline`, `/write/intro`, `/write/conclusion`, `/write/tones`, `/write/styles`
 
 **Files:** `writing_assistant.ex`
 
