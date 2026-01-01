@@ -1,0 +1,44 @@
+## BEAM VM Arguments for Production
+## Copy to rel/vm.args.eex for release builds
+
+## Name of the node
+-name <%= @release.name %>@127.0.0.1
+
+## Cookie for distributed erlang
+-setcookie <%= @release.cookie %>
+
+## Enable SMP automatically based on available processors
++S <%= System.schedulers_online() %>:<%= System.schedulers_online() %>
+
+## Increase async thread pool (for file I/O, DNS, etc.)
++A 64
+
+## Enable kernel poll (epoll on Linux, kqueue on macOS)
++K true
+
+## Increase port limit for many concurrent connections
++Q 65536
+
+## Memory allocator settings for reduced fragmentation
++MBas aoffcbf
++MHas aoffcbf
++MBlmbcs 512
++MHlmbcs 512
++MMmcs 30
+
+## Increase binary heap for handling many binary payloads
++hms 8192
+
+## Process heap settings
++hmbs 1024
+
+## Garbage collection: fullsweep after 20 generations
+-env ERL_FULLSWEEP_AFTER 20
+
+## Enable busy waiting for schedulers (lower latency, higher CPU)
+## Uncomment for latency-critical deployments:
+## +sbwt very_long
+## +swt very_low
+
+## Heartbeat for crash recovery
+-heart

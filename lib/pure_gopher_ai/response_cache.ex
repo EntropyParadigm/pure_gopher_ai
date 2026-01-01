@@ -138,8 +138,9 @@ defmodule PureGopherAi.ResponseCache do
 
   @impl true
   def init(_opts) do
-    :ets.new(@table_name, [:named_table, :public, :set])
-    :ets.new(@stats_table, [:named_table, :public, :set])
+    # read_concurrency for high-frequency cache lookups
+    :ets.new(@table_name, [:named_table, :public, :set, read_concurrency: true])
+    :ets.new(@stats_table, [:named_table, :public, :set, read_concurrency: true])
 
     # Initialize stats
     :ets.insert(@stats_table, {:hits, 0})

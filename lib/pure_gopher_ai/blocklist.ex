@@ -97,8 +97,9 @@ defmodule PureGopherAi.Blocklist do
 
   @impl true
   def init(_opts) do
-    :ets.new(@table_name, [:named_table, :public, :set])
-    :ets.new(@cidr_table, [:named_table, :public, :set])
+    # read_concurrency for per-request blocklist checks
+    :ets.new(@table_name, [:named_table, :public, :set, read_concurrency: true])
+    :ets.new(@cidr_table, [:named_table, :public, :set, read_concurrency: true])
 
     if enabled?() do
       # Initial fetch

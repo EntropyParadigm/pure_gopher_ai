@@ -280,12 +280,10 @@ defmodule PureGopherAi.RateLimiter do
 
   @impl true
   def init(_opts) do
-    # Create ETS table for storing rate limit data
-    :ets.new(@table_name, [:named_table, :public, :set])
-    # Create ETS table for bans
-    :ets.new(@bans_table, [:named_table, :public, :set])
-    # Create ETS table for abuse tracking
-    :ets.new(@abuse_table, [:named_table, :public, :set])
+    # Create ETS tables with read_concurrency for per-request checks
+    :ets.new(@table_name, [:named_table, :public, :set, read_concurrency: true, write_concurrency: true])
+    :ets.new(@bans_table, [:named_table, :public, :set, read_concurrency: true])
+    :ets.new(@abuse_table, [:named_table, :public, :set, read_concurrency: true, write_concurrency: true])
 
     # Schedule periodic cleanup
     schedule_cleanup()
