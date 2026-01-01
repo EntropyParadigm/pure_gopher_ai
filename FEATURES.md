@@ -1540,6 +1540,55 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.14 Simple Games
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Simple games for the Gopher community - Hangman, Number Guess, Word Scramble.
+
+**Implementation:**
+- [x] Create `Games` GenServer with ETS session storage
+- [x] `/games` - Games menu
+- [x] Hangman - guess letters to reveal a word
+- [x] Number Guess - guess a random number with hints
+- [x] Word Scramble - unscramble a word
+- [x] Session-based game state with 1-hour TTL
+- [x] Automatic cleanup of expired sessions
+
+**Games:**
+1. **Hangman** - Classic word guessing game
+   - Random word from curated list (tech, animals, objects, abstract)
+   - 6 wrong guesses allowed
+   - Visual display with masked letters
+
+2. **Number Guess** - Guess the secret number
+   - Range 1-100 (configurable)
+   - Hints: higher/lower
+   - Track number of attempts
+
+3. **Word Scramble** - Unscramble the letters
+   - Word scrambled randomly
+   - Unlimited attempts
+
+**Selectors:**
+- `/games` - Games menu
+- `/games/hangman` - Start Hangman
+- `/games/hangman/guess` - Guess a letter
+- `/games/hangman/status` - View game status
+- `/games/number` - Start Number Guess
+- `/games/number/guess` - Make a guess
+- `/games/number/status` - View game status
+- `/games/scramble` - Start Word Scramble
+- `/games/scramble/guess` - Guess the word
+- `/games/scramble/status` - View game status
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/games.ex` (new)
+- `lib/pure_gopher_ai/application.ex` (added to supervisor)
+- `lib/pure_gopher_ai/gopher_handler.ex` (games routes)
+- `lib/pure_gopher_ai/sitemap.ex` (updated)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

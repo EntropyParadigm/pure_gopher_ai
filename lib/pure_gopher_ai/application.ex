@@ -93,6 +93,9 @@ defmodule PureGopherAi.Application do
       # Bookmarks / Favorites
       PureGopherAi.Bookmarks,
 
+      # Simple Games (Hangman, Number Guess, Word Scramble)
+      PureGopherAi.Games,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

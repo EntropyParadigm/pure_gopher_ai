@@ -143,6 +143,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/bookmarks.ex` | User bookmarks and favorites |
 | `lib/pure_gopher_ai/unit_converter.ex` | Unit conversion (length, weight, temp, etc) |
 | `lib/pure_gopher_ai/calculator.ex` | Mathematical expression evaluator |
+| `lib/pure_gopher_ai/games.ex` | Simple games (Hangman, Number Guess, Word Scramble) |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -274,6 +275,13 @@ end
 | `/convert <query>` | Convert units (e.g., "100 km to mi") |
 | `/calc` | Calculator |
 | `/calc <expression>` | Evaluate expression (e.g., "2 + 2") |
+| `/games` | Simple games (Hangman, Number Guess, Word Scramble) |
+| `/games/hangman` | Start Hangman game |
+| `/games/hangman/guess` | Guess a letter |
+| `/games/number` | Start Number Guess |
+| `/games/number/guess` | Guess a number |
+| `/games/scramble` | Start Word Scramble |
+| `/games/scramble/guess` | Guess the word |
 
 ### Response Format
 ```

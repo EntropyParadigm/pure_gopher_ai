@@ -66,7 +66,8 @@ defmodule PureGopherAi.Sitemap do
           %{selector: "/utils", type: 1, description: "Quick utilities"},
           %{selector: "/mail", type: 1, description: "Mailbox / Private messaging"},
           %{selector: "/trivia", type: 1, description: "Trivia quiz game"},
-          %{selector: "/bookmarks", type: 1, description: "Bookmarks / Favorites"}
+          %{selector: "/bookmarks", type: 1, description: "Bookmarks / Favorites"},
+          %{selector: "/games", type: 1, description: "Simple games (Hangman, Number Guess, Word Scramble)"}
         ]
       },
       %{

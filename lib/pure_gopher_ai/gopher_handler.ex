@@ -47,6 +47,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Bookmarks
   alias PureGopherAi.UnitConverter
   alias PureGopherAi.Calculator
+  alias PureGopherAi.Games
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -684,6 +685,52 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/calc " <> expr, host, port, _network, _ip, _socket),
     do: calc_evaluate(expr, host, port)
 
+  # Games routes
+  defp route_selector("/games", host, port, _network, _ip, _socket),
+    do: games_menu(host, port)
+
+  defp route_selector("/games/", host, port, _network, _ip, _socket),
+    do: games_menu(host, port)
+
+  # Hangman
+  defp route_selector("/games/hangman", host, port, _network, ip, _socket),
+    do: hangman_start(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/games/hangman/play", host, port, _network, ip, _socket),
+    do: hangman_play(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/games/hangman/guess\t" <> letter, host, port, _network, ip, _socket),
+    do: hangman_guess(session_id_from_ip(ip), letter, host, port)
+
+  defp route_selector("/games/hangman/guess " <> letter, host, port, _network, ip, _socket),
+    do: hangman_guess(session_id_from_ip(ip), letter, host, port)
+
+  # Number Guess
+  defp route_selector("/games/number", host, port, _network, ip, _socket),
+    do: number_guess_start(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/games/number/play", host, port, _network, ip, _socket),
+    do: number_guess_play(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/games/number/guess\t" <> num, host, port, _network, ip, _socket),
+    do: number_guess_guess(session_id_from_ip(ip), num, host, port)
+
+  defp route_selector("/games/number/guess " <> num, host, port, _network, ip, _socket),
+    do: number_guess_guess(session_id_from_ip(ip), num, host, port)
+
+  # Word Scramble
+  defp route_selector("/games/scramble", host, port, _network, ip, _socket),
+    do: scramble_start(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/games/scramble/play", host, port, _network, ip, _socket),
+    do: scramble_play(session_id_from_ip(ip), host, port)
+
+  defp route_selector("/games/scramble/guess\t" <> word, host, port, _network, ip, _socket),
+    do: scramble_guess(session_id_from_ip(ip), word, host, port)
+
+  defp route_selector("/games/scramble/guess " <> word, host, port, _network, ip, _socket),
+    do: scramble_guess(session_id_from_ip(ip), word, host, port)
+
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
     do: phlog_index(host, port, network, 1)
@@ -1207,6 +1254,7 @@ defmodule PureGopherAi.GopherHandler do
     1Bookmarks\t/bookmarks\t#{host}\t#{port}
     7Unit Converter\t/convert\t#{host}\t#{port}
     7Calculator\t/calc\t#{host}\t#{port}
+    1Games\t/games\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -7285,6 +7333,373 @@ defmodule PureGopherAi.GopherHandler do
         i\t\t#{host}\t#{port}
         7Try Again\t/calc\t#{host}\t#{port}
         1Back to Calculator\t/calc\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # === Games Functions ===
+
+  defp games_menu(host, port) do
+    """
+    i=== Simple Games ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPlay classic word and number games!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Available Games ---\t\t#{host}\t#{port}
+    1Hangman\t/games/hangman\t#{host}\t#{port}
+    i  Guess the word letter by letter\t\t#{host}\t#{port}
+    1Number Guess\t/games/number\t#{host}\t#{port}
+    i  Guess the secret number (1-100)\t\t#{host}\t#{port}
+    1Word Scramble\t/games/scramble\t#{host}\t#{port}
+    i  Unscramble the letters\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Hangman handlers
+
+  defp hangman_start(session_id, host, port) do
+    case Games.start_hangman(session_id) do
+      {:ok, game} ->
+        """
+        i=== Hangman ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iGuess the word letter by letter.\t\t#{host}\t#{port}
+        iYou have #{game.remaining} wrong guesses allowed.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iWord: #{game.display}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Guess a letter\t/games/hangman/guess\t#{host}\t#{port}
+        1View game state\t/games/hangman/play\t#{host}\t#{port}
+        1New game\t/games/hangman\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, _} ->
+        error_response("Could not start game.")
+    end
+  end
+
+  defp hangman_play(session_id, host, port) do
+    case Games.hangman_state(session_id) do
+      {:ok, game} ->
+        guessed = if Enum.empty?(game.guessed_letters), do: "(none)", else: Enum.join(game.guessed_letters, " ")
+
+        status_line = case game.status do
+          :won -> "iCongratulations! You won!\t\t#{host}\t#{port}"
+          :lost -> "iGame Over! The word was: #{game.word}\t\t#{host}\t#{port}"
+          :playing -> "7Guess a letter\t/games/hangman/guess\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Hangman ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iWord: #{game.display}\t\t#{host}\t#{port}
+        iGuessed: #{guessed}\t\t#{host}\t#{port}
+        iRemaining guesses: #{game.remaining}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{status_line}
+        1New game\t/games/hangman\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_game} ->
+        """
+        i=== Hangman ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo active game. Start a new one!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/hangman\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp hangman_guess(session_id, letter, host, port) do
+    case Games.guess_letter(session_id, letter) do
+      {:ok, result} ->
+        guessed = Enum.join(result.guessed_letters, " ")
+        correct_text = if result.correct, do: "Correct!", else: "Wrong!"
+
+        status_line = case result.status do
+          :won -> "iCongratulations! You won!\t\t#{host}\t#{port}"
+          :lost -> "iGame Over! The word was: #{result.word}\t\t#{host}\t#{port}"
+          :playing -> "7Guess another letter\t/games/hangman/guess\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Hangman ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iYou guessed: #{result.letter} - #{correct_text}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iWord: #{result.display}\t\t#{host}\t#{port}
+        iGuessed letters: #{guessed}\t\t#{host}\t#{port}
+        iRemaining guesses: #{result.remaining}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{status_line}
+        1New game\t/games/hangman\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :already_guessed} ->
+        error_response("You already guessed that letter!")
+
+      {:error, :invalid_letter} ->
+        error_response("Please enter a single letter (a-z)")
+
+      {:error, :game_over, status, word} ->
+        result_text = if status == :won, do: "You won!", else: "Game over!"
+        """
+        i=== Hangman ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{result_text} The word was: #{word}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/hangman\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_game} ->
+        """
+        i=== Hangman ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo active game. Start a new one!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/hangman\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # Number Guess handlers
+
+  defp number_guess_start(session_id, host, port) do
+    case Games.start_number_guess(session_id, 100) do
+      {:ok, game} ->
+        """
+        i=== Number Guess ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iI'm thinking of a number between 1 and #{game.max}.\t\t#{host}\t#{port}
+        iCan you guess what it is?\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Enter your guess\t/games/number/guess\t#{host}\t#{port}
+        1View game state\t/games/number/play\t#{host}\t#{port}
+        1New game\t/games/number\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, _} ->
+        error_response("Could not start game.")
+    end
+  end
+
+  defp number_guess_play(session_id, host, port) do
+    case Games.number_guess_state(session_id) do
+      {:ok, game} ->
+        guesses_text = if Enum.empty?(game.guesses), do: "(none)", else: Enum.join(game.guesses, ", ")
+
+        status_line = case game.status do
+          :won -> "iCongratulations! You got it in #{game.attempts} tries!\t\t#{host}\t#{port}"
+          :playing -> "7Enter your guess\t/games/number/guess\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Number Guess ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iGuessing a number between 1 and #{game.max}\t\t#{host}\t#{port}
+        iAttempts: #{game.attempts}\t\t#{host}\t#{port}
+        iPrevious guesses: #{guesses_text}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{status_line}
+        1New game\t/games/number\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_game} ->
+        """
+        i=== Number Guess ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo active game. Start a new one!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/number\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp number_guess_guess(session_id, num_str, host, port) do
+    case Integer.parse(String.trim(num_str)) do
+      {num, ""} ->
+        case Games.guess_number(session_id, num) do
+          {:ok, result} ->
+            hint_text = case result.hint do
+              :correct -> "Correct! You got it!"
+              :higher -> "Too low! Go higher."
+              :lower -> "Too high! Go lower."
+            end
+
+            status_line = case result.status do
+              :won -> "iCongratulations! You got it in #{result.attempts} tries!\t\t#{host}\t#{port}"
+              :playing -> "7Guess again\t/games/number/guess\t#{host}\t#{port}"
+            end
+
+            """
+            i=== Number Guess ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iYou guessed: #{result.guess}\t\t#{host}\t#{port}
+            i#{hint_text}\t\t#{host}\t#{port}
+            iAttempts: #{result.attempts}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{status_line}
+            1New game\t/games/number\t#{host}\t#{port}
+            1Back to Games\t/games\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :already_guessed} ->
+            error_response("You already guessed that number!")
+
+          {:error, :invalid_number} ->
+            error_response("Please enter a number between 1 and 100")
+
+          {:error, :game_over, _status, secret} ->
+            """
+            i=== Number Guess ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iGame already over! The number was: #{secret}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Start New Game\t/games/number\t#{host}\t#{port}
+            1Back to Games\t/games\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :no_game} ->
+            """
+            i=== Number Guess ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iNo active game. Start a new one!\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Start New Game\t/games/number\t#{host}\t#{port}
+            1Back to Games\t/games\t#{host}\t#{port}
+            .
+            """
+        end
+
+      _ ->
+        error_response("Please enter a valid number")
+    end
+  end
+
+  # Word Scramble handlers
+
+  defp scramble_start(session_id, host, port) do
+    case Games.start_scramble(session_id) do
+      {:ok, game} ->
+        """
+        i=== Word Scramble ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iUnscramble the letters to find the word!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iScrambled: #{game.scrambled}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Enter your guess\t/games/scramble/guess\t#{host}\t#{port}
+        1View game state\t/games/scramble/play\t#{host}\t#{port}
+        1New game\t/games/scramble\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, _} ->
+        error_response("Could not start game.")
+    end
+  end
+
+  defp scramble_play(session_id, host, port) do
+    case Games.scramble_state(session_id) do
+      {:ok, game} ->
+        status_line = case game.status do
+          :won -> "iCongratulations! You got it: #{game.word}\t\t#{host}\t#{port}"
+          :playing -> "7Enter your guess\t/games/scramble/guess\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Word Scramble ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iScrambled: #{game.scrambled}\t\t#{host}\t#{port}
+        iAttempts: #{game.attempts}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{status_line}
+        1New game\t/games/scramble\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_game} ->
+        """
+        i=== Word Scramble ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo active game. Start a new one!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/scramble\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp scramble_guess(session_id, word, host, port) do
+    case Games.guess_word(session_id, word) do
+      {:ok, result} ->
+        result_text = if result.correct, do: "Correct!", else: "Not quite..."
+
+        status_line = case result.status do
+          :won -> "iThe word was: #{result.word}\t\t#{host}\t#{port}"
+          :playing -> "7Try again\t/games/scramble/guess\t#{host}\t#{port}"
+        end
+
+        """
+        i=== Word Scramble ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iYou guessed: #{result.guess} - #{result_text}\t\t#{host}\t#{port}
+        iScrambled: #{result.scrambled}\t\t#{host}\t#{port}
+        iAttempts: #{result.attempts}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{status_line}
+        1New game\t/games/scramble\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :game_over, _status, word} ->
+        """
+        i=== Word Scramble ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iGame already over! The word was: #{word}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/scramble\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :no_game} ->
+        """
+        i=== Word Scramble ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo active game. Start a new one!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Start New Game\t/games/scramble\t#{host}\t#{port}
+        1Back to Games\t/games\t#{host}\t#{port}
         .
         """
     end
