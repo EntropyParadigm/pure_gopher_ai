@@ -38,6 +38,8 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.ServerDirectory
   alias PureGopherAi.CrawlerHints
   alias PureGopherAi.Caps
+  alias PureGopherAi.PhlogFormatter
+  alias PureGopherAi.PhlogArt
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -877,6 +879,28 @@ defmodule PureGopherAi.GopherHandler do
         error_response("Invalid user phlog path")
     end
   end
+
+  # Phlog Formatting Tools
+  defp route_selector("/phlog/format", host, port, _network, _ip, _socket),
+    do: phlog_format_menu(host, port)
+
+  defp route_selector("/phlog/format/preview", host, port, _network, _ip, _socket),
+    do: phlog_format_preview_prompt(host, port)
+
+  defp route_selector("/phlog/format/preview\t" <> input, host, port, _network, _ip, _socket),
+    do: handle_phlog_format_preview(input, host, port)
+
+  defp route_selector("/phlog/format/preview " <> input, host, port, _network, _ip, _socket),
+    do: handle_phlog_format_preview(input, host, port)
+
+  defp route_selector("/phlog/format/styles", host, port, _network, _ip, _socket),
+    do: phlog_format_styles(host, port)
+
+  defp route_selector("/phlog/format/art", host, port, _network, _ip, _socket),
+    do: phlog_art_gallery(host, port)
+
+  defp route_selector("/phlog/format/art/" <> theme, host, port, _network, _ip, _socket),
+    do: phlog_art_theme(theme, host, port)
 
   # Search (Type 7)
   defp route_selector("/search", host, port, _network, _ip, _socket),
@@ -5923,6 +5947,240 @@ defmodule PureGopherAi.GopherHandler do
       {:error, reason} ->
         error_response("Failed to delete: #{sanitize_error(reason)}")
     end
+  end
+
+  # === Phlog Formatting Functions ===
+
+  defp phlog_format_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i    ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i    ║         PHLOG FORMATTING & CREATIVE TOOLS             ║\t\t#{host}\t#{port}
+    i    ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i    Transform your phlog posts with AI-powered formatting!\t\t#{host}\t#{port}
+    i    Inspired by medieval illuminated manuscripts.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   FEATURES\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i   * Markdown to Gopher conversion\t\t#{host}\t#{port}
+    i   * Illuminated drop caps (decorative first letters)\t\t#{host}\t#{port}
+    i   * Thematic ASCII art illustrations\t\t#{host}\t#{port}
+    i   * Medieval-style borders and ornaments\t\t#{host}\t#{port}
+    i   * Auto-link detection (URLs, Gopher, email)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   TOOLS\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Preview Formatted Content\t/phlog/format/preview\t#{host}\t#{port}
+    1View Formatting Styles\t/phlog/format/styles\t#{host}\t#{port}
+    1Browse Art Gallery\t/phlog/format/art\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   MARKDOWN GUIDE\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i   Headers:    # Title, ## Section, ### Subsection\t\t#{host}\t#{port}
+    i   Links:      [text](gopher://host/path)\t\t#{host}\t#{port}
+    i   Images:     ![alt](path/to/image.gif)\t\t#{host}\t#{port}
+    i   Bold:       **text** or __text__\t\t#{host}\t#{port}
+    i   Italic:     *text* or _text_\t\t#{host}\t#{port}
+    i   Code:       `inline` or ```block```\t\t#{host}\t#{port}
+    i   Lists:      - item or 1. item\t\t#{host}\t#{port}
+    i   Quote:      > quoted text\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Phlog\t/phlog\t#{host}\t#{port}
+    1Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp phlog_format_preview_prompt(host, port) do
+    """
+    i=== Preview Formatted Content ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter: title|body\t\t#{host}\t#{port}
+    i(Separate title and body with |)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThe body can include Markdown:\t\t#{host}\t#{port}
+    i  # Headers, **bold**, *italic*\t\t#{host}\t#{port}
+    i  [links](url), ![images](path)\t\t#{host}\t#{port}
+    i  - lists, > quotes, `code`\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    iMy Adventure|Today I went on a **journey** to the forest.\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_format_preview(input, host, port) do
+    case String.split(input, "|", parts: 2) do
+      [title, body] when byte_size(title) > 0 and byte_size(body) > 0 ->
+        # Format the content
+        formatted = PhlogFormatter.format(
+          String.trim(title),
+          String.trim(body),
+          host: host, port: port, style: :medieval
+        )
+
+        # Get preview metadata
+        preview = PhlogFormatter.preview(title, body, host: host, port: port)
+
+        # Convert to Gopher info lines
+        formatted_lines = formatted
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== FORMATTED PREVIEW ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTheme detected: #{preview.theme}\t\t#{host}\t#{port}
+        iWord count: #{preview.word_count}\t\t#{host}\t#{port}
+        iLine count: #{preview.line_count}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted_lines}
+        i\t\t#{host}\t#{port}
+        i─────────────────────────────────────────────\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTip: Copy this formatting to your phlog post!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Another Preview\t/phlog/format/preview\t#{host}\t#{port}
+        1Formatting Menu\t/phlog/format\t#{host}\t#{port}
+        .
+        """
+
+      _ ->
+        error_response("Format: title|body (separate with |)")
+    end
+  end
+
+  defp phlog_format_styles(host, port) do
+    # Show examples of each style
+    example_text = "Hello world"
+
+    minimal_preview = PhlogFormatter.format("Example Post", example_text,
+      host: host, port: port, style: :minimal, drop_cap: false, illustrations: false)
+      |> String.split("\n")
+      |> Enum.take(8)
+      |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+      |> Enum.join("\r\n")
+
+    ornate_preview = PhlogFormatter.format("Example Post", example_text,
+      host: host, port: port, style: :ornate, drop_cap: false, illustrations: false)
+      |> String.split("\n")
+      |> Enum.take(8)
+      |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+      |> Enum.join("\r\n")
+
+    medieval_preview = PhlogFormatter.format("Example Post", example_text,
+      host: host, port: port, style: :medieval, drop_cap: true, illustrations: false)
+      |> String.split("\n")
+      |> Enum.take(12)
+      |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+      |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i    ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i    ║              FORMATTING STYLES                        ║\t\t#{host}\t#{port}
+    i    ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   MINIMAL STYLE\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   Clean, simple borders. Good for technical content.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{minimal_preview}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   ORNATE STYLE\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   Decorative boxes and flourishes. Elegant appearance.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{ornate_preview}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   MEDIEVAL STYLE (Default)\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   Illuminated drop caps, ornate borders, thematic art.\t\t#{host}\t#{port}
+    i   Inspired by medieval manuscripts.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{medieval_preview}
+    i\t\t#{host}\t#{port}
+    1Back to Formatting\t/phlog/format\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp phlog_art_gallery(host, port) do
+    themes = PhlogArt.themes()
+
+    theme_lines = themes
+      |> Enum.map(fn theme ->
+        "1#{theme |> Atom.to_string() |> String.capitalize()}\t/phlog/format/art/#{theme}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i    ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i    ║              ASCII ART GALLERY                        ║\t\t#{host}\t#{port}
+    i    ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i    Browse thematic ASCII art for your phlog posts.\t\t#{host}\t#{port}
+    i    Art is automatically selected based on your content,\t\t#{host}\t#{port}
+    i    or you can choose a specific theme.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   THEMES (#{length(themes)} available)\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{theme_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Formatting\t/phlog/format\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp phlog_art_theme(theme_str, host, port) do
+    theme = String.to_existing_atom(theme_str)
+    arts = PhlogArt.get_all_art(theme)
+
+    art_displays = arts
+      |> Enum.with_index(1)
+      |> Enum.map(fn {art, idx} ->
+        art_lines = art
+          |> String.trim()
+          |> String.split("\n")
+          |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+          |> Enum.join("\r\n")
+
+        "i--- Option #{idx} ---\t\t#{host}\t#{port}\r\n#{art_lines}"
+      end)
+      |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== #{String.upcase(theme_str)} Art ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i#{length(arts)} variations available:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{art_displays}
+    i\t\t#{host}\t#{port}
+    1Back to Gallery\t/phlog/format/art\t#{host}\t#{port}
+    1Back to Formatting\t/phlog/format\t#{host}\t#{port}
+    .
+    """
+  rescue
+    ArgumentError ->
+      error_response("Unknown theme: #{theme_str}")
   end
 
   # Error response
