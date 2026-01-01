@@ -4,11 +4,55 @@ A pure Elixir Gopher server (RFC 1436) with native AI inference via Bumblebee. O
 
 ## Features
 
+### Core
 - **Pure Elixir** - No external runtime dependencies (Python, Go, etc.)
 - **Native AI** - Bumblebee + Nx for local GPU-accelerated inference
 - **Apple Silicon Optimized** - Torchx backend with Metal MPS
 - **Tor Support** - Built-in hidden service listener
+- **Gemini Protocol** - Optional TLS on port 1965
 - **OTP Supervision** - Fault-tolerant architecture
+
+### AI Capabilities
+- **AI Chat** - Conversational AI with session memory
+- **Multi-Model Support** - Switch between AI models
+- **AI Personas** - Character-based AI responses
+- **RAG** - Query your documents with AI-enhanced answers
+- **Summarization** - TL;DR for phlog posts and documents
+- **Translation** - 25+ language support
+- **Content Discovery** - AI-powered recommendations
+
+### Content & Community
+- **Phlog** - Gopher blog with Atom feed
+- **Phlog Formatting** - AI-powered Markdown to Gopher conversion with medieval manuscript decorations
+- **ANSI Color Art** - 16-color terminal art for supporting clients
+- **User Profiles** - Personal homepages with passphrase auth
+- **User Phlog** - User-submitted blog posts
+- **Comments** - Phlog comment system
+- **Mailbox** - Internal messaging
+- **Guestbook** - Visitor signatures
+
+### Interactive Features
+- **Polls** - Voting and surveys
+- **Trivia** - Quiz game with leaderboard
+- **Games** - Hangman, Number Guess, Word Scramble
+- **Text Adventure** - RPG-style game engine
+- **ASCII Art** - Text-to-art generation
+
+### Utilities
+- **Search** - Full-text search with ranking
+- **Pastebin** - Text sharing
+- **URL Shortener** - Link shortening
+- **Calculator** - Math expression evaluator
+- **Unit Converter** - Length, weight, temperature, etc.
+- **Bookmarks** - User favorites
+- **Calendar** - Community events
+
+### Security
+- **Rate Limiting** - Per-IP with auto-ban
+- **Prompt Injection Defense** - AI input sanitization
+- **Output Sanitization** - Sensitive data redaction
+- **Request Validation** - Size limits, pattern blocking
+- **Passphrase Auth** - Secure user authentication
 
 ## Architecture
 
@@ -236,13 +280,30 @@ The server automatically selects the optimal compute backend:
 
 ## Gopher Protocol
 
-### Selectors
+### Key Selectors
 
-| Selector | Type | Description |
-|----------|------|-------------|
-| `/` | Menu | Root directory |
-| `/ask <query>` | Text | AI-generated response |
-| `/about` | Text | Server statistics |
+| Selector | Description |
+|----------|-------------|
+| `/` | Root menu |
+| `/ask <query>` | AI text generation |
+| `/chat <msg>` | AI chat with memory |
+| `/phlog` | Gopher blog index |
+| `/phlog/format` | Phlog formatting tools |
+| `/phlog/format/color` | ANSI color art |
+| `/docs` | Document knowledge base |
+| `/docs/ask <query>` | RAG document query |
+| `/search <query>` | Full-text search |
+| `/users` | User profiles |
+| `/mail` | Private messaging |
+| `/games` | Interactive games |
+| `/trivia` | Quiz game |
+| `/polls` | Polls and voting |
+| `/paste` | Pastebin |
+| `/art` | ASCII art generator |
+| `/utils` | Quick utilities |
+| `/sitemap` | Full server sitemap |
+
+See `CLAUDE.md` for the complete selector reference.
 
 ### Response Types
 
@@ -250,6 +311,7 @@ The server automatically selects the optimal compute backend:
 - `0` - Text file
 - `1` - Directory/Menu
 - `3` - Error
+- `7` - Search/Query input
 
 ## Dependencies
 

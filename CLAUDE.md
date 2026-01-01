@@ -144,6 +144,9 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/unit_converter.ex` | Unit conversion (length, weight, temp, etc) |
 | `lib/pure_gopher_ai/calculator.ex` | Mathematical expression evaluator |
 | `lib/pure_gopher_ai/games.ex` | Simple games (Hangman, Number Guess, Word Scramble) |
+| `lib/pure_gopher_ai/phlog_formatter.ex` | AI-powered Markdown to Gopher conversion |
+| `lib/pure_gopher_ai/phlog_art.ex` | Thematic ASCII art library (15+ themes) |
+| `lib/pure_gopher_ai/ansi_art.ex` | 16-color ANSI art for terminal clients |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -282,6 +285,16 @@ end
 | `/games/number/guess` | Guess a number |
 | `/games/scramble` | Start Word Scramble |
 | `/games/scramble/guess` | Guess the word |
+| `/phlog/format` | Phlog formatting tools menu |
+| `/phlog/format/preview` | Preview formatted content |
+| `/phlog/format/styles` | View formatting styles |
+| `/phlog/format/art` | ASCII art gallery |
+| `/phlog/format/art/<theme>` | View theme art |
+| `/phlog/format/color` | ANSI color art menu |
+| `/phlog/format/color/gallery` | Color art gallery |
+| `/phlog/format/color/gallery/<theme>` | View theme color art |
+| `/phlog/format/color/preview` | Preview color formatting |
+| `/phlog/format/color/borders` | View color border styles |
 
 ### Response Format
 ```
@@ -460,6 +473,51 @@ Supported: en, es, fr, de, it, pt, ja, ko, zh, ru, ar, hi, nl, pl, tr, vi, th, s
 ### Gopher Proxy
 - `/fetch <url>` - Fetch external Gopher content
 - `/fetch-summary <url>` - Fetch and AI summarize
+
+## Phlog Formatting & Creative Tools
+
+AI-powered content formatting with medieval manuscript-inspired decorations.
+
+### PhlogFormatter Module
+Converts Markdown to Gopher format with decorative elements:
+- Headers, links, images, lists, code blocks, blockquotes
+- Auto URL detection (HTTP, Gopher, email)
+- Illuminated drop caps (decorative first letters)
+- Medieval-style borders and ornaments
+- Thematic ASCII art based on content
+
+### Formatting Styles
+- `:minimal` - Simple borders, clean text
+- `:ornate` - Box frames with ornaments
+- `:medieval` - Full medieval manuscript style
+
+### ASCII Art Themes (PhlogArt)
+technology, nature, adventure, knowledge, music, space, fantasy, food, home, time, love, animals, weather, celebration, default
+
+### ANSI Color Art (AnsiArt)
+16-color ANSI escape codes for terminals that support it:
+- Basic colors: black, red, green, yellow, blue, magenta, cyan, white
+- Bright colors: bright_black, bright_red, bright_green, etc.
+- Rainbow, fire, ocean, forest, gold, magic dividers
+- Colorful illuminated drop caps
+- `strip_ansi/1` for fallback to plain text
+
+### Usage
+```elixir
+# Plain ASCII formatting
+PhlogFormatter.format(title, body, host: "localhost", port: 70, style: :medieval)
+
+# With ANSI color output
+PhlogFormatter.format(title, body, host: "localhost", port: 70, style: :medieval, color: true)
+
+# Get themed art
+PhlogArt.get_art(:technology)     # Plain ASCII
+AnsiArt.get_art(:technology)      # With ANSI colors
+
+# Illuminated drop cap
+PhlogArt.illuminated_letter("A")  # Plain
+AnsiArt.get_drop_cap("A")         # Colored
+```
 
 ## Notes
 - First model load downloads from Hugging Face
