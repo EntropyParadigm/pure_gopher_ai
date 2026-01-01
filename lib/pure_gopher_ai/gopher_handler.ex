@@ -45,6 +45,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.SlideRenderer
   alias PureGopherAi.WritingAssistant
   alias PureGopherAi.SemanticSearch
+  alias PureGopherAi.CreativeStudio
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -777,6 +778,85 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/semantic/types", host, port, _network, _ip, _socket),
     do: semantic_types(host, port)
+
+  # AI Creative Writing Studio routes
+  defp route_selector("/creative", host, port, _network, _ip, _socket),
+    do: creative_menu(host, port)
+
+  defp route_selector("/creative/", host, port, _network, _ip, _socket),
+    do: creative_menu(host, port)
+
+  defp route_selector("/creative/story", host, port, _network, _ip, _socket),
+    do: creative_story_prompt(host, port)
+
+  defp route_selector("/creative/story\t" <> input, host, port, _network, _ip, _socket),
+    do: creative_story(input, host, port)
+
+  defp route_selector("/creative/story " <> input, host, port, _network, _ip, _socket),
+    do: creative_story(input, host, port)
+
+  defp route_selector("/creative/poem", host, port, _network, _ip, _socket),
+    do: creative_poem_prompt(host, port)
+
+  defp route_selector("/creative/poem\t" <> input, host, port, _network, _ip, _socket),
+    do: creative_poem(input, host, port)
+
+  defp route_selector("/creative/poem " <> input, host, port, _network, _ip, _socket),
+    do: creative_poem(input, host, port)
+
+  defp route_selector("/creative/lyrics", host, port, _network, _ip, _socket),
+    do: creative_lyrics_prompt(host, port)
+
+  defp route_selector("/creative/lyrics\t" <> input, host, port, _network, _ip, _socket),
+    do: creative_lyrics(input, host, port)
+
+  defp route_selector("/creative/lyrics " <> input, host, port, _network, _ip, _socket),
+    do: creative_lyrics(input, host, port)
+
+  defp route_selector("/creative/continue", host, port, _network, _ip, _socket),
+    do: creative_continue_prompt(host, port)
+
+  defp route_selector("/creative/continue\t" <> input, host, port, _network, _ip, _socket),
+    do: creative_continue(input, host, port)
+
+  defp route_selector("/creative/continue " <> input, host, port, _network, _ip, _socket),
+    do: creative_continue(input, host, port)
+
+  defp route_selector("/creative/rewrite/" <> style, host, port, _network, _ip, _socket),
+    do: creative_rewrite_prompt(style, host, port)
+
+  defp route_selector("/creative/prompts", host, port, _network, _ip, _socket),
+    do: creative_prompts(host, port)
+
+  defp route_selector("/creative/prompts/" <> category, host, port, _network, _ip, _socket),
+    do: creative_prompts_category(category, host, port)
+
+  defp route_selector("/creative/character", host, port, _network, _ip, _socket),
+    do: creative_character_prompt(host, port)
+
+  defp route_selector("/creative/character\t" <> input, host, port, _network, _ip, _socket),
+    do: creative_character(input, host, port)
+
+  defp route_selector("/creative/character " <> input, host, port, _network, _ip, _socket),
+    do: creative_character(input, host, port)
+
+  defp route_selector("/creative/world", host, port, _network, _ip, _socket),
+    do: creative_world_prompt(host, port)
+
+  defp route_selector("/creative/world\t" <> input, host, port, _network, _ip, _socket),
+    do: creative_world(input, host, port)
+
+  defp route_selector("/creative/world " <> input, host, port, _network, _ip, _socket),
+    do: creative_world(input, host, port)
+
+  defp route_selector("/creative/genres", host, port, _network, _ip, _socket),
+    do: creative_genres(host, port)
+
+  defp route_selector("/creative/poem-types", host, port, _network, _ip, _socket),
+    do: creative_poem_types(host, port)
+
+  defp route_selector("/creative/moods", host, port, _network, _ip, _socket),
+    do: creative_moods(host, port)
 
   # AI Writing Assistant routes
   defp route_selector("/write", host, port, _network, _ip, _socket),
@@ -6812,6 +6892,518 @@ defmodule PureGopherAi.GopherHandler do
       :user_phlog -> "1View Post\t/phlog/user/#{result.author}/#{result.id}\t#{host}\t#{port}"
       _ -> "i(No direct link)\t\t#{host}\t#{port}"
     end
+  end
+
+  # === AI Creative Writing Studio Functions ===
+
+  defp creative_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║           AI CREATIVE WRITING STUDIO                  ║\t\t#{host}\t#{port}
+    i  ║        Stories, Poems, Lyrics, and More               ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Let your imagination run wild! Generate creative content\t\t#{host}\t#{port}
+    i  from stories to poetry to song lyrics.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  CREATIVE WRITING\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Write a Story\t/creative/story\t#{host}\t#{port}
+    7Write a Poem\t/creative/poem\t#{host}\t#{port}
+    7Write Song Lyrics\t/creative/lyrics\t#{host}\t#{port}
+    7Continue a Story\t/creative/continue\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  WORLDBUILDING\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Create a Character\t/creative/character\t#{host}\t#{port}
+    7Build a World\t/creative/world\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  INSPIRATION\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    1Get Writing Prompts\t/creative/prompts\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  REFERENCES\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    1Story Genres\t/creative/genres\t#{host}\t#{port}
+    1Poem Types\t/creative/poem-types\t#{host}\t#{port}
+    1Moods & Tones\t/creative/moods\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_story_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Write a Story ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a story prompt and AI will write a short story.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "A detective finds a mysterious letter"\t\t#{host}\t#{port}
+    i  "Two strangers meet on a train"\t\t#{host}\t#{port}
+    i  "A witch discovers she's lost her powers"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Story Prompt\t/creative/story\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_story(prompt, host, port) do
+    prompt = String.trim(prompt)
+
+    case CreativeStudio.story(prompt) do
+      {:ok, story} ->
+        formatted = format_text_as_info(story, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Your Story ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iPrompt: #{truncate(prompt, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Write Another Story\t/creative/story\t#{host}\t#{port}
+        7Continue This Story\t/creative/continue\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating story: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp creative_poem_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Write a Poem ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic for your poem.\t\t#{host}\t#{port}
+    iDefault style: free verse\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "autumn leaves"\t\t#{host}\t#{port}
+    i  "first love"\t\t#{host}\t#{port}
+    i  "the ocean at midnight"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Poem Topic\t/creative/poem\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1View Poem Types\t/creative/poem-types\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_poem(topic, host, port) do
+    topic = String.trim(topic)
+
+    case CreativeStudio.poem(topic) do
+      {:ok, poem} ->
+        formatted = format_text_as_info(poem, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Your Poem ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTopic: #{truncate(topic, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Write Another Poem\t/creative/poem\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating poem: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp creative_lyrics_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Write Song Lyrics ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a theme for your song lyrics.\t\t#{host}\t#{port}
+    iDefault style: pop\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "heartbreak and moving on"\t\t#{host}\t#{port}
+    i  "summer road trip adventure"\t\t#{host}\t#{port}
+    i  "finding yourself"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Song Theme\t/creative/lyrics\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1View Moods\t/creative/moods\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_lyrics(theme, host, port) do
+    theme = String.trim(theme)
+
+    case CreativeStudio.lyrics(theme) do
+      {:ok, lyrics} ->
+        formatted = format_text_as_info(lyrics, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Your Song Lyrics ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTheme: #{truncate(theme, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Write More Lyrics\t/creative/lyrics\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating lyrics: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp creative_continue_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Continue a Story ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste the beginning of your story and AI will\t\t#{host}\t#{port}
+    icontinue it for you.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Story So Far\t/creative/continue\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_continue(story_so_far, host, port) do
+    story_so_far = String.trim(story_so_far)
+
+    case CreativeStudio.continue_story(story_so_far) do
+      {:ok, continuation} ->
+        formatted = format_text_as_info(continuation, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Story Continuation ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Continue Further\t/creative/continue\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error continuing story: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp creative_rewrite_prompt(style, host, port) do
+    # Validate style exists as atom (will raise if invalid)
+    _style_atom = String.to_existing_atom(style)
+    """
+    i\t\t#{host}\t#{port}
+    i=== Rewrite in #{style} Style ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your content and AI will rewrite it\t\t#{host}\t#{port}
+    iin the #{style} genre style.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Content to Rewrite\t/creative/rewrite/#{style}\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1View All Genres\t/creative/genres\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  rescue
+    _ ->
+      """
+      i\t\t#{host}\t#{port}
+      3Unknown style: #{style}\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1View Available Genres\t/creative/genres\t#{host}\t#{port}
+      1Back to Creative Menu\t/creative\t#{host}\t#{port}
+      .
+      """
+  end
+
+  defp creative_prompts(host, port) do
+    categories = [:fantasy, :scifi, :romance, :horror, :mystery, :slice_of_life]
+
+    category_lines = categories
+    |> Enum.map(fn cat ->
+      name = cat |> Atom.to_string() |> String.replace("_", " ") |> String.capitalize()
+      "1#{name} Prompts\t/creative/prompts/#{cat}\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Writing Prompts ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iGet AI-generated writing prompts for inspiration!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- By Category ---\t\t#{host}\t#{port}
+    #{category_lines}
+    i\t\t#{host}\t#{port}
+    1Random Prompts\t/creative/prompts/general\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_prompts_category(category, host, port) do
+    category_atom = String.to_existing_atom(category)
+
+    case CreativeStudio.generate_prompts(category_atom, 5) do
+      {:ok, prompts} ->
+        prompt_lines = prompts
+        |> Enum.with_index(1)
+        |> Enum.map(fn {prompt, idx} ->
+          "i  #{idx}. #{truncate(prompt, 65)}\t\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\r\n")
+
+        category_name = category |> String.replace("_", " ") |> String.capitalize()
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== #{category_name} Writing Prompts ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{prompt_lines}
+        i\t\t#{host}\t#{port}
+        1Generate More Prompts\t/creative/prompts/#{category}\t#{host}\t#{port}
+        1All Categories\t/creative/prompts\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating prompts: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  rescue
+    _ ->
+      creative_prompts_category("general", host, port)
+  end
+
+  defp creative_character_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Create a Character ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter character traits and AI will create\t\t#{host}\t#{port}
+    ia detailed character profile.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "brave, curious, has a secret"\t\t#{host}\t#{port}
+    i  "cynical detective with a soft spot for strays"\t\t#{host}\t#{port}
+    i  "young wizard, impatient, brilliant"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Character Traits\t/creative/character\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_character(traits, host, port) do
+    traits = String.trim(traits)
+
+    case CreativeStudio.character(traits) do
+      {:ok, profile} ->
+        formatted = format_text_as_info(profile, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Character Profile ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTraits: #{truncate(traits, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Create Another Character\t/creative/character\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error creating character: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp creative_world_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Build a World ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a concept and AI will create a detailed\t\t#{host}\t#{port}
+    iworld/setting description.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "floating islands connected by bridges"\t\t#{host}\t#{port}
+    i  "post-apocalyptic underground city"\t\t#{host}\t#{port}
+    i  "enchanted forest with sentient trees"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter World Concept\t/creative/world\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_world(concept, host, port) do
+    concept = String.trim(concept)
+
+    case CreativeStudio.worldbuild(concept) do
+      {:ok, world} ->
+        formatted = format_text_as_info(world, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== World Description ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iConcept: #{truncate(concept, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Build Another World\t/creative/world\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error building world: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Creative Menu\t/creative\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp creative_genres(host, port) do
+    genres = CreativeStudio.genres()
+
+    genre_lines = genres
+    |> Enum.map(fn genre ->
+      name = genre |> Atom.to_string() |> String.capitalize()
+      "1Rewrite as #{name}\t/creative/rewrite/#{genre}\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Story Genres ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable genres for stories and rewrites:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{genre_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_poem_types(host, port) do
+    poem_types = CreativeStudio.poem_types()
+
+    type_descriptions = %{
+      haiku: "5-7-5 syllables, 3 lines, Japanese",
+      sonnet: "14 lines, iambic pentameter, ABAB rhyme",
+      limerick: "5 lines, AABBA rhyme, humorous",
+      free_verse: "No strict meter or rhyme",
+      acrostic: "First letters spell a word",
+      ballad: "Narrative with rhythm and refrain"
+    }
+
+    type_lines = poem_types
+    |> Enum.map(fn type ->
+      name = type |> Atom.to_string() |> String.replace("_", " ") |> String.capitalize()
+      desc = Map.get(type_descriptions, type, "")
+      "i  #{String.pad_trailing(name, 12)} #{desc}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Poem Types ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{type_lines}
+    i\t\t#{host}\t#{port}
+    7Write a Poem\t/creative/poem\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp creative_moods(host, port) do
+    moods = CreativeStudio.moods()
+
+    mood_lines = moods
+    |> Enum.map(fn mood ->
+      name = mood |> Atom.to_string() |> String.capitalize()
+      "i  - #{name}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Moods & Tones ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iAvailable moods for creative writing:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{mood_lines}
+    i\t\t#{host}\t#{port}
+    7Write Song Lyrics\t/creative/lyrics\t#{host}\t#{port}
+    1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
   end
 
   # === Link Directory Functions ===
