@@ -1566,7 +1566,10 @@ defmodule PureGopherAi.GopherHandler do
     _response = ModelRegistry.generate_stream(model_id, query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        lines = String.split(chunk, "\n", trim: false)
+        # Sanitize output to prevent sensitive data leakage, then escape for protocol
+        sanitized = OutputSanitizer.sanitize(chunk)
+        escaped = InputSanitizer.escape_gopher(sanitized)
+        lines = String.split(escaped, "\r\n", trim: false)
         formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
         ThousandIsland.Socket.send(socket, Enum.join(formatted))
       end
@@ -1773,7 +1776,10 @@ defmodule PureGopherAi.GopherHandler do
 
     case PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, nil, fn chunk ->
            if String.length(chunk) > 0 do
-             lines = String.split(chunk, "\n", trim: false)
+             # Sanitize output to prevent sensitive data leakage, then escape for protocol
+             sanitized = OutputSanitizer.sanitize(chunk)
+             escaped = InputSanitizer.escape_gopher(sanitized)
+             lines = String.split(escaped, "\r\n", trim: false)
              formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
              ThousandIsland.Socket.send(socket, Enum.join(formatted))
            end
@@ -1802,7 +1808,10 @@ defmodule PureGopherAi.GopherHandler do
     result = PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        lines = String.split(chunk, "\n", trim: false)
+        # Sanitize output to prevent sensitive data leakage, then escape for protocol
+        sanitized = OutputSanitizer.sanitize(chunk)
+        escaped = InputSanitizer.escape_gopher(sanitized)
+        lines = String.split(escaped, "\r\n", trim: false)
         formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
         ThousandIsland.Socket.send(socket, Enum.join(formatted))
       end
@@ -8549,12 +8558,13 @@ defmodule PureGopherAi.GopherHandler do
     header = format_gopher_lines(["Query: #{query}", "", "Response:"], host, port)
     ThousandIsland.Socket.send(socket, header)
 
-    # Stream the AI response with proper escaping
+    # Stream the AI response with proper escaping and output sanitization
     _response = PureGopherAi.AiEngine.generate_stream(query, nil, fn chunk ->
       # Format each chunk as Gopher info line and send
       if String.length(chunk) > 0 do
-        # Escape and split chunk by newlines and format each line
-        escaped = InputSanitizer.escape_gopher(chunk)
+        # Sanitize output to prevent sensitive data leakage, then escape for protocol
+        sanitized = OutputSanitizer.sanitize(chunk)
+        escaped = InputSanitizer.escape_gopher(sanitized)
         lines = String.split(escaped, "\r\n", trim: false)
         formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
         ThousandIsland.Socket.send(socket, Enum.join(formatted))
@@ -8582,11 +8592,13 @@ defmodule PureGopherAi.GopherHandler do
     response_chunks = Agent.start_link(fn -> [] end)
     {:ok, response_agent} = response_chunks
 
-    # Stream the AI response with proper escaping
+    # Stream the AI response with proper escaping and output sanitization
     _response = PureGopherAi.AiEngine.generate_stream(query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        escaped = InputSanitizer.escape_gopher(chunk)
+        # Sanitize output to prevent sensitive data leakage, then escape for protocol
+        sanitized = OutputSanitizer.sanitize(chunk)
+        escaped = InputSanitizer.escape_gopher(sanitized)
         lines = String.split(escaped, "\r\n", trim: false)
         formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
         ThousandIsland.Socket.send(socket, Enum.join(formatted))
