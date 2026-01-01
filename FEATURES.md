@@ -1508,6 +1508,38 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.13 Calculator
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Evaluate mathematical expressions.
+
+**Implementation:**
+- [x] Create `Calculator` module with expression parser
+- [x] `/calc` - Calculator menu with examples
+- [x] `/calc <expression>` - Evaluate expression
+- [x] Support basic operators: +, -, *, /, ^, %
+- [x] Support parentheses for grouping
+- [x] Support functions: sqrt, abs, sin, cos, tan, log, exp, pow, floor, ceil, round
+- [x] Support constants: pi, e
+- [x] Shunting-yard algorithm for operator precedence
+
+**Operators:**
+- `+` `-` `*` `/` (basic math)
+- `^` or `**` (power)
+- `%` or `mod` (modulo)
+- `( )` (grouping)
+
+**Selectors:**
+- `/calc` - Calculator menu
+- `/calc <expression>` - Evaluate
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/calculator.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (calc routes)
+- `lib/pure_gopher_ai/sitemap.ex` (updated)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

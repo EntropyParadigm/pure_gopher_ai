@@ -86,7 +86,8 @@ defmodule PureGopherAi.Sitemap do
           %{selector: "/utils/timestamp", type: 7, description: "Convert timestamp"},
           %{selector: "/utils/now", type: 0, description: "Current timestamp"},
           %{selector: "/utils/count", type: 7, description: "Count text"},
-          %{selector: "/convert", type: 7, description: "Unit converter"}
+          %{selector: "/convert", type: 7, description: "Unit converter"},
+          %{selector: "/calc", type: 7, description: "Calculator"}
         ]
       },
       %{

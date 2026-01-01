@@ -46,6 +46,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Trivia
   alias PureGopherAi.Bookmarks
   alias PureGopherAi.UnitConverter
+  alias PureGopherAi.Calculator
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -670,6 +671,19 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/convert/" <> category, host, port, _network, _ip, _socket),
     do: convert_category(category, host, port)
 
+  # Calculator routes
+  defp route_selector("/calc", host, port, _network, _ip, _socket),
+    do: calc_menu(host, port)
+
+  defp route_selector("/calc/", host, port, _network, _ip, _socket),
+    do: calc_menu(host, port)
+
+  defp route_selector("/calc\t" <> expr, host, port, _network, _ip, _socket),
+    do: calc_evaluate(expr, host, port)
+
+  defp route_selector("/calc " <> expr, host, port, _network, _ip, _socket),
+    do: calc_evaluate(expr, host, port)
+
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
     do: phlog_index(host, port, network, 1)
@@ -1192,6 +1206,7 @@ defmodule PureGopherAi.GopherHandler do
     1Trivia Quiz\t/trivia\t#{host}\t#{port}
     1Bookmarks\t/bookmarks\t#{host}\t#{port}
     7Unit Converter\t/convert\t#{host}\t#{port}
+    7Calculator\t/calc\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -7182,6 +7197,98 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   defp format_convert_number(num), do: to_string(num)
+
+  # === Calculator Functions ===
+
+  defp calc_menu(host, port) do
+    examples = Calculator.examples()
+      |> Enum.map(fn ex -> "i  #{ex}\t\t#{host}\t#{port}" end)
+      |> Enum.join("\r\n")
+
+    functions = Calculator.functions()
+      |> Enum.map(fn f -> "i  #{f.name} - #{f.description}\t\t#{host}\t#{port}" end)
+      |> Enum.join("\r\n")
+
+    constants = Calculator.constants()
+      |> Enum.map(fn c -> "i  #{c.name} = #{c.value}\t\t#{host}\t#{port}" end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Calculator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEvaluate mathematical expressions.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Calculate\t/calc\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Examples ---\t\t#{host}\t#{port}
+    #{examples}
+    i\t\t#{host}\t#{port}
+    i--- Operators ---\t\t#{host}\t#{port}
+    i  + - * / (basic math)\t\t#{host}\t#{port}
+    i  ^ or ** (power)\t\t#{host}\t#{port}
+    i  % or mod (modulo)\t\t#{host}\t#{port}
+    i  ( ) (grouping)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Functions ---\t\t#{host}\t#{port}
+    #{functions}
+    i\t\t#{host}\t#{port}
+    i--- Constants ---\t\t#{host}\t#{port}
+    #{constants}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp calc_evaluate(expr, host, port) do
+    expr = String.trim(expr)
+
+    case Calculator.evaluate(expr) do
+      {:ok, result, formatted} ->
+        """
+        i=== Calculator Result ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{expr} = #{formatted}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iResult: #{formatted}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Calculate Another\t/calc\t#{host}\t#{port}
+        1Back to Calculator\t/calc\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :arithmetic_error} ->
+        error_response("Arithmetic error (division by zero?)")
+
+      {:error, :negative_sqrt} ->
+        error_response("Cannot take square root of negative number")
+
+      {:error, :invalid_log} ->
+        error_response("Logarithm requires a positive number")
+
+      {:error, :mismatched_parentheses} ->
+        error_response("Mismatched parentheses")
+
+      {:error, :insufficient_operands} ->
+        error_response("Not enough operands for operator")
+
+      {:error, _} ->
+        """
+        i=== Calculator Error ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCould not evaluate: #{expr}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTips:\t\t#{host}\t#{port}
+        i  - Use spaces between numbers and operators\t\t#{host}\t#{port}
+        i  - Check parentheses are balanced\t\t#{host}\t#{port}
+        i  - Use valid function names\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Again\t/calc\t#{host}\t#{port}
+        1Back to Calculator\t/calc\t#{host}\t#{port}
+        .
+        """
+    end
+  end
 
   # === Link Directory Functions ===
 
