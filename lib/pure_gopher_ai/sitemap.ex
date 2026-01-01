@@ -85,7 +85,8 @@ defmodule PureGopherAi.Sitemap do
           %{selector: "/utils/rot13", type: 7, description: "ROT13 cipher"},
           %{selector: "/utils/timestamp", type: 7, description: "Convert timestamp"},
           %{selector: "/utils/now", type: 0, description: "Current timestamp"},
-          %{selector: "/utils/count", type: 7, description: "Count text"}
+          %{selector: "/utils/count", type: 7, description: "Count text"},
+          %{selector: "/convert", type: 7, description: "Unit converter"}
         ]
       },
       %{

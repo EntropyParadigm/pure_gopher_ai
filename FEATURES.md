@@ -1472,6 +1472,42 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.12 Unit Converter
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Convert between various units of measurement.
+
+**Implementation:**
+- [x] Create `UnitConverter` module with conversion logic
+- [x] `/convert` - Main menu with categories
+- [x] `/convert <query>` - Quick conversion (e.g., "100 km to mi")
+- [x] `/convert/<category>` - View category-specific units
+- [x] Support for 8 categories: length, weight, temperature, volume, area, speed, data, time
+- [x] Temperature special case (non-linear conversion)
+- [x] Parse natural language queries
+
+**Categories:**
+- Length (m, cm, mm, km, in, ft, yd, mi)
+- Weight (g, kg, mg, lb, oz, ton, stone)
+- Temperature (c, f, k)
+- Volume (l, ml, gal, qt, pt, cup, floz)
+- Area (sqm, sqft, acre, hectare, sqkm)
+- Speed (m/s, km/h, mph, knots)
+- Data (b, kb, mb, gb, tb)
+- Time (s, min, h, d, wk, mo, yr)
+
+**Selectors:**
+- `/convert` - Main menu
+- `/convert <query>` - Quick convert
+- `/convert/<category>` - Category details
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/unit_converter.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (convert routes)
+- `lib/pure_gopher_ai/sitemap.ex` (updated)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

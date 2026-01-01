@@ -141,6 +141,7 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/mailbox.ex` | Internal messaging system |
 | `lib/pure_gopher_ai/trivia.ex` | Trivia quiz game with leaderboard |
 | `lib/pure_gopher_ai/bookmarks.ex` | User bookmarks and favorites |
+| `lib/pure_gopher_ai/unit_converter.ex` | Unit conversion (length, weight, temp, etc) |
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
@@ -268,6 +269,8 @@ end
 | `/bookmarks/user/<username>` | View user's bookmarks |
 | `/bookmarks/add/<username>` | Add bookmark |
 | `/bookmarks/folders/<username>` | Manage folders |
+| `/convert` | Unit converter |
+| `/convert <query>` | Convert units (e.g., "100 km to mi") |
 
 ### Response Format
 ```

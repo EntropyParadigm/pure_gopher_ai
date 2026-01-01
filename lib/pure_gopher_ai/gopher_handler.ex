@@ -45,6 +45,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Mailbox
   alias PureGopherAi.Trivia
   alias PureGopherAi.Bookmarks
+  alias PureGopherAi.UnitConverter
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -653,6 +654,22 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/bookmarks/export/" <> username, host, port, _network, _ip, _socket),
     do: bookmarks_export(username, host, port)
 
+  # Unit Converter routes
+  defp route_selector("/convert", host, port, _network, _ip, _socket),
+    do: convert_menu(host, port)
+
+  defp route_selector("/convert/", host, port, _network, _ip, _socket),
+    do: convert_menu(host, port)
+
+  defp route_selector("/convert\t" <> query, host, port, _network, _ip, _socket),
+    do: convert_query(query, host, port)
+
+  defp route_selector("/convert " <> query, host, port, _network, _ip, _socket),
+    do: convert_query(query, host, port)
+
+  defp route_selector("/convert/" <> category, host, port, _network, _ip, _socket),
+    do: convert_category(category, host, port)
+
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
     do: phlog_index(host, port, network, 1)
@@ -1174,6 +1191,7 @@ defmodule PureGopherAi.GopherHandler do
     1Mailbox\t/mail\t#{host}\t#{port}
     1Trivia Quiz\t/trivia\t#{host}\t#{port}
     1Bookmarks\t/bookmarks\t#{host}\t#{port}
+    7Unit Converter\t/convert\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -7043,6 +7061,127 @@ defmodule PureGopherAi.GopherHandler do
         "Error exporting bookmarks.\n"
     end
   end
+
+  # === Unit Converter Functions ===
+
+  defp convert_menu(host, port) do
+    categories = UnitConverter.categories()
+
+    category_lines = categories
+      |> Enum.map(fn cat ->
+        units = Enum.join(cat.units, ", ")
+        "1#{cat.name}\t/convert/#{String.downcase(cat.name)}\t#{host}\t#{port}\r\n" <>
+        "i  Units: #{units}\t\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Unit Converter ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iConvert between various units of measurement.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Quick Convert ---\t\t#{host}\t#{port}
+    7Convert (e.g. "100 km to mi")\t/convert\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Categories ---\t\t#{host}\t#{port}
+    #{category_lines}
+    i\t\t#{host}\t#{port}
+    i--- Examples ---\t\t#{host}\t#{port}
+    i  100 km to mi\t\t#{host}\t#{port}
+    i  32 f to c\t\t#{host}\t#{port}
+    i  5 lb to kg\t\t#{host}\t#{port}
+    i  1 gal to l\t\t#{host}\t#{port}
+    i  1 gb to mb\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp convert_query(query, host, port) do
+    query = String.trim(query)
+
+    case UnitConverter.parse_query(query) do
+      {:ok, value, from_unit, to_unit} ->
+        case UnitConverter.convert(value, from_unit, to_unit) do
+          {:ok, result, formatted} ->
+            """
+            i=== Conversion Result ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            i#{formatted}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iResult: #{format_convert_number(result)}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            7Convert Another\t/convert\t#{host}\t#{port}
+            1Back to Converter\t/convert\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :unknown_units} ->
+            error_response("Unknown or incompatible units. Check /convert for supported units.")
+
+          {:error, _} ->
+            error_response("Conversion error. Check your input format.")
+        end
+
+      {:error, :invalid_format} ->
+        """
+        i=== Invalid Format ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCould not parse: #{query}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFormat: <value> <from> to <to>\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iExamples:\t\t#{host}\t#{port}
+        i  100 km to mi\t\t#{host}\t#{port}
+        i  32 f to c\t\t#{host}\t#{port}
+        i  5 lb to kg\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Again\t/convert\t#{host}\t#{port}
+        1Back to Converter\t/convert\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp convert_category(category, host, port) do
+    category = String.downcase(String.trim(category))
+
+    categories = UnitConverter.categories()
+    cat = Enum.find(categories, fn c -> String.downcase(c.name) == category end)
+
+    if cat do
+      units_lines = cat.units
+        |> Enum.map(fn unit -> "i  #{unit}\t\t#{host}\t#{port}" end)
+        |> Enum.join("\r\n")
+
+      """
+      i=== #{cat.name} Converter ===\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      iSupported units:\t\t#{host}\t#{port}
+      #{units_lines}
+      i\t\t#{host}\t#{port}
+      7Convert #{cat.name}\t/convert\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Back to Converter\t/convert\t#{host}\t#{port}
+      .
+      """
+    else
+      error_response("Unknown category: #{category}")
+    end
+  end
+
+  defp format_convert_number(num) when is_float(num) do
+    cond do
+      num == Float.round(num, 0) -> :erlang.float_to_binary(num, decimals: 0)
+      abs(num) >= 1000 -> :erlang.float_to_binary(num, decimals: 2)
+      abs(num) >= 1 -> :erlang.float_to_binary(num, decimals: 4)
+      abs(num) >= 0.01 -> :erlang.float_to_binary(num, decimals: 6)
+      true -> :erlang.float_to_binary(num, decimals: 10)
+    end
+  end
+
+  defp format_convert_number(num), do: to_string(num)
 
   # === Link Directory Functions ===
 
