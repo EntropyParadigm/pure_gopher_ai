@@ -1352,6 +1352,44 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.9 Internal Messaging / Mailbox
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** Private messaging system for registered users.
+
+**Implementation:**
+- [x] Create `Mailbox` GenServer with DETS persistent storage
+- [x] `/mail` - Mailbox menu with stats
+- [x] `/mail/login` - Login with username
+- [x] `/mail/inbox/<username>` - View inbox messages
+- [x] `/mail/sent/<username>` - View sent messages
+- [x] `/mail/read/<username>/<id>` - Read message (marks as read)
+- [x] `/mail/compose/<username>` - Compose new message
+- [x] `/mail/send/<from>/<to>` - Send message
+- [x] `/mail/delete/<username>/<id>` - Delete message
+- [x] Unread message tracking with indicators
+- [x] Recipient must have user profile
+- [x] Rate limiting (1 min between messages)
+- [x] Message expiration (30 days)
+- [x] 100 message inbox limit per user
+
+**Selectors:**
+- `/mail` - Mailbox menu
+- `/mail/login` - Login prompt
+- `/mail/inbox/<username>` - Inbox
+- `/mail/sent/<username>` - Sent messages
+- `/mail/read/<username>/<id>` - Read message
+- `/mail/compose/<username>` - Compose
+- `/mail/delete/<username>/<id>` - Delete
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/mailbox.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (mail routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `lib/pure_gopher_ai/sitemap.ex` (updated)
+
+---
+
 ## Notes
 
 - Implement features in order of priority

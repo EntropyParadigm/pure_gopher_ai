@@ -84,6 +84,9 @@ defmodule PureGopherAi.Application do
       # URL Shortener
       PureGopherAi.UrlShortener,
 
+      # Mailbox / Messaging
+      PureGopherAi.Mailbox,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

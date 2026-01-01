@@ -42,6 +42,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.UrlShortener
   alias PureGopherAi.Utilities
   alias PureGopherAi.Sitemap
+  alias PureGopherAi.Mailbox
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -513,6 +514,55 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/sitemap/text", host, port, _network, _ip, _socket),
     do: sitemap_text(host, port)
+
+  # Mailbox routes
+  defp route_selector("/mail", host, port, _network, _ip, _socket),
+    do: mail_menu(host, port)
+
+  defp route_selector("/mail/login", host, port, _network, _ip, _socket),
+    do: mail_login_prompt(host, port)
+
+  defp route_selector("/mail/login\t" <> username, host, port, _network, _ip, _socket),
+    do: mail_inbox(username, host, port)
+
+  defp route_selector("/mail/login " <> username, host, port, _network, _ip, _socket),
+    do: mail_inbox(username, host, port)
+
+  defp route_selector("/mail/inbox/" <> username, host, port, _network, _ip, _socket),
+    do: mail_inbox(username, host, port)
+
+  defp route_selector("/mail/sent/" <> username, host, port, _network, _ip, _socket),
+    do: mail_sent(username, host, port)
+
+  defp route_selector("/mail/read/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [username, message_id] -> mail_read(username, message_id, host, port)
+      _ -> error_response("Invalid message path")
+    end
+  end
+
+  defp route_selector("/mail/compose/" <> username, host, port, _network, _ip, _socket),
+    do: mail_compose_prompt(username, host, port)
+
+  defp route_selector("/mail/send/" <> rest, host, port, _network, ip, _socket) do
+    # Format: from_user/to_user\tsubject|body
+    case String.split(rest, "/", parts: 2) do
+      [from_user, to_and_content] ->
+        case String.split(to_and_content, "\t", parts: 2) do
+          [to_user, content] -> handle_mail_send(from_user, to_user, content, ip, host, port)
+          [to_user] -> mail_compose_to_prompt(from_user, to_user, host, port)
+        end
+      _ ->
+        error_response("Invalid send path")
+    end
+  end
+
+  defp route_selector("/mail/delete/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [username, message_id] -> handle_mail_delete(username, message_id, host, port)
+      _ -> error_response("Invalid delete path")
+    end
+  end
 
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
@@ -1032,6 +1082,7 @@ defmodule PureGopherAi.GopherHandler do
     1Calendar & Events\t/calendar\t#{host}\t#{port}
     1URL Shortener\t/short\t#{host}\t#{port}
     1Quick Utilities\t/utils\t#{host}\t#{port}
+    1Mailbox\t/mail\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -6169,6 +6220,248 @@ defmodule PureGopherAi.GopherHandler do
     ---
     Generated: #{DateTime.utc_now() |> DateTime.to_string()}
     """, host, port)
+  end
+
+  # === Mailbox Functions ===
+
+  defp mail_menu(host, port) do
+    stats = Mailbox.stats()
+
+    """
+    i=== Mailbox ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPrivate messaging for registered users.\t\t#{host}\t#{port}
+    i(You need a user profile to use mailbox)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Stats ---\t\t#{host}\t#{port}
+    iTotal messages: #{stats.total_messages}\t\t#{host}\t#{port}
+    iUnread messages: #{stats.total_unread}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Access Mailbox ---\t\t#{host}\t#{port}
+    7Enter your username\t/mail/login\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Create a Profile\t/users/create\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp mail_login_prompt(host, port) do
+    """
+    i=== Mailbox Login ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your username to access your mailbox:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp mail_inbox(username, host, port) do
+    username = String.trim(username)
+
+    case Mailbox.get_inbox(username, limit: 20) do
+      {:ok, []} ->
+        unread = Mailbox.unread_count(username)
+
+        """
+        i=== Inbox: #{username} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo messages yet.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
+        1View Sent Messages\t/mail/sent/#{username}\t#{host}\t#{port}
+        1Back to Mailbox\t/mail\t#{host}\t#{port}
+        .
+        """
+
+      {:ok, messages} ->
+        unread = Mailbox.unread_count(username)
+
+        message_lines = messages
+          |> Enum.map(fn msg ->
+            status = if msg.read, do: "   ", else: "[*]"
+            date = format_date(msg.created_at)
+            "1#{status} #{truncate(msg.subject, 30)} - from #{msg.from} (#{date})\t/mail/read/#{username}/#{msg.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Inbox: #{username} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iUnread: #{unread} | Total: #{length(messages)}\t\t#{host}\t#{port}
+        i[*] = unread\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{message_lines}
+        i\t\t#{host}\t#{port}
+        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
+        1View Sent Messages\t/mail/sent/#{username}\t#{host}\t#{port}
+        1Back to Mailbox\t/mail\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp mail_sent(username, host, port) do
+    case Mailbox.get_sent(username, limit: 20) do
+      {:ok, []} ->
+        """
+        i=== Sent Messages: #{username} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo sent messages yet.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
+        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:ok, messages} ->
+        message_lines = messages
+          |> Enum.map(fn msg ->
+            date = format_date(msg.created_at)
+            "1#{truncate(msg.subject, 30)} - to #{msg.to} (#{date})\t/mail/read/#{username}/#{msg.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Sent Messages: #{username} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTotal: #{length(messages)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{message_lines}
+        i\t\t#{host}\t#{port}
+        7Compose New Message\t/mail/compose/#{username}\t#{host}\t#{port}
+        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp mail_read(username, message_id, host, port) do
+    case Mailbox.read_message(username, message_id) do
+      {:ok, msg} ->
+        date = format_date(msg.created_at)
+        direction = if msg.to == username, do: "From: #{msg.from}", else: "To: #{msg.to}"
+
+        body_lines = msg.body
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Message ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iSubject: #{msg.subject}\t\t#{host}\t#{port}
+        i#{direction}\t\t#{host}\t#{port}
+        iDate: #{date}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Message ---\t\t#{host}\t#{port}
+        #{body_lines}
+        i\t\t#{host}\t#{port}
+        i--- Actions ---\t\t#{host}\t#{port}
+        7Reply to #{msg.from}\t/mail/send/#{username}/#{msg.from}\t#{host}\t#{port}
+        1Delete Message\t/mail/delete/#{username}/#{message_id}\t#{host}\t#{port}
+        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Message not found.")
+    end
+  end
+
+  defp mail_compose_prompt(username, host, port) do
+    """
+    i=== Compose Message ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFrom: #{username}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter recipient username:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp mail_compose_to_prompt(from_user, to_user, host, port) do
+    """
+    i=== Compose Message ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iFrom: #{from_user}\t\t#{host}\t#{port}
+    iTo: #{to_user}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your message in format:\t\t#{host}\t#{port}
+    iSubject | Message body\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample: Hello! | Nice to meet you!\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_mail_send(from_user, to_user, content, ip, host, port) do
+    case String.split(content, "|", parts: 2) do
+      [subject, body] ->
+        subject = String.trim(subject)
+        body = String.trim(body)
+
+        case Mailbox.send_message(from_user, to_user, subject, body, ip) do
+          {:ok, _message_id} ->
+            """
+            i=== Message Sent! ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iYour message to #{to_user} has been sent.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iSubject: #{truncate(subject, 40)}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            7Send Another Message\t/mail/compose/#{from_user}\t#{host}\t#{port}
+            1Back to Inbox\t/mail/inbox/#{from_user}\t#{host}\t#{port}
+            .
+            """
+
+          {:error, :rate_limited} ->
+            error_response("Please wait before sending another message.")
+
+          {:error, :recipient_not_found} ->
+            error_response("User '#{to_user}' not found. They must have a profile first.")
+
+          {:error, :recipient_inbox_full} ->
+            error_response("#{to_user}'s inbox is full.")
+
+          {:error, :cannot_message_self} ->
+            error_response("You cannot send a message to yourself.")
+
+          {:error, :empty_subject} ->
+            error_response("Subject cannot be empty.")
+
+          {:error, :empty_message} ->
+            error_response("Message body cannot be empty.")
+
+          {:error, :subject_too_long} ->
+            error_response("Subject is too long (max 100 characters).")
+
+          {:error, :message_too_long} ->
+            error_response("Message is too long (max 2000 characters).")
+
+          {:error, reason} ->
+            error_response("Failed to send message: #{inspect(reason)}")
+        end
+
+      [_only_subject] ->
+        error_response("Invalid format. Use: Subject | Message body")
+    end
+  end
+
+  defp handle_mail_delete(username, message_id, host, port) do
+    case Mailbox.delete_message(username, message_id) do
+      :ok ->
+        """
+        i=== Message Deleted ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iThe message has been deleted.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Inbox\t/mail/inbox/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Message not found.")
+    end
   end
 
   # === Link Directory Functions ===
