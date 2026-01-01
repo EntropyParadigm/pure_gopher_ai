@@ -13,6 +13,8 @@ defmodule PureGopherAi.BulletinBoard do
   use GenServer
   require Logger
 
+  alias PureGopherAi.InputSanitizer
+
   @table_name :bulletin_board
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
   @max_posts_per_board 500
@@ -387,9 +389,8 @@ defmodule PureGopherAi.BulletinBoard do
 
   defp sanitize(text) when is_binary(text) do
     text
-    |> String.trim()
     |> String.replace(~r/<[^>]*>/, "")  # Remove HTML tags
-    |> String.slice(0, @max_body_length)
+    |> then(&InputSanitizer.sanitize(&1, max_length: @max_body_length, allow_newlines: true))
   end
 
   defp sanitize(nil), do: ""

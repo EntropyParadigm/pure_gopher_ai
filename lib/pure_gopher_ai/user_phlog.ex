@@ -15,6 +15,7 @@ defmodule PureGopherAi.UserPhlog do
 
   alias PureGopherAi.UserProfiles
   alias PureGopherAi.ContentModerator
+  alias PureGopherAi.InputSanitizer
 
   @table_name :user_phlog
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
@@ -367,7 +368,6 @@ defmodule PureGopherAi.UserPhlog do
   defp sanitize_text(text) do
     text
     |> String.replace(~r/<[^>]*>/, "")  # Strip HTML tags
-    |> String.replace(~r/[\x00-\x08\x0B\x0C\x0E-\x1F]/, "")  # Strip control chars (keep newlines, tabs)
-    |> String.trim()
+    |> then(&InputSanitizer.sanitize(&1, allow_newlines: true))
   end
 end

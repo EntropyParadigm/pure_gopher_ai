@@ -17,6 +17,7 @@ defmodule PureGopherAi.Mailbox do
 
   alias PureGopherAi.UserProfiles
   alias PureGopherAi.ContentModerator
+  alias PureGopherAi.InputSanitizer
 
   @table_name :mailbox
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
@@ -433,9 +434,8 @@ defmodule PureGopherAi.Mailbox do
 
   defp sanitize_text(text) when is_binary(text) do
     text
-    |> String.trim()
     |> String.replace(~r/<[^>]*>/, "")  # Strip HTML
-    |> String.replace(~r/[\x00-\x1f\x7f]/, "")  # Strip control chars
+    |> then(&InputSanitizer.sanitize(&1, allow_newlines: true))
   end
 
   defp sanitize_text(_), do: ""

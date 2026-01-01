@@ -13,6 +13,8 @@ defmodule PureGopherAi.Polls do
   use GenServer
   require Logger
 
+  alias PureGopherAi.InputSanitizer
+
   @table_name :polls
   @votes_table :poll_votes
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
@@ -113,11 +115,15 @@ defmodule PureGopherAi.Polls do
 
   @impl true
   def handle_call({:create, question, options, ip, opts}, _from, state) do
+    # Sanitize inputs
+    question = InputSanitizer.sanitize(question, max_length: @max_question_length)
+    options = Enum.map(options, &InputSanitizer.sanitize(&1, max_length: @max_option_length))
+
     cond do
       String.length(question) > @max_question_length ->
         {:reply, {:error, :question_too_long}, state}
 
-      String.trim(question) == "" ->
+      question == "" ->
         {:reply, {:error, :empty_question}, state}
 
       length(options) < 2 ->
@@ -126,8 +132,8 @@ defmodule PureGopherAi.Polls do
       length(options) > @max_options ->
         {:reply, {:error, :too_many_options}, state}
 
-      Enum.any?(options, &(String.length(&1) > @max_option_length)) ->
-        {:reply, {:error, :option_too_long}, state}
+      Enum.any?(options, &(&1 == "")) ->
+        {:reply, {:error, :empty_option}, state}
 
       true ->
         id = generate_id()
@@ -137,8 +143,8 @@ defmodule PureGopherAi.Polls do
 
         poll = %{
           id: id,
-          question: String.trim(question),
-          options: Enum.map(options, &String.trim/1),
+          question: question,
+          options: options,
           votes: List.duplicate(0, length(options)),
           total_votes: 0,
           created_at: DateTime.to_iso8601(now),

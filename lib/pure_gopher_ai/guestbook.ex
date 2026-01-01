@@ -16,6 +16,8 @@ defmodule PureGopherAi.Guestbook do
   use GenServer
   require Logger
 
+  alias PureGopherAi.InputSanitizer
+
   @table_name :guestbook
   @default_max_entries 1000
   @default_entries_per_page 20
@@ -268,10 +270,7 @@ defmodule PureGopherAi.Guestbook do
   defp format_ip(ip), do: inspect(ip)
 
   defp sanitize_input(text, max_length) do
-    text
-    |> String.trim()
-    |> String.replace(~r/[\x00-\x1F\x7F]/, "")  # Remove control characters
-    |> String.slice(0, max_length)
+    InputSanitizer.sanitize(text, max_length: max_length, allow_newlines: true)
   end
 
   defp check_rate_limit(ip_key) do

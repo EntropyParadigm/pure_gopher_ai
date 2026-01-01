@@ -14,6 +14,8 @@ defmodule PureGopherAi.Pastebin do
   use GenServer
   require Logger
 
+  alias PureGopherAi.InputSanitizer
+
   @table_name :pastebin
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
   @default_ttl_hours 24 * 7  # 1 week default
@@ -109,6 +111,9 @@ defmodule PureGopherAi.Pastebin do
 
   @impl true
   def handle_call({:create, content, ip, opts}, _from, state) do
+    # Sanitize content - allow newlines but remove null bytes and dangerous control chars
+    content = InputSanitizer.sanitize(content, allow_newlines: true, max_length: @max_paste_size)
+
     cond do
       byte_size(content) > @max_paste_size ->
         {:reply, {:error, :too_large}, state}
@@ -124,8 +129,7 @@ defmodule PureGopherAi.Pastebin do
 
         title = opts
           |> Keyword.get(:title, "")
-          |> String.slice(0, @max_title_length)
-          |> String.trim()
+          |> then(&InputSanitizer.sanitize(&1, max_length: @max_title_length))
 
         syntax = Keyword.get(opts, :syntax, "text")
         syntax = if syntax in @syntax_types, do: syntax, else: "text"
