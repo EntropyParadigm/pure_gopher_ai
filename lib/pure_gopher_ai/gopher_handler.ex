@@ -44,6 +44,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Slides
   alias PureGopherAi.SlideRenderer
   alias PureGopherAi.WritingAssistant
+  alias PureGopherAi.SemanticSearch
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -751,6 +752,31 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/games/scramble/guess " <> word, host, port, _network, ip, _socket),
     do: scramble_guess(session_id_from_ip(ip), word, host, port)
+
+  # AI Semantic Search routes
+  defp route_selector("/semantic", host, port, _network, _ip, _socket),
+    do: semantic_menu(host, port)
+
+  defp route_selector("/semantic/", host, port, _network, _ip, _socket),
+    do: semantic_menu(host, port)
+
+  defp route_selector("/semantic/search", host, port, _network, _ip, _socket),
+    do: semantic_search_prompt(host, port)
+
+  defp route_selector("/semantic/search\t" <> query, host, port, _network, _ip, _socket),
+    do: semantic_search(query, host, port)
+
+  defp route_selector("/semantic/search " <> query, host, port, _network, _ip, _socket),
+    do: semantic_search(query, host, port)
+
+  defp route_selector("/semantic/similar/" <> path, host, port, _network, _ip, _socket),
+    do: semantic_similar(path, host, port)
+
+  defp route_selector("/semantic/trending", host, port, _network, _ip, _socket),
+    do: semantic_trending(host, port)
+
+  defp route_selector("/semantic/types", host, port, _network, _ip, _socket),
+    do: semantic_types(host, port)
 
   # AI Writing Assistant routes
   defp route_selector("/write", host, port, _network, _ip, _socket),
@@ -6514,6 +6540,278 @@ defmodule PureGopherAi.GopherHandler do
     1Back to Writing Menu\t/write\t#{host}\t#{port}
     .
     """
+  end
+
+  # === AI Semantic Search Functions ===
+
+  defp semantic_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║           AI SEMANTIC SEARCH                          ║\t\t#{host}\t#{port}
+    i  ║     Find Content by Meaning, Not Just Keywords        ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Use natural language to find what you're looking for.\t\t#{host}\t#{port}
+    i  AI understands the meaning behind your queries.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  SEARCH\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Search All Content\t/semantic/search\t#{host}\t#{port}
+    1View Trending Topics\t/semantic/trending\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  INFO\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    1Content Types\t/semantic/types\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  TIP: Try natural queries like:\t\t#{host}\t#{port}
+    i    "articles about technology trends"\t\t#{host}\t#{port}
+    i    "posts discussing privacy"\t\t#{host}\t#{port}
+    i    "content related to retro computing"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp semantic_search_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Semantic Search ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your query in natural language.\t\t#{host}\t#{port}
+    iAI will find content matching the meaning.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "recent discussions about open source"\t\t#{host}\t#{port}
+    i  "tutorials on programming"\t\t#{host}\t#{port}
+    i  "philosophical thoughts"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Search Query\t/semantic/search\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp semantic_search(query, host, port) do
+    query = String.trim(query)
+
+    case SemanticSearch.search(query, limit: 15) do
+      {:ok, []} ->
+        """
+        i\t\t#{host}\t#{port}
+        i=== Search Results ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo results found for: "#{truncate(query, 40)}"\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTry different keywords or phrasing.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Another Search\t/semantic/search\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+
+      {:ok, results} ->
+        result_lines = results
+        |> Enum.with_index(1)
+        |> Enum.map(fn {result, idx} ->
+          type_label = result.type |> Atom.to_string() |> String.capitalize()
+          score_pct = Float.round(result.score * 100, 0) |> trunc()
+          excerpt = truncate(result.excerpt, 60)
+          link = result_link(result, host, port)
+
+          """
+          i#{idx}. [#{type_label}] #{result.title} (#{score_pct}% match)\t\t#{host}\t#{port}
+          i   #{excerpt}\t\t#{host}\t#{port}
+          #{link}
+          i\t\t#{host}\t#{port}
+          """
+        end)
+        |> Enum.join("")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Search Results for "#{truncate(query, 30)}" ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFound #{length(results)} result(s)\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{result_lines}
+        7Search Again\t/semantic/search\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp semantic_similar(path, host, port) do
+    # Parse type/id from path
+    case String.split(path, "/", parts: 2) do
+      [type_str, id] ->
+        type = String.to_existing_atom(type_str)
+
+        case SemanticSearch.find_similar(type, id, limit: 10) do
+          {:ok, []} ->
+            """
+            i\t\t#{host}\t#{port}
+            i=== Similar Content ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            iNo similar content found.\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+            .
+            """
+
+          {:ok, similar} ->
+            similar_lines = similar
+            |> Enum.with_index(1)
+            |> Enum.map(fn {item, idx} ->
+              type_label = item.type |> Atom.to_string() |> String.capitalize()
+              score_pct = Float.round(item.score * 100, 0) |> trunc()
+              link = result_link(item, host, port)
+
+              """
+              i#{idx}. [#{type_label}] #{item.title} (#{score_pct}% similar)\t\t#{host}\t#{port}
+              #{link}
+              """
+            end)
+            |> Enum.join("")
+
+            """
+            i\t\t#{host}\t#{port}
+            i=== Similar Content ===\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            #{similar_lines}
+            i\t\t#{host}\t#{port}
+            1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+            .
+            """
+
+          {:error, reason} ->
+            """
+            i\t\t#{host}\t#{port}
+            3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+            i\t\t#{host}\t#{port}
+            1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+            .
+            """
+        end
+
+      _ ->
+        """
+        i\t\t#{host}\t#{port}
+        3Invalid path format. Use: /semantic/similar/<type>/<id>\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+    end
+  rescue
+    ArgumentError ->
+      """
+      i\t\t#{host}\t#{port}
+      3Unknown content type\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+      .
+      """
+  end
+
+  defp semantic_trending(host, port) do
+    case SemanticSearch.trending_topics(limit: 10, days: 7) do
+      {:ok, []} ->
+        """
+        i\t\t#{host}\t#{port}
+        i=== Trending Topics ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iNo trending topics found.\t\t#{host}\t#{port}
+        iAdd more content to see trends!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+
+      {:ok, topics} ->
+        topic_lines = topics
+        |> Enum.with_index(1)
+        |> Enum.map(fn {topic, idx} ->
+          desc = if topic.description != "", do: " - #{topic.description}", else: ""
+          "i  #{idx}. #{topic.topic}#{desc}\t\t#{host}\t#{port}"
+        end)
+        |> Enum.join("\r\n")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Trending Topics (Last 7 Days) ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{topic_lines}
+        i\t\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp semantic_types(host, port) do
+    types = SemanticSearch.content_types()
+
+    type_descriptions = %{
+      phlog: "Blog posts and articles",
+      document: "Uploaded documents and files",
+      post: "Bulletin board discussions",
+      guestbook: "Guestbook entries",
+      user_phlog: "User-submitted blog posts"
+    }
+
+    type_lines = types
+    |> Enum.map(fn type ->
+      desc = Map.get(type_descriptions, type, "")
+      "i  #{String.pad_trailing(Atom.to_string(type), 12)} #{desc}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Content Types ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSemantic search covers these content types:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{type_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp result_link(result, host, port) do
+    case result.type do
+      :phlog -> "1View Entry\t/phlog/entry/#{result.path || result.id}\t#{host}\t#{port}"
+      :document -> "1View Document\t/docs/view/#{result.id}\t#{host}\t#{port}"
+      :post -> "1View Post\t/board/post/#{result.id}\t#{host}\t#{port}"
+      :guestbook -> "1View Guestbook\t/guestbook\t#{host}\t#{port}"
+      :user_phlog -> "1View Post\t/phlog/user/#{result.author}/#{result.id}\t#{host}\t#{port}"
+      _ -> "i(No direct link)\t\t#{host}\t#{port}"
+    end
   end
 
   # === Link Directory Functions ===

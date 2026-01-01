@@ -2568,17 +2568,18 @@ technology, nature, adventure, space, fantasy, knowledge, music, love, fire, wat
 **Files:** `writing_assistant.ex`
 
 ### 12.3 AI Semantic Search
-**Status:** 🔴 Planned
+**Status:** ✅ Complete
 **Description:** Meaning-based search using embeddings instead of keywords.
 
 **Features:**
 - Vector similarity search across all content
-- Cross-content type search (phlogs, docs, users, comments)
+- Cross-content type search (phlogs, documents, guestbook)
 - "Find similar" for any content item
 - Natural language queries
-- Relevance ranking with explanations
+- Trending topics discovery
+- Content type filtering
 
-**Routes:** `/semantic`, `/semantic/search`, `/semantic/similar/<type>/<id>`
+**Routes:** `/semantic`, `/semantic/search`, `/semantic/similar/<type>/<id>`, `/semantic/trending`, `/semantic/types`
 
 **Files:** `semantic_search.ex`
 
