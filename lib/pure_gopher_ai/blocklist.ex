@@ -41,7 +41,7 @@ defmodule PureGopherAi.Blocklist do
   end
 
   def blocked?(ip) when is_binary(ip) do
-    if enabled?() do
+    if enabled?() and not localhost_or_private?(ip) do
       # First check exact IP match
       case :ets.lookup(@table_name, ip) do
         [{^ip, _source}] -> true
@@ -51,6 +51,18 @@ defmodule PureGopherAi.Blocklist do
       end
     else
       false
+    end
+  end
+
+  # Whitelist localhost and private IP ranges
+  defp localhost_or_private?(ip) do
+    case :inet.parse_address(String.to_charlist(ip)) do
+      {:ok, {127, _, _, _}} -> true                    # 127.0.0.0/8 (loopback)
+      {:ok, {10, _, _, _}} -> true                     # 10.0.0.0/8 (private)
+      {:ok, {172, b, _, _}} when b >= 16 and b <= 31 -> true  # 172.16.0.0/12 (private)
+      {:ok, {192, 168, _, _}} -> true                  # 192.168.0.0/16 (private)
+      {:ok, {0, 0, 0, 0, 0, 0, 0, 1}} -> true          # ::1 (IPv6 loopback)
+      _ -> false
     end
   end
 

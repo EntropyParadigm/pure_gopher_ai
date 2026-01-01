@@ -167,6 +167,72 @@ case :os.type() do
 end
 ```
 
+## Apple Silicon Setup (M1/M2/M3/M4)
+
+Torchx requires native ARM64 tooling and a manual libtorch download (PyTorch's official macOS downloads currently return 403 errors).
+
+### Prerequisites
+
+Install ARM-native tools via Homebrew:
+```bash
+# Ensure Homebrew is ARM native (should be in /opt/homebrew)
+/opt/homebrew/bin/brew install cmake libomp node elixir
+```
+
+### Libtorch Setup
+
+Download the ARM64 nightly build:
+```bash
+mkdir -p ~/libtorch && cd ~/libtorch
+curl -LO https://download.pytorch.org/libtorch/nightly/cpu/libtorch-macos-arm64-latest.zip
+unzip libtorch-macos-arm64-latest.zip
+```
+
+### Environment Variables
+
+Add to `~/.zshrc` (or `~/.bashrc`):
+```bash
+# ARM Homebrew (must be first to use ARM tools over x86)
+export PATH="/opt/homebrew/bin:$PATH"
+
+# Torchx / libtorch
+export LIBTORCH_DIR=~/libtorch/libtorch
+```
+
+### Verification
+
+```bash
+# Verify ARM mode
+uname -m                    # Should show: arm64
+arch                        # Should show: arm64
+
+# Verify tools are ARM
+file $(which cmake)         # Should show: arm64
+file $(which node)          # Should show: arm64
+file ~/libtorch/libtorch/lib/libtorch.dylib  # Should show: arm64
+
+# After building, verify torchx.so
+file _build/dev/lib/torchx/priv/torchx.so    # Should show: arm64
+```
+
+### Common Issues
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| `ld: found architecture 'arm64', required architecture 'x86_64'` | x86 cmake in PATH | Ensure `/opt/homebrew/bin` is first in PATH |
+| `Library not loaded: libomp.dylib` | Missing OpenMP | `brew install libomp` |
+| Torchx downloads fail (403) | PyTorch CDN blocks macOS | Use manual libtorch download above |
+| Running under Rosetta | x86 Node.js | Install ARM Node via Homebrew |
+
+### Clean Rebuild
+
+If switching architectures or fixing build issues:
+```bash
+rm -rf _build deps
+mix deps.get
+mix compile
+```
+
 ## Gopher Protocol (RFC 1436)
 
 ### Selectors
@@ -585,3 +651,11 @@ config :pure_gopher_ai,
 - Gemini output escaping
 - Path traversal prevention in file serving
 - Admin token authentication
+
+### Blocklist Whitelist
+The blocklist automatically exempts localhost and private IP ranges to allow local development and testing:
+- `127.0.0.0/8` - IPv4 loopback
+- `10.0.0.0/8` - Private network
+- `172.16.0.0/12` - Private network
+- `192.168.0.0/16` - Private network
+- `::1` - IPv6 loopback

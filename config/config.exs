@@ -7,7 +7,8 @@ import Config
 nx_backend =
   case :os.type() do
     {:unix, :darwin} ->
-      # Apple Silicon with Metal GPU acceleration
+      # Apple Silicon - Torchx with Metal MPS GPU acceleration
+      # Requires: export LIBTORCH_DIR=~/libtorch/libtorch
       {Torchx.Backend, device: :mps}
 
     _ ->

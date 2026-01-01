@@ -35,7 +35,7 @@ defmodule PureGopherAi.MixProject do
       {:bumblebee, "~> 0.6"},
       {:nx, "~> 0.9"},
       {:exla, "~> 0.9"},
-      {:torchx, "~> 0.9"},
+      {:torchx, "~> 0.9"},  # Re-enabled with manual libtorch download
 
       # Utilities
       {:jason, "~> 1.4"},
