@@ -17,6 +17,7 @@ defmodule PureGopherAi.PhlogFormatter do
 
   alias PureGopherAi.AiEngine
   alias PureGopherAi.PhlogArt
+  alias PureGopherAi.AnsiArt
 
   # Common theme keywords for art generation
   @theme_keywords %{
@@ -132,6 +133,7 @@ defmodule PureGopherAi.PhlogFormatter do
   - `:drop_cap` - Enable illuminated drop cap (default: true)
   - `:illustrations` - Enable AI-generated ASCII art (default: true)
   - `:borders` - Border style (:simple, :ornate, :vine, :celtic, etc.)
+  - `:color` - Enable ANSI 16-color output for terminals that support it (default: false)
   """
   def format(title, body, opts \\ []) do
     host = Keyword.get(opts, :host, "localhost")
@@ -140,6 +142,7 @@ defmodule PureGopherAi.PhlogFormatter do
     enable_drop_cap = Keyword.get(opts, :drop_cap, true)
     enable_illustrations = Keyword.get(opts, :illustrations, true)
     border_style = Keyword.get(opts, :borders, :ornate)
+    enable_color = Keyword.get(opts, :color, false)
 
     # Detect theme from content
     theme = detect_theme(title <> " " <> body)
@@ -148,21 +151,21 @@ defmodule PureGopherAi.PhlogFormatter do
     lines = []
 
     # Add decorative header
-    lines = lines ++ format_header(title, style, border_style, theme)
+    lines = lines ++ format_header(title, style, border_style, theme, enable_color)
 
     # Add thematic illustration if enabled
     lines = if enable_illustrations do
-      lines ++ format_illustration(theme)
+      lines ++ format_illustration(theme, enable_color)
     else
       lines
     end
 
     # Format body with drop cap and Gopher conversion
-    formatted_body = format_body(body, host, port, enable_drop_cap, style)
+    formatted_body = format_body(body, host, port, enable_drop_cap, style, enable_color)
     lines = lines ++ formatted_body
 
     # Add decorative footer
-    lines = lines ++ format_footer(style, border_style)
+    lines = lines ++ format_footer(style, border_style, enable_color)
 
     Enum.join(lines, "\n")
   end
@@ -235,14 +238,19 @@ defmodule PureGopherAi.PhlogFormatter do
 
   @doc """
   Creates an illuminated drop cap for the first letter.
+  Supports optional ANSI color for terminals that support it.
   """
-  def create_drop_cap(text) do
+  def create_drop_cap(text, enable_color \\ false) do
     case String.first(text) do
       nil -> {"", text}
       first_char ->
         rest = String.slice(text, 1..-1//1)
-        # Use PhlogArt for illuminated letters
-        art = PhlogArt.illuminated_letter(first_char)
+        # Use AnsiArt for color, PhlogArt for plain ASCII
+        art = if enable_color do
+          AnsiArt.get_drop_cap(first_char)
+        else
+          PhlogArt.illuminated_letter(first_char)
+        end
         {art, rest}
     end
   end
@@ -275,9 +283,13 @@ defmodule PureGopherAi.PhlogFormatter do
     if score > 0, do: best_theme, else: :default
   end
 
-  defp format_header(title, style, border_style, theme) do
-    border = Map.get(@borders, border_style, @borders.simple)
-    ornament = theme_ornament(theme)
+  defp format_header(title, style, border_style, theme, enable_color) do
+    border = if enable_color do
+      AnsiArt.get_border(color_border_style(border_style))
+    else
+      Map.get(@borders, border_style, @borders.simple)
+    end
+    ornament = theme_ornament(theme, enable_color)
 
     case style do
       :minimal ->
@@ -288,33 +300,55 @@ defmodule PureGopherAi.PhlogFormatter do
           ""
         ]
       :ornate ->
-        [
-          "",
-          "╔" <> String.duplicate("═", 58) <> "╗",
-          "║" <> String.pad_leading("", 58) <> "║",
-          "║" <> center_text("#{ornament} #{title} #{ornament}", 58) <> "║",
-          "║" <> String.pad_leading("", 58) <> "║",
-          "╚" <> String.duplicate("═", 58) <> "╝",
-          ""
-        ]
+        if enable_color do
+          # Use colorful frame for ornate style
+          frame = AnsiArt.color_frame(title, border_color: :bright_yellow, text_color: :bright_cyan)
+          ["", frame, ""]
+        else
+          [
+            "",
+            "╔" <> String.duplicate("═", 58) <> "╗",
+            "║" <> String.pad_leading("", 58) <> "║",
+            "║" <> center_text("#{ornament} #{title} #{ornament}", 58) <> "║",
+            "║" <> String.pad_leading("", 58) <> "║",
+            "╚" <> String.duplicate("═", 58) <> "╝",
+            ""
+          ]
+        end
       :medieval ->
-        [
-          "",
-          "    " <> border,
-          "",
-          "         #{ornament}  #{String.upcase(title)}  #{ornament}",
-          "",
-          "    " <> border,
-          ""
-        ]
+        if enable_color do
+          [
+            "",
+            "    " <> AnsiArt.divider(:rainbow, 50),
+            "",
+            "         #{ornament}  " <> AnsiArt.colorize(String.upcase(title), :bright_yellow) <> "  #{ornament}",
+            "",
+            "    " <> AnsiArt.divider(:rainbow, 50),
+            ""
+          ]
+        else
+          [
+            "",
+            "    " <> border,
+            "",
+            "         #{ornament}  #{String.upcase(title)}  #{ornament}",
+            "",
+            "    " <> border,
+            ""
+          ]
+        end
       _ ->
         [border, "  #{title}", border, ""]
     end
   end
 
-  defp format_illustration(theme) do
-    # Use PhlogArt for richer art options
-    art = PhlogArt.get_art(theme)
+  defp format_illustration(theme, enable_color) do
+    # Use AnsiArt for color, PhlogArt for plain ASCII
+    art = if enable_color do
+      AnsiArt.get_art(theme)
+    else
+      PhlogArt.get_art(theme)
+    end
 
     # Center and indent the art
     lines = art
@@ -325,12 +359,12 @@ defmodule PureGopherAi.PhlogFormatter do
     lines ++ [""]
   end
 
-  defp format_body(body, host, port, enable_drop_cap, style) do
+  defp format_body(body, host, port, enable_drop_cap, style, enable_color) do
     # Convert markdown to gopher format
     converted = markdown_to_gopher(body, host, port)
 
     if enable_drop_cap and String.length(converted) > 0 do
-      {drop_cap, rest} = create_drop_cap(converted)
+      {drop_cap, rest} = create_drop_cap(converted, enable_color)
 
       # Format drop cap with text flowing around it
       drop_cap_lines = String.split(drop_cap, "\n")
@@ -362,34 +396,57 @@ defmodule PureGopherAi.PhlogFormatter do
     merged ++ remaining
   end
 
-  defp format_footer(style, border_style) do
-    border = Map.get(@borders, border_style, @borders.simple)
+  defp format_footer(style, border_style, enable_color) do
+    border = if enable_color do
+      AnsiArt.get_border(color_border_style(border_style))
+    else
+      Map.get(@borders, border_style, @borders.simple)
+    end
 
     case style do
       :minimal ->
         [border]
       :ornate ->
-        [
-          "",
-          "    " <> border,
-          "    " <> center_text("❦ ❦ ❦", String.length(border)),
-          ""
-        ]
+        if enable_color do
+          [
+            "",
+            "    " <> AnsiArt.divider(:gold, 50),
+            "    " <> center_text(AnsiArt.colorize("❦ ❦ ❦", :bright_magenta), 50),
+            ""
+          ]
+        else
+          [
+            "",
+            "    " <> border,
+            "    " <> center_text("❦ ❦ ❦", String.length(border)),
+            ""
+          ]
+        end
       :medieval ->
-        [
-          "",
-          "    " <> @borders.vine,
-          "    " <> center_text("~ Finis ~", String.length(@borders.vine)),
-          "    " <> @borders.vine,
-          ""
-        ]
+        if enable_color do
+          [
+            "",
+            "    " <> AnsiArt.divider(:magic, 50),
+            "    " <> center_text(AnsiArt.colorize("~ Finis ~", :bright_cyan), 50),
+            "    " <> AnsiArt.divider(:magic, 50),
+            ""
+          ]
+        else
+          [
+            "",
+            "    " <> @borders.vine,
+            "    " <> center_text("~ Finis ~", String.length(@borders.vine)),
+            "    " <> @borders.vine,
+            ""
+          ]
+        end
       _ ->
         [border]
     end
   end
 
-  defp theme_ornament(theme) do
-    case theme do
+  defp theme_ornament(theme, enable_color) do
+    ornament = case theme do
       :technology -> "⚙"
       :nature -> "🌿"
       :adventure -> "⚔"
@@ -401,6 +458,39 @@ defmodule PureGopherAi.PhlogFormatter do
       :home -> "♥"
       :time -> "⌛"
       _ -> "❦"
+    end
+
+    if enable_color do
+      color = case theme do
+        :technology -> :bright_cyan
+        :nature -> :bright_green
+        :adventure -> :bright_red
+        :knowledge -> :bright_yellow
+        :music -> :bright_magenta
+        :space -> :bright_blue
+        :fantasy -> :bright_red
+        :food -> :yellow
+        :home -> :bright_red
+        :time -> :bright_yellow
+        _ -> :bright_magenta
+      end
+      AnsiArt.colorize(ornament, color)
+    else
+      ornament
+    end
+  end
+
+  defp color_border_style(border_style) do
+    case border_style do
+      :simple -> :rainbow
+      :ornate -> :gold
+      :vine -> :forest
+      :celtic -> :magic
+      :wave -> :ocean
+      :dots -> :rainbow
+      :stars -> :magic
+      :diamond -> :gold
+      _ -> :rainbow
     end
   end
 

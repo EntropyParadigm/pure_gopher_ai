@@ -2495,6 +2495,40 @@ technology, nature, adventure, knowledge, music, space, fantasy, food, home, tim
 - `lib/pure_gopher_ai/phlog_art.ex` (new)
 - `lib/pure_gopher_ai/gopher_handler.ex` (routes, handlers)
 
+### 11.20 ANSI Color Art for Terminal Clients
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** 16-color ANSI art support for terminals that support escape codes, with fallback to plain ASCII.
+
+**Implementation:**
+- [x] Create `AnsiArt` module - 16-color ANSI art library
+- [x] Color art themes matching all ASCII themes (12+ themes)
+- [x] Color illuminated drop caps (A, B, C, and default)
+- [x] Rainbow, fire, ocean, forest, gold, magic dividers
+- [x] Colorful borders and frames
+- [x] PhlogFormatter color option for ANSI output
+- [x] `strip_ansi/1` function for fallback to plain text
+- [x] Color art gallery and preview endpoints
+
+**ANSI Colors Available:**
+- Basic (8): black, red, green, yellow, blue, magenta, cyan, white
+- Bright (8): bright_black, bright_red, bright_green, bright_yellow, bright_blue, bright_magenta, bright_cyan, bright_white
+
+**New Routes:**
+- `/phlog/format/color` - Color art menu
+- `/phlog/format/color/gallery` - Color art gallery
+- `/phlog/format/color/gallery/<theme>` - View theme color art
+- `/phlog/format/color/preview` - Preview color formatting
+- `/phlog/format/color/borders` - View color border styles
+
+**Color Themes:**
+technology, nature, adventure, space, fantasy, knowledge, music, love, fire, water, celebration, weather, default
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/ansi_art.ex` (new)
+- `lib/pure_gopher_ai/phlog_formatter.ex` (added color support)
+- `lib/pure_gopher_ai/gopher_handler.ex` (color routes, handlers)
+
 ---
 
 ## Notes

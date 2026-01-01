@@ -40,6 +40,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Caps
   alias PureGopherAi.PhlogFormatter
   alias PureGopherAi.PhlogArt
+  alias PureGopherAi.AnsiArt
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -901,6 +902,28 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/phlog/format/art/" <> theme, host, port, _network, _ip, _socket),
     do: phlog_art_theme(theme, host, port)
+
+  # Color (ANSI) Art Routes
+  defp route_selector("/phlog/format/color", host, port, _network, _ip, _socket),
+    do: phlog_color_art_menu(host, port)
+
+  defp route_selector("/phlog/format/color/gallery", host, port, _network, _ip, _socket),
+    do: phlog_color_art_gallery(host, port)
+
+  defp route_selector("/phlog/format/color/gallery/" <> theme, host, port, _network, _ip, _socket),
+    do: phlog_color_art_theme(theme, host, port)
+
+  defp route_selector("/phlog/format/color/preview", host, port, _network, _ip, _socket),
+    do: phlog_color_preview_prompt(host, port)
+
+  defp route_selector("/phlog/format/color/preview\t" <> input, host, port, _network, _ip, _socket),
+    do: handle_phlog_color_preview(input, host, port)
+
+  defp route_selector("/phlog/format/color/preview " <> input, host, port, _network, _ip, _socket),
+    do: handle_phlog_color_preview(input, host, port)
+
+  defp route_selector("/phlog/format/color/borders", host, port, _network, _ip, _socket),
+    do: phlog_color_borders(host, port)
 
   # Search (Type 7)
   defp route_selector("/search", host, port, _network, _ip, _socket),
@@ -6181,6 +6204,198 @@ defmodule PureGopherAi.GopherHandler do
   rescue
     ArgumentError ->
       error_response("Unknown theme: #{theme_str}")
+  end
+
+  # === Color (ANSI) Art Functions ===
+
+  defp phlog_color_art_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i    ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i    ║      \e[31mC\e[33mO\e[32mL\e[36mO\e[34mR\e[35m \e[31mA\e[33mR\e[32mT\e[0m FOR ANSI TERMINALS           ║\t\t#{host}\t#{port}
+    i    ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i    \e[93mNOTE:\e[0m This section uses ANSI escape codes for color.\t\t#{host}\t#{port}
+    i    If you see garbled text like "[31m", your terminal\t\t#{host}\t#{port}
+    i    doesn't support ANSI colors. Use the plain art instead.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   FEATURES\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i   * \e[91m1\e[93m6\e[92m-\e[96mc\e[94mo\e[95ml\e[91mo\e[93mr\e[0m ANSI art for supporting terminals\t\t#{host}\t#{port}
+    i   * Colorful illuminated drop caps\t\t#{host}\t#{port}
+    i   * Rainbow and themed borders\t\t#{host}\t#{port}
+    i   * Falls back to plain ASCII if needed\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   BROWSE\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Color Art Gallery\t/phlog/format/color/gallery\t#{host}\t#{port}
+    1Color Borders\t/phlog/format/color/borders\t#{host}\t#{port}
+    7Preview Color Formatting\t/phlog/format/color/preview\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i   COMPATIBILITY\t\t#{host}\t#{port}
+    i════════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i   Supported: Most Linux/Mac terminals, PuTTY, xterm\t\t#{host}\t#{port}
+    i   Not supported: Some basic Gopher clients\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Plain ASCII Art (No Colors)\t/phlog/format/art\t#{host}\t#{port}
+    1Back to Formatting\t/phlog/format\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp phlog_color_art_gallery(host, port) do
+    themes = AnsiArt.themes()
+
+    theme_lines = themes
+      |> Enum.map(fn theme ->
+        "1#{theme |> Atom.to_string() |> String.capitalize()}\t/phlog/format/color/gallery/#{theme}\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i    \e[93m╔═══════════════════════════════════════════════════════╗\e[0m\t\t#{host}\t#{port}
+    i    \e[93m║\e[0m       \e[91mC\e[93mO\e[92mL\e[96mO\e[94mR\e[0m ASCII ART GALLERY             \e[93m║\e[0m\t\t#{host}\t#{port}
+    i    \e[93m╚═══════════════════════════════════════════════════════╝\e[0m\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i    Browse themed ANSI color art for your phlog posts.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[0m\t\t#{host}\t#{port}
+    i   THEMES (#{length(themes)} available)\t\t#{host}\t#{port}
+    i\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[31m═\e[33m═\e[32m═\e[36m═\e[34m═\e[35m═\e[0m\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{theme_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Color Menu\t/phlog/format/color\t#{host}\t#{port}
+    1Plain Art (No Colors)\t/phlog/format/art\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp phlog_color_art_theme(theme_str, host, port) do
+    theme = String.to_existing_atom(theme_str)
+    arts = AnsiArt.get_all_art(theme)
+
+    art_displays = arts
+      |> Enum.with_index(1)
+      |> Enum.map(fn {art, idx} ->
+        art_lines = art
+          |> String.trim()
+          |> String.split("\n")
+          |> Enum.map(&("i    #{&1}\t\t#{host}\t#{port}"))
+          |> Enum.join("\r\n")
+
+        "i\e[93m--- Option #{idx} ---\e[0m\t\t#{host}\t#{port}\r\n#{art_lines}"
+      end)
+      |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i\e[93m=== \e[91m#{String.upcase(theme_str)}\e[93m Color Art ===\e[0m\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i#{length(arts)} color variations available:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{art_displays}
+    i\t\t#{host}\t#{port}
+    1Back to Color Gallery\t/phlog/format/color/gallery\t#{host}\t#{port}
+    1Back to Color Menu\t/phlog/format/color\t#{host}\t#{port}
+    .
+    """
+  rescue
+    ArgumentError ->
+      error_response("Unknown theme: #{theme_str}")
+  end
+
+  defp phlog_color_borders(host, port) do
+    border_styles = AnsiArt.border_styles()
+
+    border_demos = border_styles
+      |> Enum.map(fn style ->
+        border = AnsiArt.divider(style, 40)
+        "i  #{style |> Atom.to_string() |> String.capitalize()}:\t\t#{host}\t#{port}\r\ni  #{border}\t\t#{host}\t#{port}"
+      end)
+      |> Enum.join("\r\ni\t\t#{host}\t#{port}\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i\e[93m╔═══════════════════════════════════════════════════════╗\e[0m\t\t#{host}\t#{port}
+    i\e[93m║\e[0m          \e[91mC\e[93mO\e[92mL\e[96mO\e[94mR\e[0m BORDER STYLES               \e[93m║\e[0m\t\t#{host}\t#{port}
+    i\e[93m╚═══════════════════════════════════════════════════════╝\e[0m\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i    Available border styles for phlog decoration:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{border_demos}
+    i\t\t#{host}\t#{port}
+    1Back to Color Menu\t/phlog/format/color\t#{host}\t#{port}
+    1Back to Formatting\t/phlog/format\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp phlog_color_preview_prompt(host, port) do
+    """
+    i\e[93m=== Preview Color Formatted Content ===\e[0m\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter: title|body\t\t#{host}\t#{port}
+    i(Separate title and body with |)\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThis will show your content with \e[91mc\e[93mo\e[92ml\e[96mo\e[94mr\e[0m formatting.\t\t#{host}\t#{port}
+    iANSI escape codes will be included for\t\t#{host}\t#{port}
+    iterminals that support them.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    iMy Journey|I went on an **adventure** today!\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_color_preview(input, host, port) do
+    case String.split(input, "|", parts: 2) do
+      [title, body] when byte_size(title) > 0 and byte_size(body) > 0 ->
+        # Format with color enabled
+        formatted = PhlogFormatter.format(
+          String.trim(title),
+          String.trim(body),
+          host: host, port: port, style: :medieval, color: true
+        )
+
+        preview = PhlogFormatter.preview(title, body, host: host, port: port)
+
+        formatted_lines = formatted
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i\t\t#{host}\t#{port}
+        i\e[93m=== COLOR FORMATTED PREVIEW ===\e[0m\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTheme detected: \e[96m#{preview.theme}\e[0m\t\t#{host}\t#{port}
+        iWord count: #{preview.word_count}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[0m\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted_lines}
+        i\t\t#{host}\t#{port}
+        i\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[31m─\e[33m─\e[32m─\e[36m─\e[34m─\e[35m─\e[0m\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTip: Content uses ANSI color codes!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Try Another Preview\t/phlog/format/color/preview\t#{host}\t#{port}
+        1Color Menu\t/phlog/format/color\t#{host}\t#{port}
+        1Plain Preview (No Color)\t/phlog/format/preview\t#{host}\t#{port}
+        .
+        """
+
+      _ ->
+        error_response("Format: title|body (separate with |)")
+    end
   end
 
   # Error response
