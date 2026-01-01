@@ -48,6 +48,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.CreativeStudio
   alias PureGopherAi.CodeCompanion
   alias PureGopherAi.Oracle
+  alias PureGopherAi.LearningTools
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -1029,6 +1030,103 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/oracle/lifepath " <> input, host, port, _network, _ip, _socket),
     do: oracle_lifepath(input, host, port)
+
+  # AI Learning Tools routes
+  defp route_selector("/learn", host, port, _network, _ip, _socket),
+    do: learn_menu(host, port)
+
+  defp route_selector("/learn/", host, port, _network, _ip, _socket),
+    do: learn_menu(host, port)
+
+  defp route_selector("/learn/flashcards", host, port, _network, _ip, _socket),
+    do: learn_flashcards_prompt(host, port)
+
+  defp route_selector("/learn/flashcards\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_flashcards(input, host, port)
+
+  defp route_selector("/learn/flashcards " <> input, host, port, _network, _ip, _socket),
+    do: learn_flashcards(input, host, port)
+
+  defp route_selector("/learn/quiz", host, port, _network, _ip, _socket),
+    do: learn_quiz_prompt(host, port)
+
+  defp route_selector("/learn/quiz\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_quiz(input, host, port)
+
+  defp route_selector("/learn/quiz " <> input, host, port, _network, _ip, _socket),
+    do: learn_quiz(input, host, port)
+
+  defp route_selector("/learn/eli5", host, port, _network, _ip, _socket),
+    do: learn_eli5_prompt(host, port)
+
+  defp route_selector("/learn/eli5\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_eli5(input, host, port)
+
+  defp route_selector("/learn/eli5 " <> input, host, port, _network, _ip, _socket),
+    do: learn_eli5(input, host, port)
+
+  defp route_selector("/learn/define", host, port, _network, _ip, _socket),
+    do: learn_define_prompt(host, port)
+
+  defp route_selector("/learn/define\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_define(input, host, port)
+
+  defp route_selector("/learn/define " <> input, host, port, _network, _ip, _socket),
+    do: learn_define(input, host, port)
+
+  defp route_selector("/learn/etymology", host, port, _network, _ip, _socket),
+    do: learn_etymology_prompt(host, port)
+
+  defp route_selector("/learn/etymology\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_etymology(input, host, port)
+
+  defp route_selector("/learn/etymology " <> input, host, port, _network, _ip, _socket),
+    do: learn_etymology(input, host, port)
+
+  defp route_selector("/learn/map", host, port, _network, _ip, _socket),
+    do: learn_map_prompt(host, port)
+
+  defp route_selector("/learn/map\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_map(input, host, port)
+
+  defp route_selector("/learn/map " <> input, host, port, _network, _ip, _socket),
+    do: learn_map(input, host, port)
+
+  defp route_selector("/learn/compare", host, port, _network, _ip, _socket),
+    do: learn_compare_prompt(host, port)
+
+  defp route_selector("/learn/compare\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_compare(input, host, port)
+
+  defp route_selector("/learn/compare " <> input, host, port, _network, _ip, _socket),
+    do: learn_compare(input, host, port)
+
+  defp route_selector("/learn/mnemonic", host, port, _network, _ip, _socket),
+    do: learn_mnemonic_prompt(host, port)
+
+  defp route_selector("/learn/mnemonic\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_mnemonic(input, host, port)
+
+  defp route_selector("/learn/mnemonic " <> input, host, port, _network, _ip, _socket),
+    do: learn_mnemonic(input, host, port)
+
+  defp route_selector("/learn/breakdown", host, port, _network, _ip, _socket),
+    do: learn_breakdown_prompt(host, port)
+
+  defp route_selector("/learn/breakdown\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_breakdown(input, host, port)
+
+  defp route_selector("/learn/breakdown " <> input, host, port, _network, _ip, _socket),
+    do: learn_breakdown(input, host, port)
+
+  defp route_selector("/learn/practice", host, port, _network, _ip, _socket),
+    do: learn_practice_prompt(host, port)
+
+  defp route_selector("/learn/practice\t" <> input, host, port, _network, _ip, _socket),
+    do: learn_practice(input, host, port)
+
+  defp route_selector("/learn/practice " <> input, host, port, _network, _ip, _socket),
+    do: learn_practice(input, host, port)
 
   # AI Writing Assistant routes
   defp route_selector("/write", host, port, _network, _ip, _socket),
@@ -8610,6 +8708,550 @@ defmodule PureGopherAi.GopherHandler do
         3Error: #{inspect(reason)}\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
         1Back to Oracle Menu\t/oracle\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  # === AI Learning Tools Functions ===
+
+  defp learn_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║             AI LEARNING TOOLS                         ║\t\t#{host}\t#{port}
+    i  ║       Study Smarter with AI Assistance                ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Enhance your learning with AI-powered tools!\t\t#{host}\t#{port}
+    i  Generate flashcards, quizzes, and more.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  STUDY AIDS\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Generate Flashcards\t/learn/flashcards\t#{host}\t#{port}
+    7Generate Quiz\t/learn/quiz\t#{host}\t#{port}
+    7Practice Problems\t/learn/practice\t#{host}\t#{port}
+    7Create Mnemonic\t/learn/mnemonic\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  UNDERSTAND\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Explain Like I'm 5\t/learn/eli5\t#{host}\t#{port}
+    7Break Down Topic\t/learn/breakdown\t#{host}\t#{port}
+    7Compare Concepts\t/learn/compare\t#{host}\t#{port}
+    7Concept Map\t/learn/map\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  VOCABULARY\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Define Word\t/learn/define\t#{host}\t#{port}
+    7Word Etymology\t/learn/etymology\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_flashcards_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Flashcards ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your study material and AI will generate\t\t#{host}\t#{port}
+    iflashcards for studying.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTip: Include detailed content for better cards.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Study Material\t/learn/flashcards\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_flashcards(content, host, port) do
+    content = String.trim(content)
+
+    case LearningTools.flashcards(content) do
+      {:ok, cards} ->
+        card_lines = cards
+        |> Enum.with_index(1)
+        |> Enum.map(fn {card, idx} ->
+          """
+          i--- Card #{idx} ---\t\t#{host}\t#{port}
+          iFront: #{truncate(card.front, 60)}\t\t#{host}\t#{port}
+          iBack: #{truncate(card.back, 60)}\t\t#{host}\t#{port}
+          """
+        end)
+        |> Enum.join("")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Flashcards ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i#{length(cards)} cards generated:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{card_lines}
+        i\t\t#{host}\t#{port}
+        7Generate More Flashcards\t/learn/flashcards\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_quiz_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Quiz ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your study material and AI will generate\t\t#{host}\t#{port}
+    iquiz questions to test your knowledge.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Study Material\t/learn/quiz\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_quiz(content, host, port) do
+    content = String.trim(content)
+
+    case LearningTools.quiz(content) do
+      {:ok, questions} ->
+        quiz_lines = questions
+        |> Enum.with_index(1)
+        |> Enum.map(fn {q, idx} ->
+          options_text = if q.options != [] do
+            q.options |> Enum.map(fn opt -> "i  #{opt}\t\t#{host}\t#{port}" end) |> Enum.join("\r\n")
+          else
+            ""
+          end
+          """
+          i\t\t#{host}\t#{port}
+          iQ#{idx}: #{truncate(q.question, 60)}\t\t#{host}\t#{port}
+          #{options_text}
+          iAnswer: #{truncate(q.answer, 50)}\t\t#{host}\t#{port}
+          """
+        end)
+        |> Enum.join("")
+
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Quiz ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{quiz_lines}
+        i\t\t#{host}\t#{port}
+        7Generate Another Quiz\t/learn/quiz\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_eli5_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Explain Like I'm 5 ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a concept and get a simple explanation\t\t#{host}\t#{port}
+    ithat anyone can understand.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "quantum physics"\t\t#{host}\t#{port}
+    i  "blockchain technology"\t\t#{host}\t#{port}
+    i  "how the stock market works"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Concept\t/learn/eli5\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_eli5(concept, host, port) do
+    concept = String.trim(concept)
+
+    case LearningTools.explain(concept, level: :child) do
+      {:ok, explanation} ->
+        formatted = format_text_as_info(explanation, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== ELI5: #{truncate(concept, 40)} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Explain Another Concept\t/learn/eli5\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_define_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Enhanced Dictionary ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a word for a detailed definition\t\t#{host}\t#{port}
+    iwith usage examples and synonyms.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Word\t/learn/define\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_define(word, host, port) do
+    word = String.trim(word)
+
+    case LearningTools.define(word) do
+      {:ok, definition} ->
+        formatted = format_text_as_info(definition, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Definition: #{word} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Define Another Word\t/learn/define\t#{host}\t#{port}
+        7See Etymology\t/learn/etymology\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_etymology_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Word Etymology ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a word to learn about its origin\t\t#{host}\t#{port}
+    iand historical development.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Word\t/learn/etymology\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_etymology(word, host, port) do
+    word = String.trim(word)
+
+    case LearningTools.etymology(word) do
+      {:ok, etymology} ->
+        formatted = format_text_as_info(etymology, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Etymology: #{word} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Explore Another Word\t/learn/etymology\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_map_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Concept Map ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic and AI will create a visual\t\t#{host}\t#{port}
+    iconcept map showing relationships.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "machine learning"\t\t#{host}\t#{port}
+    i  "French Revolution causes"\t\t#{host}\t#{port}
+    i  "cell biology"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Topic\t/learn/map\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_map(topic, host, port) do
+    topic = String.trim(topic)
+
+    case LearningTools.concept_map(topic) do
+      {:ok, map} ->
+        formatted = format_text_as_info(map, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Concept Map: #{truncate(topic, 40)} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Map Another Topic\t/learn/map\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_compare_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Compare Concepts ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter two concepts separated by " vs "\t\t#{host}\t#{port}
+    ito compare and contrast them.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "democracy vs republic"\t\t#{host}\t#{port}
+    i  "DNA vs RNA"\t\t#{host}\t#{port}
+    i  "capitalism vs socialism"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Concepts (A vs B)\t/learn/compare\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_compare(input, host, port) do
+    input = String.trim(input)
+
+    {concept1, concept2} = case String.split(input, ~r/\s+vs\s+/i, parts: 2) do
+      [c1, c2] -> {String.trim(c1), String.trim(c2)}
+      [single] -> {single, ""}
+      _ -> {input, ""}
+    end
+
+    if concept2 == "" do
+      """
+      i\t\t#{host}\t#{port}
+      3Please enter two concepts separated by " vs "\t\t#{host}\t#{port}
+      iExample: "DNA vs RNA"\t\t#{host}\t#{port}
+      i\t\t#{host}\t#{port}
+      7Try Again\t/learn/compare\t#{host}\t#{port}
+      1Back to Learn Menu\t/learn\t#{host}\t#{port}
+      .
+      """
+    else
+      case LearningTools.compare(concept1, concept2) do
+        {:ok, comparison} ->
+          formatted = format_text_as_info(comparison, host, port)
+          """
+          i\t\t#{host}\t#{port}
+          i=== #{truncate(concept1, 20)} vs #{truncate(concept2, 20)} ===\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          #{formatted}
+          i\t\t#{host}\t#{port}
+          7Compare More Concepts\t/learn/compare\t#{host}\t#{port}
+          1Back to Learn Menu\t/learn\t#{host}\t#{port}
+          .
+          """
+
+        {:error, reason} ->
+          """
+          i\t\t#{host}\t#{port}
+          3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+          i\t\t#{host}\t#{port}
+          1Back to Learn Menu\t/learn\t#{host}\t#{port}
+          .
+          """
+      end
+    end
+  end
+
+  defp learn_mnemonic_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Create Mnemonic ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter something you need to remember and\t\t#{host}\t#{port}
+    iAI will create a memory trick for you.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "order of planets"\t\t#{host}\t#{port}
+    i  "colors of the rainbow"\t\t#{host}\t#{port}
+    i  "taxonomy classification order"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter What to Remember\t/learn/mnemonic\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_mnemonic(content, host, port) do
+    content = String.trim(content)
+
+    case LearningTools.mnemonic(content) do
+      {:ok, mnemonic} ->
+        formatted = format_text_as_info(mnemonic, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Memory Trick ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Create Another Mnemonic\t/learn/mnemonic\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_breakdown_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Break Down Topic ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a complex topic and AI will break it\t\t#{host}\t#{port}
+    idown into simpler, understandable parts.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Complex Topic\t/learn/breakdown\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_breakdown(topic, host, port) do
+    topic = String.trim(topic)
+
+    case LearningTools.breakdown(topic) do
+      {:ok, breakdown} ->
+        formatted = format_text_as_info(breakdown, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Topic Breakdown: #{truncate(topic, 35)} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Break Down Another Topic\t/learn/breakdown\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp learn_practice_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Practice Problems ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic and AI will generate practice\t\t#{host}\t#{port}
+    iproblems with step-by-step solutions.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "quadratic equations"\t\t#{host}\t#{port}
+    i  "physics momentum problems"\t\t#{host}\t#{port}
+    i  "chemistry balancing equations"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Topic\t/learn/practice\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Learn Menu\t/learn\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp learn_practice(topic, host, port) do
+    topic = String.trim(topic)
+
+    case LearningTools.practice_problems(topic) do
+      {:ok, problems} ->
+        formatted = format_text_as_info(problems, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Practice Problems: #{truncate(topic, 30)} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7More Practice Problems\t/learn/practice\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Learn Menu\t/learn\t#{host}\t#{port}
         .
         """
     end
