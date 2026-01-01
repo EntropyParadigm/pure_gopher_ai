@@ -44,6 +44,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.Sitemap
   alias PureGopherAi.Mailbox
   alias PureGopherAi.Trivia
+  alias PureGopherAi.Bookmarks
 
   @impl ThousandIsland.Handler
   def handle_connection(socket, state) do
@@ -602,6 +603,56 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/trivia/save " <> nickname, host, port, _network, ip, _socket),
     do: trivia_save(session_id_from_ip(ip), nickname, host, port)
 
+  # Bookmarks / Favorites routes
+  defp route_selector("/bookmarks", host, port, _network, _ip, _socket),
+    do: bookmarks_menu(host, port)
+
+  defp route_selector("/bookmarks/login", host, port, _network, _ip, _socket),
+    do: bookmarks_login_prompt(host, port)
+
+  defp route_selector("/bookmarks/login\t" <> username, host, port, _network, _ip, _socket),
+    do: bookmarks_user(username, nil, host, port)
+
+  defp route_selector("/bookmarks/login " <> username, host, port, _network, _ip, _socket),
+    do: bookmarks_user(username, nil, host, port)
+
+  defp route_selector("/bookmarks/user/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [username, folder] -> bookmarks_user(username, folder, host, port)
+      [username] -> bookmarks_user(username, nil, host, port)
+    end
+  end
+
+  defp route_selector("/bookmarks/add/" <> rest, host, port, _network, _ip, _socket) do
+    rest = String.replace(rest, "\t", "/")
+    case String.split(rest, "/", parts: 3) do
+      [username, selector, title] -> bookmarks_add(username, selector, title, host, port)
+      [username, selector] -> bookmarks_add_title_prompt(username, selector, host, port)
+      [username] -> bookmarks_add_prompt(username, host, port)
+    end
+  end
+
+  defp route_selector("/bookmarks/remove/" <> rest, host, port, _network, _ip, _socket) do
+    case String.split(rest, "/", parts: 2) do
+      [username, bookmark_id] -> bookmarks_remove(username, bookmark_id, host, port)
+      _ -> error_response("Invalid request")
+    end
+  end
+
+  defp route_selector("/bookmarks/folders/" <> username, host, port, _network, _ip, _socket),
+    do: bookmarks_folders(username, host, port)
+
+  defp route_selector("/bookmarks/newfolder/" <> rest, host, port, _network, _ip, _socket) do
+    rest = String.replace(rest, "\t", "/")
+    case String.split(rest, "/", parts: 2) do
+      [username, folder_name] -> bookmarks_create_folder(username, folder_name, host, port)
+      [username] -> bookmarks_newfolder_prompt(username, host, port)
+    end
+  end
+
+  defp route_selector("/bookmarks/export/" <> username, host, port, _network, _ip, _socket),
+    do: bookmarks_export(username, host, port)
+
   # Phlog (Gopher blog) routes
   defp route_selector("/phlog", host, port, network, _ip, _socket),
     do: phlog_index(host, port, network, 1)
@@ -1122,6 +1173,7 @@ defmodule PureGopherAi.GopherHandler do
     1Quick Utilities\t/utils\t#{host}\t#{port}
     1Mailbox\t/mail\t#{host}\t#{port}
     1Trivia Quiz\t/trivia\t#{host}\t#{port}
+    1Bookmarks\t/bookmarks\t#{host}\t#{port}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -6745,6 +6797,250 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, :invalid_nickname} ->
         error_response("Invalid nickname. Use letters, numbers, and spaces only.")
+    end
+  end
+
+  # === Bookmarks Functions ===
+
+  defp bookmarks_menu(host, port) do
+    stats = Bookmarks.stats()
+
+    """
+    i=== Bookmarks / Favorites ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSave your favorite selectors for quick access.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTotal users: #{stats.total_users}\t\t#{host}\t#{port}
+    iTotal bookmarks: #{stats.total_bookmarks}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i--- Access Your Bookmarks ---\t\t#{host}\t#{port}
+    7Enter your username\t/bookmarks/login\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTip: Use a registered username from /users\t\t#{host}\t#{port}
+    ito keep your bookmarks persistent.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Home\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp bookmarks_login_prompt(host, port) do
+    """
+    i=== Bookmarks Login ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter your username to access bookmarks:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp bookmarks_user(username, folder, host, port) do
+    username = String.trim(username)
+
+    case Bookmarks.list(username, folder) do
+      {:ok, bookmarks} ->
+        {:ok, folders} = Bookmarks.folders(username)
+        count = Bookmarks.count(username)
+        current_folder = folder || "default"
+
+        folder_lines = folders
+          |> Enum.map(fn f ->
+            indicator = if f == current_folder, do: "[*] ", else: "    "
+            "1#{indicator}#{f}\t/bookmarks/user/#{username}/#{f}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        bookmark_lines = if Enum.empty?(bookmarks) do
+          "iNo bookmarks in this folder yet.\t\t#{host}\t#{port}"
+        else
+          bookmarks
+          |> Enum.map(fn b ->
+            # Determine the type from the selector
+            type = cond do
+              String.starts_with?(b.selector, "/ask") -> "7"
+              String.starts_with?(b.selector, "/chat") -> "7"
+              String.starts_with?(b.selector, "/search") -> "7"
+              String.ends_with?(b.selector, "/") -> "1"
+              true -> "1"
+            end
+            "#{type}#{b.title}\t#{b.selector}\t#{host}\t#{port}\r\n" <>
+            "i    [#{b.folder}] Added: #{String.slice(b.created_at, 0, 10)}\t\t#{host}\t#{port}\r\n" <>
+            "1    [Remove]\t/bookmarks/remove/#{username}/#{b.id}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+        end
+
+        """
+        i=== #{username}'s Bookmarks ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTotal bookmarks: #{count}/100\t\t#{host}\t#{port}
+        iCurrent folder: #{current_folder}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Folders ---\t\t#{host}\t#{port}
+        #{folder_lines}
+        i\t\t#{host}\t#{port}
+        i--- Bookmarks ---\t\t#{host}\t#{port}
+        #{bookmark_lines}
+        i\t\t#{host}\t#{port}
+        i--- Actions ---\t\t#{host}\t#{port}
+        7Add Bookmark\t/bookmarks/add/#{username}\t#{host}\t#{port}
+        7New Folder\t/bookmarks/newfolder/#{username}\t#{host}\t#{port}
+        0Export Bookmarks\t/bookmarks/export/#{username}\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Menu\t/bookmarks\t#{host}\t#{port}
+        .
+        """
+
+      {:error, _} ->
+        error_response("Could not retrieve bookmarks.")
+    end
+  end
+
+  defp bookmarks_add_prompt(username, host, port) do
+    """
+    i=== Add Bookmark ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter the selector to bookmark:\t\t#{host}\t#{port}
+    i(Example: /phlog or /fortune)\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp bookmarks_add_title_prompt(username, selector, host, port) do
+    """
+    i=== Add Bookmark ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSelector: #{selector}\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a title for this bookmark:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp bookmarks_add(username, selector, title, host, port) do
+    # URL decode the selector if needed
+    selector = URI.decode(selector)
+
+    case Bookmarks.add(username, selector, title) do
+      {:ok, bookmark} ->
+        """
+        i=== Bookmark Added! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTitle: #{bookmark.title}\t\t#{host}\t#{port}
+        iSelector: #{bookmark.selector}\t\t#{host}\t#{port}
+        iFolder: #{bookmark.folder}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        1Add Another\t/bookmarks/add/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :limit_reached} ->
+        error_response("Bookmark limit reached (100 max). Remove some bookmarks first.")
+
+      {:error, :already_exists} ->
+        error_response("This selector is already bookmarked.")
+
+      {:error, _} ->
+        error_response("Could not add bookmark.")
+    end
+  end
+
+  defp bookmarks_remove(username, bookmark_id, host, port) do
+    case Bookmarks.remove(username, bookmark_id) do
+      :ok ->
+        """
+        i=== Bookmark Removed ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iThe bookmark has been removed.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :not_found} ->
+        error_response("Bookmark not found.")
+    end
+  end
+
+  defp bookmarks_folders(username, host, port) do
+    case Bookmarks.folders(username) do
+      {:ok, folders} ->
+        folder_lines = folders
+          |> Enum.map(fn f ->
+            "1#{f}\t/bookmarks/user/#{username}/#{f}\t#{host}\t#{port}"
+          end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== #{username}'s Folders ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{folder_lines}
+        i\t\t#{host}\t#{port}
+        7Create New Folder\t/bookmarks/newfolder/#{username}\t#{host}\t#{port}
+        1Back to Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, _} ->
+        error_response("Could not retrieve folders.")
+    end
+  end
+
+  defp bookmarks_newfolder_prompt(username, host, port) do
+    """
+    i=== Create Folder ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a name for the new folder:\t\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp bookmarks_create_folder(username, folder_name, host, port) do
+    case Bookmarks.create_folder(username, folder_name) do
+      :ok ->
+        """
+        i=== Folder Created! ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFolder "#{folder_name}" has been created.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1View Folder\t/bookmarks/user/#{username}/#{folder_name}\t#{host}\t#{port}
+        1Back to Bookmarks\t/bookmarks/user/#{username}\t#{host}\t#{port}
+        .
+        """
+
+      {:error, :limit_reached} ->
+        error_response("Folder limit reached (10 max).")
+
+      {:error, :already_exists} ->
+        error_response("A folder with this name already exists.")
+
+      {:error, :invalid_name} ->
+        error_response("Invalid folder name.")
+    end
+  end
+
+  defp bookmarks_export(username, host, port) do
+    case Bookmarks.export(username) do
+      {:ok, export_text} ->
+        if export_text == "" do
+          """
+          No bookmarks to export.
+
+          Add some bookmarks first!
+          """
+        else
+          """
+          === #{username}'s Bookmarks Export ===
+          Generated: #{DateTime.utc_now() |> DateTime.to_iso8601()}
+
+          #{export_text}
+
+          === End of Export ===
+          """
+        end
+
+      {:error, _} ->
+        "Error exporting bookmarks.\n"
     end
   end
 

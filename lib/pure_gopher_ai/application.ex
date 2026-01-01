@@ -90,6 +90,9 @@ defmodule PureGopherAi.Application do
       # Trivia / Quiz Game
       PureGopherAi.Trivia,
 
+      # Bookmarks / Favorites
+      PureGopherAi.Bookmarks,
+
       # Dynamic supervisor for multiple model servings
       {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 

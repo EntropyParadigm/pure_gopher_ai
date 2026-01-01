@@ -1435,6 +1435,43 @@ text, elixir, python, javascript, ruby, go, rust, c, cpp, java, html, css, sql, 
 
 ---
 
+### 9.11 Bookmarks / Favorites
+**Status:** 🟢 Complete
+**Priority:** Medium
+**Description:** User-based bookmark system for saving favorite selectors.
+
+**Implementation:**
+- [x] Create `Bookmarks` GenServer with DETS storage
+- [x] `/bookmarks` - Main menu
+- [x] `/bookmarks/login` - Enter username
+- [x] `/bookmarks/user/<username>` - View bookmarks
+- [x] `/bookmarks/user/<username>/<folder>` - View folder
+- [x] `/bookmarks/add/<username>/<selector>/<title>` - Add bookmark
+- [x] `/bookmarks/remove/<username>/<id>` - Remove bookmark
+- [x] `/bookmarks/folders/<username>` - Manage folders
+- [x] `/bookmarks/newfolder/<username>/<name>` - Create folder
+- [x] `/bookmarks/export/<username>` - Export bookmarks
+- [x] Folder organization (default + custom)
+- [x] 100 bookmark limit per user
+- [x] 10 folder limit per user
+
+**Selectors:**
+- `/bookmarks` - Main menu
+- `/bookmarks/login` - Login prompt
+- `/bookmarks/user/<username>` - View bookmarks
+- `/bookmarks/add/<username>` - Add bookmark
+- `/bookmarks/remove/<username>/<id>` - Remove
+- `/bookmarks/folders/<username>` - Manage folders
+- `/bookmarks/export/<username>` - Export
+
+**Files created/modified:**
+- `lib/pure_gopher_ai/bookmarks.ex` (new)
+- `lib/pure_gopher_ai/gopher_handler.ex` (bookmark routes)
+- `lib/pure_gopher_ai/application.ex` (supervisor)
+- `lib/pure_gopher_ai/sitemap.ex` (updated)
+
+---
+
 ## Notes
 
 - Implement features in order of priority
