@@ -46,6 +46,7 @@ defmodule PureGopherAi.GopherHandler do
   alias PureGopherAi.WritingAssistant
   alias PureGopherAi.SemanticSearch
   alias PureGopherAi.CreativeStudio
+  alias PureGopherAi.CodeCompanion
 
   # Handler modules (extracted for modularity)
   alias PureGopherAi.Handlers.Ai, as: AiHandler
@@ -857,6 +858,103 @@ defmodule PureGopherAi.GopherHandler do
 
   defp route_selector("/creative/moods", host, port, _network, _ip, _socket),
     do: creative_moods(host, port)
+
+  # AI Code Companion routes
+  defp route_selector("/code", host, port, _network, _ip, _socket),
+    do: code_menu(host, port)
+
+  defp route_selector("/code/", host, port, _network, _ip, _socket),
+    do: code_menu(host, port)
+
+  defp route_selector("/code/explain", host, port, _network, _ip, _socket),
+    do: code_explain_prompt(host, port)
+
+  defp route_selector("/code/explain\t" <> input, host, port, _network, _ip, _socket),
+    do: code_explain(input, host, port)
+
+  defp route_selector("/code/explain " <> input, host, port, _network, _ip, _socket),
+    do: code_explain(input, host, port)
+
+  defp route_selector("/code/review", host, port, _network, _ip, _socket),
+    do: code_review_prompt(host, port)
+
+  defp route_selector("/code/review\t" <> input, host, port, _network, _ip, _socket),
+    do: code_review(input, host, port)
+
+  defp route_selector("/code/review " <> input, host, port, _network, _ip, _socket),
+    do: code_review(input, host, port)
+
+  defp route_selector("/code/convert", host, port, _network, _ip, _socket),
+    do: code_convert_prompt(host, port)
+
+  defp route_selector("/code/convert\t" <> input, host, port, _network, _ip, _socket),
+    do: code_convert(input, host, port)
+
+  defp route_selector("/code/convert " <> input, host, port, _network, _ip, _socket),
+    do: code_convert(input, host, port)
+
+  defp route_selector("/code/regex", host, port, _network, _ip, _socket),
+    do: code_regex_prompt(host, port)
+
+  defp route_selector("/code/regex\t" <> input, host, port, _network, _ip, _socket),
+    do: code_regex(input, host, port)
+
+  defp route_selector("/code/regex " <> input, host, port, _network, _ip, _socket),
+    do: code_regex(input, host, port)
+
+  defp route_selector("/code/sql", host, port, _network, _ip, _socket),
+    do: code_sql_prompt(host, port)
+
+  defp route_selector("/code/sql\t" <> input, host, port, _network, _ip, _socket),
+    do: code_sql(input, host, port)
+
+  defp route_selector("/code/sql " <> input, host, port, _network, _ip, _socket),
+    do: code_sql(input, host, port)
+
+  defp route_selector("/code/algorithm", host, port, _network, _ip, _socket),
+    do: code_algorithm_menu(host, port)
+
+  defp route_selector("/code/algorithm/" <> name, host, port, _network, _ip, _socket),
+    do: code_algorithm(name, host, port)
+
+  defp route_selector("/code/debug", host, port, _network, _ip, _socket),
+    do: code_debug_prompt(host, port)
+
+  defp route_selector("/code/debug\t" <> input, host, port, _network, _ip, _socket),
+    do: code_debug(input, host, port)
+
+  defp route_selector("/code/debug " <> input, host, port, _network, _ip, _socket),
+    do: code_debug(input, host, port)
+
+  defp route_selector("/code/refactor", host, port, _network, _ip, _socket),
+    do: code_refactor_prompt(host, port)
+
+  defp route_selector("/code/refactor\t" <> input, host, port, _network, _ip, _socket),
+    do: code_refactor(input, host, port)
+
+  defp route_selector("/code/refactor " <> input, host, port, _network, _ip, _socket),
+    do: code_refactor(input, host, port)
+
+  defp route_selector("/code/generate", host, port, _network, _ip, _socket),
+    do: code_generate_prompt(host, port)
+
+  defp route_selector("/code/generate\t" <> input, host, port, _network, _ip, _socket),
+    do: code_generate(input, host, port)
+
+  defp route_selector("/code/generate " <> input, host, port, _network, _ip, _socket),
+    do: code_generate(input, host, port)
+
+  defp route_selector("/code/tests", host, port, _network, _ip, _socket),
+    do: code_tests_prompt(host, port)
+
+  defp route_selector("/code/tests\t" <> input, host, port, _network, _ip, _socket),
+    do: code_tests(input, host, port)
+
+  defp route_selector("/code/tests " <> input, host, port, _network, _ip, _socket),
+    do: code_tests(input, host, port)
+
+  defp route_selector("/code/languages", host, port, _network, _ip, _socket),
+    do: code_languages(host, port)
 
   # AI Writing Assistant routes
   defp route_selector("/write", host, port, _network, _ip, _socket),
@@ -7402,6 +7500,549 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     7Write Song Lyrics\t/creative/lyrics\t#{host}\t#{port}
     1Back to Creative Menu\t/creative\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # === AI Code Companion Functions ===
+
+  defp code_menu(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i  ╔═══════════════════════════════════════════════════════╗\t\t#{host}\t#{port}
+    i  ║             AI CODE COMPANION                         ║\t\t#{host}\t#{port}
+    i  ║      Code Explanation, Review, and Assistance         ║\t\t#{host}\t#{port}
+    i  ╚═══════════════════════════════════════════════════════╝\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i  Your AI programming assistant! Get help understanding,\t\t#{host}\t#{port}
+    i  reviewing, and writing code in any language.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  UNDERSTAND CODE\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Explain Code\t/code/explain\t#{host}\t#{port}
+    7Debug Code\t/code/debug\t#{host}\t#{port}
+    1Explain Algorithm\t/code/algorithm\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  IMPROVE CODE\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Code Review\t/code/review\t#{host}\t#{port}
+    7Refactor Code\t/code/refactor\t#{host}\t#{port}
+    7Generate Tests\t/code/tests\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  GENERATE CODE\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    7Pseudocode to Code\t/code/convert\t#{host}\t#{port}
+    7Generate Code\t/code/generate\t#{host}\t#{port}
+    7Build Regex\t/code/regex\t#{host}\t#{port}
+    7Generate SQL\t/code/sql\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    i  REFERENCES\t\t#{host}\t#{port}
+    i═══════════════════════════════════════════════════════════\t\t#{host}\t#{port}
+    1Supported Languages\t/code/languages\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_explain_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Explain Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste code and AI will explain what it does.\t\t#{host}\t#{port}
+    iWorks with any programming language.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Code to Explain\t/code/explain\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_explain(code, host, port) do
+    code = String.trim(code)
+
+    case CodeCompanion.explain(code) do
+      {:ok, explanation} ->
+        formatted = format_text_as_info(explanation, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Code Explanation ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Explain More Code\t/code/explain\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error explaining code: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_review_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Code Review ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste code for AI review and suggestions.\t\t#{host}\t#{port}
+    iAI will check for bugs, style, and best practices.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Code to Review\t/code/review\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_review(code, host, port) do
+    code = String.trim(code)
+
+    case CodeCompanion.review(code) do
+      {:ok, review} ->
+        formatted = format_text_as_info(review, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Code Review Results ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Review More Code\t/code/review\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error reviewing code: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_convert_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Pseudocode to Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter pseudocode and AI will convert it\t\t#{host}\t#{port}
+    ito working Python code.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample pseudocode:\t\t#{host}\t#{port}
+    i  "for each item in list, if item > 10, print it"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Pseudocode\t/code/convert\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_convert(pseudocode, host, port) do
+    pseudocode = String.trim(pseudocode)
+
+    case CodeCompanion.pseudocode_to_code(pseudocode) do
+      {:ok, code} ->
+        formatted = format_text_as_info(code, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Code ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Convert More Pseudocode\t/code/convert\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error converting pseudocode: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_regex_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Regex Builder ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDescribe what you want to match and AI will\t\t#{host}\t#{port}
+    igenerate a regular expression.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "match email addresses"\t\t#{host}\t#{port}
+    i  "match phone numbers like 123-456-7890"\t\t#{host}\t#{port}
+    i  "extract URLs from text"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Describe What to Match\t/code/regex\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_regex(description, host, port) do
+    description = String.trim(description)
+
+    case CodeCompanion.build_regex(description) do
+      {:ok, regex} ->
+        formatted = format_text_as_info(regex, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Regex ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFor: #{truncate(description, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Build Another Regex\t/code/regex\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error building regex: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_sql_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== SQL Generator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDescribe what data you want and AI will\t\t#{host}\t#{port}
+    igenerate the SQL query.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "get all users who signed up last month"\t\t#{host}\t#{port}
+    i  "count orders by product category"\t\t#{host}\t#{port}
+    i  "find top 10 customers by total purchases"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Describe Your Query\t/code/sql\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_sql(description, host, port) do
+    description = String.trim(description)
+
+    case CodeCompanion.generate_sql(description) do
+      {:ok, sql} ->
+        formatted = format_text_as_info(sql, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated SQL ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFor: #{truncate(description, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate Another Query\t/code/sql\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating SQL: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_algorithm_menu(host, port) do
+    algorithms = [
+      {"Sorting Algorithms", "sorting"},
+      {"Searching Algorithms", "searching"},
+      {"Graph Algorithms", "graph"},
+      {"Dynamic Programming", "dynamic_programming"},
+      {"Recursion", "recursion"},
+      {"Tree Algorithms", "trees"},
+      {"Hashing", "hashing"}
+    ]
+
+    algo_lines = algorithms
+    |> Enum.map(fn {name, slug} ->
+      "1#{name}\t/code/algorithm/#{slug}\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Algorithm Explanations ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSelect a category to learn about algorithms:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{algo_lines}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_algorithm(name, host, port) do
+    name = String.trim(name)
+
+    case CodeCompanion.explain_algorithm(name) do
+      {:ok, explanation} ->
+        formatted = format_text_as_info(explanation, host, port)
+        display_name = name |> String.replace("_", " ") |> String.capitalize()
+        """
+        i\t\t#{host}\t#{port}
+        i=== #{display_name} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        1Other Algorithms\t/code/algorithm\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error explaining algorithm: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_debug_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Debug Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your buggy code and AI will help\t\t#{host}\t#{port}
+    iidentify and fix the issues.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iTip: Include any error messages for better results.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Code to Debug\t/code/debug\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_debug(code, host, port) do
+    code = String.trim(code)
+
+    case CodeCompanion.debug(code) do
+      {:ok, debug_result} ->
+        formatted = format_text_as_info(debug_result, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Debug Results ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Debug More Code\t/code/debug\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error debugging: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_refactor_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Refactor Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste code and AI will refactor it for\t\t#{host}\t#{port}
+    ibetter readability and maintainability.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Code to Refactor\t/code/refactor\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_refactor(code, host, port) do
+    code = String.trim(code)
+
+    case CodeCompanion.refactor(code) do
+      {:ok, refactored} ->
+        formatted = format_text_as_info(refactored, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Refactored Code ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Refactor More Code\t/code/refactor\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error refactoring: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_generate_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Code ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iDescribe what you want the code to do\t\t#{host}\t#{port}
+    iand AI will write it for you.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  "function to check if string is palindrome"\t\t#{host}\t#{port}
+    i  "class for handling user authentication"\t\t#{host}\t#{port}
+    i  "script to read CSV and calculate averages"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Describe What You Need\t/code/generate\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_generate(description, host, port) do
+    description = String.trim(description)
+
+    case CodeCompanion.generate_code(description) do
+      {:ok, code} ->
+        formatted = format_text_as_info(code, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Code ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iFor: #{truncate(description, 50)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate More Code\t/code/generate\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating code: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_tests_prompt(host, port) do
+    """
+    i\t\t#{host}\t#{port}
+    i=== Generate Tests ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste code and AI will generate test cases\t\t#{host}\t#{port}
+    icovering normal use and edge cases.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Enter Code to Test\t/code/tests\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp code_tests(code, host, port) do
+    code = String.trim(code)
+
+    case CodeCompanion.generate_tests(code) do
+      {:ok, tests} ->
+        formatted = format_text_as_info(tests, host, port)
+        """
+        i\t\t#{host}\t#{port}
+        i=== Generated Tests ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{formatted}
+        i\t\t#{host}\t#{port}
+        7Generate More Tests\t/code/tests\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+
+      {:error, reason} ->
+        """
+        i\t\t#{host}\t#{port}
+        3Error generating tests: #{inspect(reason)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1Back to Code Menu\t/code\t#{host}\t#{port}
+        .
+        """
+    end
+  end
+
+  defp code_languages(host, port) do
+    languages = CodeCompanion.languages()
+
+    lang_lines = languages
+    |> Enum.map(fn lang ->
+      name = lang |> Atom.to_string() |> String.capitalize()
+      "i  - #{name}\t\t#{host}\t#{port}"
+    end)
+    |> Enum.join("\r\n")
+
+    """
+    i\t\t#{host}\t#{port}
+    i=== Supported Languages ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThe Code Companion can work with:\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{lang_lines}
+    i\t\t#{host}\t#{port}
+    iNote: AI can understand many more languages!\t\t#{host}\t#{port}
+    iThese are just the officially supported ones.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Code Menu\t/code\t#{host}\t#{port}
     .
     """
   end
