@@ -14,6 +14,7 @@ defmodule PureGopherAi.Handlers.Shared do
   @doc """
   Format text as Gopher info lines with proper escaping.
   Returns iodata for zero-copy socket sends.
+  USE FOR MENUS (type 1) ONLY - adds host/port to every line.
   """
   def format_text_response(text, host, port) do
     lines =
@@ -23,6 +24,24 @@ defmodule PureGopherAi.Handlers.Shared do
       |> Enum.map(&[?i, &1, ?\t, ?\t, host, ?\t, Integer.to_string(port), "\r\n"])
 
     [lines, ".\r\n"]
+  end
+
+  @doc """
+  Format text as plain Gopher text file (type 0).
+  No host/port added to lines - just plain text with proper escaping.
+  USE FOR TEXT FILES (type 0) - digest, stats, summaries, etc.
+  """
+  def format_plain_text_response(text) do
+    text
+    |> InputSanitizer.escape_gopher()
+    |> String.replace("\r\n", "\n")
+    |> String.split("\n")
+    |> Enum.map(fn
+      "." -> ".."  # Escape lone dots (Gopher terminator)
+      line -> line
+    end)
+    |> Enum.join("\r\n")
+    |> Kernel.<>("\r\n.\r\n")
   end
 
   @doc """
@@ -176,6 +195,7 @@ defmodule PureGopherAi.Handlers.Shared do
   @doc """
   Stream a chunk to socket with proper formatting.
   For buffered streaming, use stream_buffered/5 instead.
+  USE FOR MENUS (type 1) ONLY.
   """
   def stream_chunk(socket, chunk, host, port) do
     if String.length(chunk) > 0 do
@@ -184,6 +204,25 @@ defmodule PureGopherAi.Handlers.Shared do
       lines = String.split(escaped, "\r\n", trim: false)
       formatted = Enum.map(lines, &[?i, &1, ?\t, ?\t, host, ?\t, Integer.to_string(port), "\r\n"])
       ThousandIsland.Socket.send(socket, formatted)
+    end
+  end
+
+  @doc """
+  Stream a chunk to socket as plain text (type 0).
+  No host/port formatting - just plain text.
+  USE FOR TEXT FILES (type 0).
+  """
+  def stream_plain_chunk(socket, chunk) do
+    if String.length(chunk) > 0 do
+      sanitized = OutputSanitizer.sanitize(chunk)
+      escaped = InputSanitizer.escape_gopher(sanitized)
+      # Escape lone dots and normalize line endings
+      escaped = escaped
+        |> String.replace("\r\n", "\n")
+        |> String.split("\n")
+        |> Enum.map(fn "." -> ".."; line -> line end)
+        |> Enum.join("\r\n")
+      ThousandIsland.Socket.send(socket, escaped)
     end
   end
 
@@ -232,6 +271,56 @@ defmodule PureGopherAi.Handlers.Shared do
             ThousandIsland.Socket.send(socket, formatted)
           end
         end)
+      end
+    end
+
+    {streamer, flush}
+  end
+
+  @doc """
+  Create a plain text buffered streamer for type 0 responses.
+  Returns a tuple {streamer_pid, flush_fn}.
+  No host/port formatting - just plain text output.
+  """
+  def start_plain_buffered_streamer(socket, opts \\ []) do
+    line_width = Keyword.get(opts, :line_width, 70)
+
+    {:ok, pid} = Agent.start_link(fn -> "" end)
+
+    streamer = fn chunk ->
+      if String.length(chunk) > 0 do
+        Agent.update(pid, fn buffer ->
+          new_buffer = buffer <> chunk
+          {to_send, remaining} = flush_buffer(new_buffer, line_width)
+
+          if to_send != "" do
+            sanitized = OutputSanitizer.sanitize(to_send)
+            escaped = InputSanitizer.escape_gopher(sanitized)
+            # Escape lone dots and send as plain text
+            lines = String.split(escaped, "\n", trim: false)
+            output = lines
+              |> Enum.map(fn "." -> ".."; line -> String.trim_trailing(line) end)
+              |> Enum.join("\r\n")
+            ThousandIsland.Socket.send(socket, output)
+          end
+
+          remaining
+        end)
+      end
+    end
+
+    flush = fn ->
+      remaining = Agent.get(pid, & &1)
+      Agent.stop(pid)
+
+      if String.length(String.trim(remaining)) > 0 do
+        sanitized = OutputSanitizer.sanitize(remaining)
+        escaped = InputSanitizer.escape_gopher(sanitized)
+        lines = escaped |> String.trim() |> String.split("\n", trim: false)
+        output = lines
+          |> Enum.map(fn "." -> ".."; line -> String.trim_trailing(line) end)
+          |> Enum.join("\r\n")
+        ThousandIsland.Socket.send(socket, output <> "\r\n")
       end
     end
 

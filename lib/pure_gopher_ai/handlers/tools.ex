@@ -61,13 +61,13 @@ defmodule PureGopherAi.Handlers.Tools do
   def docs_list(host, port) do
     case Rag.list_documents() do
       {:ok, []} ->
-        Shared.format_text_response("""
+        Shared.format_plain_text_response("""
         === Documents ===
 
         No documents ingested yet.
 
         Add documents to: #{Rag.docs_dir()}
-        """, host, port)
+        """)
 
       {:ok, docs} ->
         doc_lines = docs
@@ -95,10 +95,10 @@ defmodule PureGopherAi.Handlers.Tools do
   @doc """
   Documents statistics.
   """
-  def docs_stats(host, port) do
+  def docs_stats(_host, _port) do
     stats = Rag.stats()
 
-    Shared.format_text_response("""
+    Shared.format_plain_text_response("""
     === Document Statistics ===
 
     Documents: #{stats.document_count}
@@ -107,7 +107,7 @@ defmodule PureGopherAi.Handlers.Tools do
 
     Storage: #{stats.storage_bytes} bytes
     Last Updated: #{stats.last_updated || "Never"}
-    """, host, port)
+    """)
   end
 
   @doc """
@@ -142,7 +142,7 @@ defmodule PureGopherAi.Handlers.Tools do
             |> Enum.map(fn s -> "- #{s.name}" end)
             |> Enum.join("\n")
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           Query: #{query}
 
           Answer:
@@ -153,7 +153,7 @@ defmodule PureGopherAi.Handlers.Tools do
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to query: #{Shared.sanitize_error(reason)}")
@@ -180,11 +180,11 @@ defmodule PureGopherAi.Handlers.Tools do
   def handle_docs_search(query, host, port) do
     case Rag.search(query) do
       {:ok, []} ->
-        Shared.format_text_response("""
+        Shared.format_plain_text_response("""
         === Search Results ===
 
         No results found for "#{query}".
-        """, host, port)
+        """)
 
       {:ok, results} ->
         result_lines = results
@@ -221,10 +221,10 @@ defmodule PureGopherAi.Handlers.Tools do
   @doc """
   View a document.
   """
-  def docs_view(doc_id, host, port) do
+  def docs_view(doc_id, _host, _port) do
     case Rag.get_document(doc_id) do
       {:ok, doc} ->
-        Shared.format_text_response("""
+        Shared.format_plain_text_response("""
         === #{doc.name} ===
 
         ID: #{doc.id}
@@ -238,7 +238,7 @@ defmodule PureGopherAi.Handlers.Tools do
         #{String.slice(doc.content, 0, 2000)}
 
         #{if String.length(doc.content) > 2000, do: "[truncated]", else: ""}
-        """, host, port)
+        """)
 
       {:error, :not_found} ->
         Shared.error_response("Document not found.")
@@ -272,13 +272,13 @@ defmodule PureGopherAi.Handlers.Tools do
 
     case results do
       [] ->
-        Shared.format_text_response("""
+        Shared.format_plain_text_response("""
         === Search Results ===
 
         No results found for "#{query}".
 
         Try different keywords or check spelling.
-        """, host, port)
+        """)
 
       results when is_list(results) ->
         result_lines = results
@@ -371,32 +371,32 @@ defmodule PureGopherAi.Handlers.Tools do
   @doc """
   Handle art text generation.
   """
-  def handle_art_text(text, host, port, style) do
+  def handle_art_text(text, _host, _port, style) do
     text = String.slice(text, 0, 20)
 
     art = AsciiArt.generate(text, style: style)
 
-    Shared.format_text_response("""
+    Shared.format_plain_text_response("""
     === ASCII Art ===
 
     #{art}
 
     Text: #{text}
     Style: #{style}
-    """, host, port)
+    """)
   end
 
   @doc """
   Handle art banner generation.
   """
-  def handle_art_banner(text, host, port) do
+  def handle_art_banner(text, _host, _port) do
     banner = AsciiArt.banner(text)
 
-    Shared.format_text_response("""
+    Shared.format_plain_text_response("""
     === Banner ===
 
     #{banner}
-    """, host, port)
+    """)
   end
 
   # === Summarization Handlers ===
@@ -417,7 +417,7 @@ defmodule PureGopherAi.Handlers.Tools do
             {:ok, summary} ->
               elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_text_response("""
+              Shared.format_plain_text_response("""
               === TL;DR: #{entry.title} ===
 
               #{summary}
@@ -425,7 +425,7 @@ defmodule PureGopherAi.Handlers.Tools do
               ---
               Original: /phlog/entry/#{path}
               Generated in #{elapsed}ms
-              """, host, port)
+              """)
 
             {:error, reason} ->
               Shared.error_response("Failed to summarize: #{Shared.sanitize_error(reason)}")
@@ -453,7 +453,7 @@ defmodule PureGopherAi.Handlers.Tools do
             {:ok, summary} ->
               elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_text_response("""
+              Shared.format_plain_text_response("""
               === TL;DR: #{doc.name} ===
 
               #{summary}
@@ -461,7 +461,7 @@ defmodule PureGopherAi.Handlers.Tools do
               ---
               Original: /docs/view/#{doc_id}
               Generated in #{elapsed}ms
-              """, host, port)
+              """)
 
             {:error, reason} ->
               Shared.error_response("Failed to summarize: #{Shared.sanitize_error(reason)}")
@@ -538,7 +538,7 @@ defmodule PureGopherAi.Handlers.Tools do
             {:ok, translated} ->
               elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_text_response("""
+              Shared.format_plain_text_response("""
               === #{entry.title} (#{lang}) ===
 
               #{translated}
@@ -546,7 +546,7 @@ defmodule PureGopherAi.Handlers.Tools do
               ---
               Original: /phlog/entry/#{path}
               Translated in #{elapsed}ms
-              """, host, port)
+              """)
 
             {:error, reason} ->
               Shared.error_response("Failed to translate: #{Shared.sanitize_error(reason)}")
@@ -574,7 +574,7 @@ defmodule PureGopherAi.Handlers.Tools do
             {:ok, translated} ->
               elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_text_response("""
+              Shared.format_plain_text_response("""
               === #{doc.name} (#{lang}) ===
 
               #{translated}
@@ -582,7 +582,7 @@ defmodule PureGopherAi.Handlers.Tools do
               ---
               Original: /docs/view/#{doc_id}
               Translated in #{elapsed}ms
-              """, host, port)
+              """)
 
             {:error, reason} ->
               Shared.error_response("Failed to translate: #{Shared.sanitize_error(reason)}")
@@ -610,14 +610,14 @@ defmodule PureGopherAi.Handlers.Tools do
         {:ok, digest} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           === Daily Digest ===
 
           #{digest}
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to generate digest: #{Shared.sanitize_error(reason)}")
@@ -652,14 +652,14 @@ defmodule PureGopherAi.Handlers.Tools do
         {:ok, recommendations} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           === Recommendations for "#{interest}" ===
 
           #{recommendations}
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to get recommendations: #{Shared.sanitize_error(reason)}")
@@ -694,14 +694,14 @@ defmodule PureGopherAi.Handlers.Tools do
         {:ok, explanation} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           === #{term} ===
 
           #{explanation}
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to explain: #{Shared.sanitize_error(reason)}")
@@ -723,14 +723,14 @@ defmodule PureGopherAi.Handlers.Tools do
         {:ok, topics} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           === Content Topics ===
 
           #{topics}
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to discover topics: #{Shared.sanitize_error(reason)}")
@@ -761,19 +761,19 @@ defmodule PureGopherAi.Handlers.Tools do
   @doc """
   Handle fetch request.
   """
-  def handle_fetch(url, host, port) do
+  def handle_fetch(url, _host, _port) do
     Logger.info("Fetching: #{url}")
 
     case GopherProxy.fetch(url) do
       {:ok, result} ->
-        Shared.format_text_response("""
+        Shared.format_plain_text_response("""
         === Fetched from #{url} ===
 
         #{result.content}
 
         ---
         Proxied via PureGopherAI
-        """, host, port)
+        """)
 
       {:error, reason} ->
         Shared.error_response("Failed to fetch: #{Shared.sanitize_error(reason)}")
@@ -798,14 +798,14 @@ defmodule PureGopherAi.Handlers.Tools do
             {:ok, summary} ->
               elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_text_response("""
+              Shared.format_plain_text_response("""
               === Summary of #{url} ===
 
               #{summary}
 
               ---
               Generated in #{elapsed}ms
-              """, host, port)
+              """)
 
             {:error, reason} ->
               Shared.error_response("Failed to summarize: #{Shared.sanitize_error(reason)}")
@@ -892,14 +892,14 @@ defmodule PureGopherAi.Handlers.Tools do
             {:ok, code} ->
               elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_text_response("""
+              Shared.format_plain_text_response("""
               === Generated #{lang} Code ===
 
               #{code}
 
               ---
               Generated in #{elapsed}ms
-              """, host, port)
+              """)
 
             {:error, reason} ->
               Shared.error_response("Failed to generate: #{Shared.sanitize_error(reason)}")
@@ -938,14 +938,14 @@ defmodule PureGopherAi.Handlers.Tools do
         {:ok, explanation} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           === Code Explanation ===
 
           #{explanation}
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to explain: #{Shared.sanitize_error(reason)}")
@@ -980,14 +980,14 @@ defmodule PureGopherAi.Handlers.Tools do
         {:ok, review} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_text_response("""
+          Shared.format_plain_text_response("""
           === Code Review ===
 
           #{review}
 
           ---
           Generated in #{elapsed}ms
-          """, host, port)
+          """)
 
         {:error, reason} ->
           Shared.error_response("Failed to review: #{Shared.sanitize_error(reason)}")
@@ -995,13 +995,12 @@ defmodule PureGopherAi.Handlers.Tools do
     end
   end
 
-  # === Streaming Helper Functions ===
+  # === Streaming Helper Functions (Plain Text for Type 0) ===
 
-  defp stream_docs_response(socket, query, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "", "Answer:", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_docs_response(socket, query, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "Query: #{query}\r\n\r\nAnswer:\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Rag.query_stream(query, fn chunk ->
            if String.length(chunk) > 0 do
@@ -1014,30 +1013,23 @@ defmodule PureGopherAi.Handlers.Tools do
 
         sources = result.sources
           |> Enum.map(fn s -> "- #{s.name}" end)
-          |> Enum.join("\n")
+          |> Enum.join("\r\n")
 
-        footer = Shared.format_gopher_lines([
-          "",
-          "Sources:",
-          sources,
-          "---",
-          "Generated in #{elapsed}ms (streamed)"
-        ], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\nSources:\r\n#{sources}\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError generating response\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError generating response.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_summary_response(socket, content, content_type, title, host, port, start_time) do
-    header = Shared.format_gopher_lines(["=== TL;DR: #{title} ===", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_summary_response(socket, content, content_type, title, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "=== TL;DR: #{title} ===\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Summarizer.summarize_text_stream(content, fn chunk ->
            if String.length(chunk) > 0 do
@@ -1047,28 +1039,21 @@ defmodule PureGopherAi.Handlers.Tools do
       {:ok, _} ->
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-
-        footer = Shared.format_gopher_lines([
-          "",
-          "---",
-          "Type: #{content_type}",
-          "Generated in #{elapsed}ms (streamed)"
-        ], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nType: #{content_type}\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError generating summary\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError generating summary.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_translate_response(socket, content, lang, content_type, title, host, port, start_time) do
-    header = Shared.format_gopher_lines(["=== #{title} (#{lang}) ===", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_translate_response(socket, content, lang, content_type, title, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "=== #{title} (#{lang}) ===\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Summarizer.translate_stream(content, lang, fn chunk ->
            if String.length(chunk) > 0 do
@@ -1078,28 +1063,21 @@ defmodule PureGopherAi.Handlers.Tools do
       {:ok, _} ->
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-
-        footer = Shared.format_gopher_lines([
-          "",
-          "---",
-          "Type: #{content_type}",
-          "Translated in #{elapsed}ms (streamed)"
-        ], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nType: #{content_type}\r\nTranslated in #{elapsed}ms (streamed)\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError translating\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError translating.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_digest_response(socket, host, port, start_time) do
-    header = Shared.format_gopher_lines(["=== Daily Digest ===", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_digest_response(socket, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "=== Daily Digest ===\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Summarizer.daily_digest_stream(fn chunk ->
            if String.length(chunk) > 0 do
@@ -1109,71 +1087,63 @@ defmodule PureGopherAi.Handlers.Tools do
       {:ok, _} ->
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-
-        footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError generating digest\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError generating digest.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_topics_response(socket, host, port, start_time) do
-    # discover_topics doesn't have a stream version, use non-streaming with buffered output
-    header = Shared.format_gopher_lines(["=== Content Topics ===", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_topics_response(socket, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "=== Content Topics ===\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Summarizer.discover_topics() do
       {:ok, topics} ->
         streamer.(topics)
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-
-        footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms"], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError discovering topics\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError discovering topics.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_discover_response(socket, interest, host, port, start_time) do
-    # recommend doesn't have a stream version, use non-streaming with buffered output
-    header = Shared.format_gopher_lines(["=== Recommendations for \"#{interest}\" ===", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_discover_response(socket, interest, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "=== Recommendations for \"#{interest}\" ===\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Summarizer.recommend(interest) do
       {:ok, recommendations} ->
         streamer.(recommendations)
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-
-        footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms"], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError generating recommendations\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError generating recommendations.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_explain_response(socket, term, host, port, start_time) do
-    header = Shared.format_gopher_lines(["=== #{term} ===", ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+  defp stream_explain_response(socket, term, _host, _port, start_time) do
+    ThousandIsland.Socket.send(socket, "=== #{term} ===\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case Summarizer.explain_stream(term, fn chunk ->
            if String.length(chunk) > 0 do
@@ -1183,19 +1153,18 @@ defmodule PureGopherAi.Handlers.Tools do
       {:ok, _} ->
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-
-        footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError explaining\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError explaining.\r\n.\r\n")
     end
 
     :streamed
   end
 
-  defp stream_code_response(socket, action, lang, input, host, port, start_time) do
+  defp stream_code_response(socket, action, lang, input, _host, _port, start_time) do
     header_text = case action do
       "generate" -> "=== Generated #{lang} Code ==="
       "explain" -> "=== Code Explanation ==="
@@ -1203,10 +1172,9 @@ defmodule PureGopherAi.Handlers.Tools do
       _ -> "=== Code Assistant ==="
     end
 
-    header = Shared.format_gopher_lines([header_text, ""], host, port)
-    ThousandIsland.Socket.send(socket, header)
+    ThousandIsland.Socket.send(socket, "#{header_text}\r\n\r\n")
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     result = case action do
       "generate" -> CodeAssistant.generate_stream(lang, input, fn chunk ->
@@ -1225,12 +1193,12 @@ defmodule PureGopherAi.Handlers.Tools do
       {:ok, _} ->
         flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["iError generating code\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\r\nError generating code.\r\n.\r\n")
     end
 
     :streamed
