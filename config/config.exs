@@ -50,11 +50,23 @@ config :pure_gopher_ai,
   streaming_enabled: true,          # Stream AI output as it generates
 
   # Bumblebee model selection (loaded via HuggingFace)
-  # Options: "microsoft/phi-2" (2.7B, best quality)
-  #          "TinyLlama/TinyLlama-1.1B-Chat-v1.0" (1.1B, faster)
-  #          "google/gemma-2b-it" (2B, efficient)
-  # Default: TinyLlama (fast, 1.1GB). For better quality: AI_MODEL=microsoft/phi-2
-  bumblebee_model: System.get_env("AI_MODEL", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
+  # DeepSeek R1 Distilled models with Chain-of-Thought reasoning
+  #
+  # Default: DeepSeek-R1-Distill-Qwen-1.5B
+  #   - Fast, efficient (1.5B params, ~3GB RAM)
+  #   - Great for coding, general questions, reasoning
+  #   - Outputs <think>...</think> tags showing reasoning process
+  #
+  # Alternative: DeepSeek-R1-Distill-Llama-8B (needs 16GB+ RAM)
+  #   - Set AI_MODEL=deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+  #
+  # Environment override: AI_MODEL
+  bumblebee_model: System.get_env("AI_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"),
+
+  # DeepSeek R1 generation settings (higher limits for reasoning)
+  deepseek_max_new_tokens: 1024,      # Allow space for <think> reasoning
+  deepseek_sequence_length: 2048,     # Context window
+  deepseek_show_thinking: true,       # Show <think> tags in output (set false to hide)
 
   # Ollama backend (optional, for even larger models)
   # Set OLLAMA_ENABLED=true if you have Ollama running

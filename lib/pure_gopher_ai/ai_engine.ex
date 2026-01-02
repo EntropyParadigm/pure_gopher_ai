@@ -5,14 +5,21 @@ defmodule PureGopherAi.AiEngine do
   ## Backends
 
   1. **Ollama** (primary) - Fast, high-quality local models (Llama 3, Mistral, etc.)
-  2. **Bumblebee** (fallback) - Pure Elixir inference with TinyLlama
+  2. **Bumblebee** (fallback) - DeepSeek R1 distilled models with Chain-of-Thought reasoning
+
+  ## Models
+
+  - **DeepSeek-R1-Distill-Qwen-1.5B** - Default for coding, fast and efficient
+  - **DeepSeek-R1-Distill-Llama-8B** - For users with more RAM (16GB+)
+
+  These models output `<think>...</think>` tags showing their reasoning process.
 
   ## Configuration
 
       config :pure_gopher_ai,
-        ollama_enabled: true,
-        ollama_url: "http://localhost:11434",
-        ollama_model: "llama3.2"
+        bumblebee_model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        deepseek_max_new_tokens: 1024,
+        deepseek_sequence_length: 2048
 
   ## Security
 
@@ -28,45 +35,50 @@ defmodule PureGopherAi.AiEngine do
   alias PureGopherAi.Ollama
 
   @doc """
-  Sets up and returns Nx.Servings for text generation.
-  Returns a tuple of {batched_serving, streaming_serving}.
+  Sets up and returns Nx.Serving for text generation with DeepSeek R1 models.
 
-  - batched_serving: For high-throughput non-streaming requests (not used in streaming mode)
-  - streaming_serving: For real-time streaming responses
+  DeepSeek R1 distilled models require higher token limits for reasoning:
+  - max_new_tokens: 1024 (space for <think> reasoning)
+  - sequence_length: 2048 (longer context window)
   """
   def setup_serving do
     Logger.info("Loading AI model... This may take a moment on first run.")
 
-    # Model selection - can be configured via environment
-    # Phi-2: better quality reasoning (2.7B params)
-    # TinyLlama: faster, lighter (1.1B params)
-    # Gemma: Google's efficient model (2B params)
-    default_model = Application.get_env(:pure_gopher_ai, :bumblebee_model, "microsoft/phi-2")
+    # DeepSeek R1 Distilled models
+    # Default: Qwen-1.5B (fast, good for coding)
+    # Alternative: Llama-8B (better quality, needs more RAM)
+    default_model = Application.get_env(:pure_gopher_ai, :bumblebee_model,
+      "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")
 
     Logger.info("Loading model: #{default_model}")
     {:ok, model_info} = Bumblebee.load_model({:hf, default_model})
     {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, default_model})
     {:ok, generation_config} = Bumblebee.load_generation_config({:hf, default_model})
 
-    # Configure generation parameters
-    # - max_new_tokens: limit response length (shorter = less looping)
+    # DeepSeek R1 needs higher token limits for Chain-of-Thought reasoning
+    # The model outputs <think>...</think> tags during reasoning
+    max_tokens = Application.get_env(:pure_gopher_ai, :deepseek_max_new_tokens, 1024)
+    seq_length = Application.get_env(:pure_gopher_ai, :deepseek_sequence_length, 2048)
+
     generation_config =
       Bumblebee.configure(generation_config,
-        max_new_tokens: 150
+        max_new_tokens: max_tokens
       )
 
     # Streaming mode enabled (yields tokens as they're generated)
     streaming_enabled = Application.get_env(:pure_gopher_ai, :streaming_enabled, true)
 
+    # Compile with memory-safe settings for consumer machines
     serving =
       Bumblebee.Text.generation(model_info, tokenizer, generation_config,
-        compile: [batch_size: 1, sequence_length: 256],
+        compile: [batch_size: 1, sequence_length: seq_length],
         defn_options: [compiler: EXLA],
         stream: streaming_enabled,
         stream_done: streaming_enabled
       )
 
     Logger.info("AI model loaded successfully! Streaming: #{streaming_enabled}")
+    Logger.info("DeepSeek R1 config: max_tokens=#{max_tokens}, seq_length=#{seq_length}")
     serving
   end
 
@@ -429,9 +441,60 @@ defmodule PureGopherAi.AiEngine do
     |> String.replace_prefix(prompt, "")
     |> String.trim()
     |> truncate_repetition()
+    |> format_thinking_tags()
     |> case do
       "" -> "No response generated."
       response -> response
+    end
+  end
+
+  # Format or hide DeepSeek R1 <think>...</think> reasoning tags
+  # When show_thinking is true: format tags nicely for display
+  # When show_thinking is false: remove thinking section, show only answer
+  defp format_thinking_tags(text) do
+    show_thinking = Application.get_env(:pure_gopher_ai, :deepseek_show_thinking, true)
+
+    if show_thinking do
+      # Format thinking tags for nice display
+      text
+      |> String.replace("<think>", "\n--- Reasoning ---\n")
+      |> String.replace("</think>", "\n--- Answer ---\n")
+      |> String.trim()
+    else
+      # Hide thinking, show only the answer
+      case Regex.run(~r/<think>.*?<\/think>\s*(.*)/s, text) do
+        [_, answer] -> String.trim(answer)
+        nil ->
+          # No think tags found, return as-is
+          # Also handle case where thinking didn't close properly
+          case String.split(text, "</think>", parts: 2) do
+            [_thinking, answer] -> String.trim(answer)
+            [no_tags] -> no_tags
+          end
+      end
+    end
+  end
+
+  @doc """
+  Extract just the thinking portion from a DeepSeek R1 response.
+  Useful for debugging or displaying reasoning separately.
+  """
+  def extract_thinking(text) do
+    case Regex.run(~r/<think>(.*?)<\/think>/s, text) do
+      [_, thinking] -> {:ok, String.trim(thinking)}
+      nil -> {:error, :no_thinking_found}
+    end
+  end
+
+  @doc """
+  Extract just the answer portion from a DeepSeek R1 response.
+  """
+  def extract_answer(text) do
+    case Regex.run(~r/<think>.*?<\/think>\s*(.*)/s, text) do
+      [_, answer] -> {:ok, String.trim(answer)}
+      nil ->
+        # No think tags, return the whole text
+        {:ok, String.trim(text)}
     end
   end
 
