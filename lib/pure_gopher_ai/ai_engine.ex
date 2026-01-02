@@ -49,10 +49,10 @@ defmodule PureGopherAi.AiEngine do
     {:ok, generation_config} = Bumblebee.load_generation_config({:hf, default_model})
 
     # Configure generation parameters
-    # Higher max_new_tokens for longer responses
+    # - max_new_tokens: limit response length (shorter = less looping)
     generation_config =
       Bumblebee.configure(generation_config,
-        max_new_tokens: 400
+        max_new_tokens: 150
       )
 
     # Streaming mode enabled (yields tokens as they're generated)
@@ -428,9 +428,56 @@ defmodule PureGopherAi.AiEngine do
     text
     |> String.replace_prefix(prompt, "")
     |> String.trim()
+    |> truncate_repetition()
     |> case do
       "" -> "No response generated."
       response -> response
+    end
+  end
+
+  # Detect and truncate repetitive output patterns (common with small models)
+  defp truncate_repetition(text) do
+    # Split into lines and detect repetition
+    lines = String.split(text, "\n")
+
+    # Look for repeating patterns (same line appearing 3+ times in sequence)
+    {clean_lines, _} =
+      Enum.reduce(lines, {[], nil, 0}, fn line, {acc, last_line, repeat_count} ->
+        trimmed = String.trim(line)
+        cond do
+          # Skip empty lines in repetition detection
+          trimmed == "" ->
+            {[line | acc], last_line, 0}
+
+          # Same line repeated
+          trimmed == last_line ->
+            if repeat_count >= 2 do
+              # Already have 2 repeats, skip further repetitions
+              {acc, last_line, repeat_count + 1}
+            else
+              {[line | acc], trimmed, repeat_count + 1}
+            end
+
+          # New line
+          true ->
+            {[line | acc], trimmed, 0}
+        end
+      end)
+      |> then(fn {lines, _, _} -> {Enum.reverse(lines), nil} end)
+
+    result = Enum.join(clean_lines, "\n") |> String.trim()
+
+    # Also truncate if we detect "User:" or "Assistant:" pattern repeating (fake dialogue)
+    case Regex.run(~r/^(.*?(?:User:|Assistant:).*?(?:User:|Assistant:))/s, result) do
+      [_, first_exchange] ->
+        # Model is generating fake dialogue, truncate to first real response
+        first_exchange
+        |> String.split(~r/\n(?=User:|Assistant:)/, parts: 2)
+        |> List.first()
+        |> String.trim()
+
+      nil ->
+        result
     end
   end
 end
