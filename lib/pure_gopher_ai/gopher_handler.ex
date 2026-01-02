@@ -123,6 +123,10 @@ defmodule PureGopherAi.GopherHandler do
 
           response when is_binary(response) ->
             ThousandIsland.Socket.send(socket, response)
+
+          response when is_list(response) ->
+            # Handle iodata responses (nested lists from format_text_response)
+            ThousandIsland.Socket.send(socket, response)
         end
 
       {:error, :rate_limited, retry_after} ->
@@ -2016,7 +2020,9 @@ defmodule PureGopherAi.GopherHandler do
 
   # About page - server stats
   defp about_page(host, port, network) do
-    {:ok, hostname} = :inet.gethostname()
+    # Use configured host instead of system hostname for privacy
+    hostname = host
+    _ = {port}  # Unused in plain text response
     memory = :erlang.memory()
     uptime_ms = :erlang.statistics(:wall_clock) |> elem(0)
     uptime_min = div(uptime_ms, 60_000)
@@ -2033,14 +2039,16 @@ defmodule PureGopherAi.GopherHandler do
         :clearnet -> "Clearnet (port #{port})"
       end
 
-    content_dir = Gophermap.content_dir()
-    content_status = if File.exists?(content_dir), do: "Active", else: "Not configured"
+    content_dir_full = Gophermap.content_dir()
+    # Sanitize path - only show relative or generic path for privacy
+    content_dir = content_dir_full |> Path.basename() |> then(&"~/.gopher/#{&1}")
+    content_status = if File.exists?(content_dir_full), do: "Active", else: "Not configured"
 
     # Get cache stats
     cache_stats = PureGopherAi.ResponseCache.stats()
     cache_status = if cache_stats.enabled, do: "Enabled", else: "Disabled"
 
-    format_text_response(
+    format_plain_text_response(
       """
       === PureGopherAI Server Stats ===
 
@@ -2067,18 +2075,16 @@ defmodule PureGopherAi.GopherHandler do
 
       TCP Server: ThousandIsland
       Architecture: OTP Supervision Tree
-      """,
-      host,
-      port
+      """
     )
   end
 
   # Stats page - detailed metrics
-  defp stats_page(host, port) do
+  defp stats_page(_host, _port) do
     stats = Telemetry.format_stats()
     cache_stats = PureGopherAi.ResponseCache.stats()
 
-    format_text_response(
+    format_plain_text_response(
       """
       === PureGopherAI Server Metrics ===
 
@@ -2111,16 +2117,14 @@ defmodule PureGopherAi.GopherHandler do
       Hits: #{cache_stats.hits}
       Misses: #{cache_stats.misses}
       Writes: #{cache_stats.writes}
-      """,
-      host,
-      port
+      """
     )
   end
 
   # === Health Check Functions ===
 
-  defp health_status(host, port) do
-    format_text_response(HealthCheck.status_text(), host, port)
+  defp health_status(_host, _port) do
+    format_plain_text_response(HealthCheck.status_text())
   end
 
   defp health_live do
@@ -2217,7 +2221,7 @@ defmodule PureGopherAi.GopherHandler do
     iNo phlog entries yet.\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     iTo add entries, create text files in:\t\t#{host}\t#{port}
-    i  #{Phlog.content_dir()}/YYYY/MM/DD-title.txt\t\t#{host}\t#{port}
+    i  ~/.gopher/phlog/YYYY/MM/DD-title.txt\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     1Back to Main Menu\t/\t#{host}\t#{port}
     .
@@ -2583,13 +2587,14 @@ defmodule PureGopherAi.GopherHandler do
       ], host, port)
       ThousandIsland.Socket.send(socket, header)
 
+      # Use buffered streaming for readable output
+      {streamer, flush} = SharedHandler.start_buffered_streamer(socket, host, port)
+
       Adventure.new_game_stream(session_id, genre, fn chunk ->
-        if String.length(chunk) > 0 do
-          lines = String.split(chunk, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-        end
+        if String.length(chunk) > 0, do: streamer.(chunk)
       end)
+
+      flush.()
 
       elapsed = System.monotonic_time(:millisecond) - start_time
       footer = format_gopher_lines([
@@ -2660,13 +2665,16 @@ defmodule PureGopherAi.GopherHandler do
       ], host, port)
       ThousandIsland.Socket.send(socket, header)
 
-      case Adventure.take_action_stream(session_id, action, fn chunk ->
-        if String.length(chunk) > 0 do
-          lines = String.split(chunk, "\n", trim: false)
-          formatted = Enum.map(lines, &"i#{&1}\t\t#{host}\t#{port}\r\n")
-          ThousandIsland.Socket.send(socket, Enum.join(formatted))
-        end
-      end) do
+      # Use buffered streaming for readable output
+      {streamer, flush} = SharedHandler.start_buffered_streamer(socket, host, port)
+
+      result = Adventure.take_action_stream(session_id, action, fn chunk ->
+        if String.length(chunk) > 0, do: streamer.(chunk)
+      end)
+
+      flush.()
+
+      case result do
         {:ok, state, _response} ->
           elapsed = System.monotonic_time(:millisecond) - start_time
 
@@ -3275,29 +3283,29 @@ defmodule PureGopherAi.GopherHandler do
     """
   end
 
-  defp handle_fortune_random(host, port) do
+  defp handle_fortune_random(_host, _port) do
     case Fortune.random() do
       {:ok, {quote, author, category}} ->
         formatted = Fortune.format_cookie_style({quote, author, category})
-        format_text_response("""
+        format_plain_text_response("""
         === Random Quote ===
 
         Category: #{String.capitalize(category)}
 
         #{formatted}
-        """, host, port)
+        """)
 
       {:error, reason} ->
         error_response("Fortune error: #{sanitize_error(reason)}")
     end
   end
 
-  defp handle_fortune_of_day(host, port) do
+  defp handle_fortune_of_day(_host, _port) do
     case Fortune.fortune_of_the_day() do
       {:ok, {quote, author, category}} ->
         formatted = Fortune.format_cookie_style({quote, author, category})
         today = Date.utc_today() |> Date.to_string()
-        format_text_response("""
+        format_plain_text_response("""
         === Quote of the Day ===
         #{today}
 
@@ -3306,18 +3314,18 @@ defmodule PureGopherAi.GopherHandler do
         #{formatted}
 
         Come back tomorrow for a new quote!
-        """, host, port)
+        """)
 
       {:error, reason} ->
         error_response("Fortune error: #{sanitize_error(reason)}")
     end
   end
 
-  defp handle_fortune_cookie(host, port) do
+  defp handle_fortune_cookie(_host, _port) do
     case Fortune.fortune_cookie() do
       {:ok, {message, numbers}} ->
         formatted = Fortune.format_fortune_cookie({message, numbers})
-        format_text_response("""
+        format_plain_text_response("""
         === Fortune Cookie ===
 
         *crack*
@@ -3325,7 +3333,7 @@ defmodule PureGopherAi.GopherHandler do
         You open the fortune cookie and find...
 
         #{formatted}
-        """, host, port)
+        """)
 
       {:error, reason} ->
         error_response("Fortune error: #{sanitize_error(reason)}")
@@ -3852,14 +3860,14 @@ defmodule PureGopherAi.GopherHandler do
     i--- Random & Games ---\t\t#{host}\t#{port}
     7Roll Dice\t/utils/dice\t#{host}\t#{port}
     7Magic 8-Ball\t/utils/8ball\t#{host}\t#{port}
-    0Flip a Coin\t/utils/coin\t#{host}\t#{port}
+    1Flip a Coin\t/utils/coin\t#{host}\t#{port}
     7Random Number\t/utils/random\t#{host}\t#{port}
     7Pick Random Item\t/utils/pick\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i--- Generators ---\t\t#{host}\t#{port}
-    0Generate UUID\t/utils/uuid\t#{host}\t#{port}
-    0Generate Password (16)\t/utils/password\t#{host}\t#{port}
-    0Generate Password (32)\t/utils/password/32\t#{host}\t#{port}
+    1Generate UUID\t/utils/uuid\t#{host}\t#{port}
+    1Generate Password (16)\t/utils/password\t#{host}\t#{port}
+    1Generate Password (32)\t/utils/password/32\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i--- Encoding & Hashing ---\t\t#{host}\t#{port}
     7Calculate Hash\t/utils/hash\t#{host}\t#{port}
@@ -3868,7 +3876,7 @@ defmodule PureGopherAi.GopherHandler do
     7ROT13 Cipher\t/utils/rot13\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i--- Time & Text ---\t\t#{host}\t#{port}
-    0Current Timestamp\t/utils/now\t#{host}\t#{port}
+    1Current Timestamp\t/utils/now\t#{host}\t#{port}
     7Convert Timestamp\t/utils/timestamp\t#{host}\t#{port}
     7Count Text\t/utils/count\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -3957,7 +3965,7 @@ defmodule PureGopherAi.GopherHandler do
     i    #{emoji}\t\t#{host}\t#{port}
     i  #{result_str}!\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    0Flip Again\t/utils/coin\t#{host}\t#{port}
+    1Flip Again\t/utils/coin\t#{host}\t#{port}
     1Back to Utilities\t/utils\t#{host}\t#{port}
     .
     """
@@ -4027,7 +4035,7 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     i  #{uuid}\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    0Generate Another\t/utils/uuid\t#{host}\t#{port}
+    1Generate Another\t/utils/uuid\t#{host}\t#{port}
     1Back to Utilities\t/utils\t#{host}\t#{port}
     .
     """
@@ -4168,9 +4176,9 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     i(Contains: a-z, A-Z, 0-9, symbols)\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    0Generate Another (16)\t/utils/password\t#{host}\t#{port}
-    0Generate Another (32)\t/utils/password/32\t#{host}\t#{port}
-    0Generate Another (64)\t/utils/password/64\t#{host}\t#{port}
+    1Generate Another (16)\t/utils/password\t#{host}\t#{port}
+    1Generate Another (32)\t/utils/password/32\t#{host}\t#{port}
+    1Generate Another (64)\t/utils/password/64\t#{host}\t#{port}
     1Back to Utilities\t/utils\t#{host}\t#{port}
     .
     """
@@ -4200,7 +4208,7 @@ defmodule PureGopherAi.GopherHandler do
             i  #{date_str}\t\t#{host}\t#{port}
             i\t\t#{host}\t#{port}
             7Convert Another\t/utils/timestamp\t#{host}\t#{port}
-            0Current Timestamp\t/utils/now\t#{host}\t#{port}
+            1Current Timestamp\t/utils/now\t#{host}\t#{port}
             1Back to Utilities\t/utils\t#{host}\t#{port}
             .
             """
@@ -4226,7 +4234,7 @@ defmodule PureGopherAi.GopherHandler do
     iDate/Time (UTC):\t\t#{host}\t#{port}
     i  #{date_str}\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    0Refresh\t/utils/now\t#{host}\t#{port}
+    1Refresh\t/utils/now\t#{host}\t#{port}
     7Convert Timestamp\t/utils/timestamp\t#{host}\t#{port}
     1Back to Utilities\t/utils\t#{host}\t#{port}
     .
@@ -4417,10 +4425,10 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp sitemap_text(host, port) do
+  defp sitemap_text(_host, _port) do
     text = Sitemap.to_text()
 
-    format_text_response("""
+    format_plain_text_response("""
     PureGopherAI Server - Full Sitemap
     ===================================
 
@@ -4428,7 +4436,7 @@ defmodule PureGopherAi.GopherHandler do
 
     ---
     Generated: #{DateTime.utc_now() |> DateTime.to_string()}
-    """, host, port)
+    """)
   end
 
   # === Mailbox Functions ===
@@ -4682,9 +4690,9 @@ defmodule PureGopherAi.GopherHandler do
     #{category_lines}
     i\t\t#{host}\t#{port}
     i--- Your Stats ---\t\t#{host}\t#{port}
-    0View Your Score\t/trivia/score\t#{host}\t#{port}
+    1View Your Score\t/trivia/score\t#{host}\t#{port}
     7Save Score to Leaderboard\t/trivia/save\t#{host}\t#{port}
-    0Reset Score\t/trivia/reset\t#{host}\t#{port}
+    1Reset Score\t/trivia/reset\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     1Leaderboard\t/trivia/leaderboard\t#{host}\t#{port}
     1Back to Home\t/\t#{host}\t#{port}
@@ -4804,7 +4812,7 @@ defmodule PureGopherAi.GopherHandler do
       i\t\t#{host}\t#{port}
       1Continue Playing\t/trivia/play\t#{host}\t#{port}
       7Save to Leaderboard\t/trivia/save\t#{host}\t#{port}
-      0Reset Score\t/trivia/reset\t#{host}\t#{port}
+      1Reset Score\t/trivia/reset\t#{host}\t#{port}
       1Back to Trivia Menu\t/trivia\t#{host}\t#{port}
       .
       """
@@ -9698,8 +9706,8 @@ defmodule PureGopherAi.GopherHandler do
 
   defp format_date(_), do: "unknown"
 
-  # Format as Gopher text response (type 0)
-  # Escapes dangerous characters that could break Gopher protocol
+  # Format as Gopher menu response with info lines
+  # Each line becomes an info line with host/port (for menus)
   defp format_text_response(text, host, port) do
     lines =
       text
@@ -9709,6 +9717,21 @@ defmodule PureGopherAi.GopherHandler do
       |> Enum.join("\r\n")
 
     lines <> "\r\n.\r\n"
+  end
+
+  # Format as plain text file (type 0)
+  # Returns plain text without Gopher menu formatting - for text documents
+  defp format_plain_text_response(text) do
+    text
+    |> InputSanitizer.escape_gopher()
+    |> String.replace("\r\n", "\n")
+    |> String.split("\n")
+    |> Enum.map(fn
+      "." -> ".."  # Escape lone dots
+      line -> line
+    end)
+    |> Enum.join("\r\n")
+    |> Kernel.<>("\r\n.\r\n")
   end
 
   # Format lines as Gopher info lines with proper escaping
@@ -10486,6 +10509,8 @@ defmodule PureGopherAi.GopherHandler do
       :not_found -> "Not found"
       :invalid_input -> "Invalid input"
       :empty_content -> "Content cannot be empty"
+      :no_response -> "AI could not generate a response"
+      :unknown_error -> "An unexpected error occurred"
       :rate_limited -> "Rate limit exceeded"
       :already_exists -> "Already exists"
       :already_ingested -> "Already processed"

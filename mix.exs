@@ -43,7 +43,10 @@ defmodule PureGopherAi.MixProject do
       # Performance & Monitoring
       {:telemetry, "~> 1.2"},
       {:telemetry_metrics, "~> 0.6"},
-      {:telemetry_poller, "~> 1.0"}
+      {:telemetry_poller, "~> 1.0"},
+
+      # Tunneling (expose services without opening ports)
+      {:burrow, github: "EntropyParadigm/burrow"}
     ]
   end
 end

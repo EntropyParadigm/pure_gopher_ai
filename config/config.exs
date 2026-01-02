@@ -24,7 +24,7 @@ config :pure_gopher_ai,
   # macOS: works without root
   # Linux: requires setcap or GOPHER_PORT=7070 override
   clearnet_port: 70,
-  clearnet_host: "localhost",
+  clearnet_host: System.get_env("GOPHER_HOST", "gopherlab.org"),
 
   # Tor hidden service listener (binds to localhost only)
   tor_enabled: true,
@@ -48,6 +48,20 @@ config :pure_gopher_ai,
 
   # Streaming AI responses
   streaming_enabled: true,          # Stream AI output as it generates
+
+  # Bumblebee model selection (loaded via HuggingFace)
+  # Options: "microsoft/phi-2" (2.7B, best quality)
+  #          "TinyLlama/TinyLlama-1.1B-Chat-v1.0" (1.1B, faster)
+  #          "google/gemma-2b-it" (2B, efficient)
+  # Default: TinyLlama (fast, 1.1GB). For better quality: AI_MODEL=microsoft/phi-2
+  bumblebee_model: System.get_env("AI_MODEL", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
+
+  # Ollama backend (optional, for even larger models)
+  # Set OLLAMA_ENABLED=true if you have Ollama running
+  ollama_enabled: System.get_env("OLLAMA_ENABLED", "false") == "true",
+  ollama_url: System.get_env("OLLAMA_URL", "http://localhost:11434"),
+  ollama_model: System.get_env("OLLAMA_MODEL", "llama3.2"),
+  ollama_timeout: 120_000,
 
   # System prompts (AI personality/behavior)
   # Default system prompt applied to all queries
@@ -113,7 +127,7 @@ config :pure_gopher_ai,
   # Gemini protocol support (gemini://)
   # Requires TLS certificates - generate with:
   # openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-  gemini_enabled: false,                # Enable Gemini server
+  gemini_enabled: true,                 # Enable Gemini server
   gemini_port: 1965,                    # Standard Gemini port
   gemini_cert_file: "~/.gopher/gemini/cert.pem",  # TLS certificate
   gemini_key_file: "~/.gopher/gemini/key.pem",    # TLS private key
@@ -135,6 +149,22 @@ config :pure_gopher_ai,
     # {"Lobsters", "https://lobste.rs/rss"},
     # {"Elixir Blog", "https://elixir-lang.org/blog.atom"}
   ]
+
+# Burrow Tunnel Configuration
+# Expose local services via relay server without opening ports
+config :pure_gopher_ai, :tunnel,
+  enabled: true,                            # Enable tunneling
+  server: System.get_env("BURROW_SERVER", "gopherlab.org:4000"),  # Relay server (host:port)
+  token: {:system, "BURROW_TOKEN"},         # Auth token from env var
+  reconnect: true,                          # Auto-reconnect on disconnect
+  # Tunnels are auto-configured based on enabled services
+  # Or specify explicitly:
+  # tunnels: [
+  #   [name: "gopher", local: 70, remote: 70],
+  #   [name: "gemini", local: 1965, remote: 1965],
+  #   [name: "finger", local: 79, remote: 79]
+  # ]
+  tunnels: nil  # nil = auto-detect from enabled services
 
 # Logging
 config :logger, :console,

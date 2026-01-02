@@ -236,15 +236,12 @@ defmodule PureGopherAi.Adventure do
     You are the narrator of an interactive text adventure game set in #{genre.setting}.
 
     Start a new adventure! Create an engaging opening scene that:
-    1. Establishes the setting vividly
-    2. Introduces the player's character and situation
+    1. Establishes the setting vividly in 2-3 sentences
+    2. Introduces the player's character briefly
     3. Presents an immediate choice or challenge
-    4. Ends with 2-3 clear options for what the player can do next
+    4. End with 2-3 clear numbered options
 
-    Keep the response under 300 words. Be descriptive but concise.
-    Format options as a numbered list at the end.
-
-    Begin the adventure:
+    Keep response under 150 words. Be descriptive but concise.
     """
 
     case generate_response(prompt, stream?, callback) do
@@ -276,26 +273,15 @@ defmodule PureGopherAi.Adventure do
         genre = Map.get(@genres, state.genre, @genres["fantasy"])
 
         prompt = """
-        You are the narrator of an interactive text adventure game set in #{genre.setting}.
+        You are the narrator of a text adventure in #{genre.setting}.
+        Player items: #{Enum.join(Enum.take(state.inventory, 3), ", ")}
+        Health: #{state.stats.health}/100
 
-        The player has these items: #{Enum.join(state.inventory, ", ")}
-        Player stats - Health: #{state.stats.health}, Strength: #{state.stats.strength}, Intelligence: #{state.stats.intelligence}
+        Recent story: #{String.slice(history_context, 0..300)}
 
-        Recent story:
-        #{history_context}
+        Player action: #{action}
 
-        The player's action: #{action}
-
-        Respond to their action by:
-        1. Describing what happens as a result
-        2. Advancing the story in an interesting way
-        3. If combat or danger is involved, describe the outcome (you may modify their health)
-        4. End with 2-3 options for what they can do next
-
-        Be dramatic and immersive. Keep response under 250 words.
-        If the action is impossible or doesn't make sense, gently redirect them.
-        If they find items, mention what they found.
-        Format options as a numbered list.
+        Respond with what happens (under 100 words) and 2-3 numbered options.
         """
 
         case generate_response(prompt, stream?, callback) do
@@ -350,14 +336,25 @@ defmodule PureGopherAi.Adventure do
   end
 
   defp generate_response(prompt, true = _stream?, callback) do
+    # generate_stream returns a plain string, not a tuple
     result = AiEngine.generate_stream(prompt, nil, fn chunk ->
       callback.(chunk)
       chunk
     end)
 
+    # Return {:ok, response} to match non-streaming API
     case result do
-      {:ok, full_response} -> {:ok, String.trim(full_response)}
-      error -> error
+      response when is_binary(response) and response != "" ->
+        {:ok, String.trim(response)}
+
+      "" ->
+        {:error, :no_response}
+
+      {:error, _} = error ->
+        error
+
+      _ ->
+        {:error, :unknown_error}
     end
   end
 

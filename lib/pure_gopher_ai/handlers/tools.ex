@@ -998,15 +998,18 @@ defmodule PureGopherAi.Handlers.Tools do
   # === Streaming Helper Functions ===
 
   defp stream_docs_response(socket, query, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "", "Answer:"], host, port)
+    header = Shared.format_gopher_lines(["Query: #{query}", "", "Answer:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
+
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
 
     case Rag.query_stream(query, fn chunk ->
            if String.length(chunk) > 0 do
-             Shared.stream_chunk(socket, chunk, host, port)
+             streamer.(chunk)
            end
          end) do
       {:ok, result} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         sources = result.sources
@@ -1023,6 +1026,7 @@ defmodule PureGopherAi.Handlers.Tools do
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError generating response\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1033,12 +1037,15 @@ defmodule PureGopherAi.Handlers.Tools do
     header = Shared.format_gopher_lines(["=== TL;DR: #{title} ===", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     case Summarizer.summarize_text_stream(content, fn chunk ->
            if String.length(chunk) > 0 do
-             Shared.stream_chunk(socket, chunk, host, port)
+             streamer.(chunk)
            end
          end) do
       {:ok, _} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         footer = Shared.format_gopher_lines([
@@ -1050,6 +1057,7 @@ defmodule PureGopherAi.Handlers.Tools do
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError generating summary\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1060,12 +1068,15 @@ defmodule PureGopherAi.Handlers.Tools do
     header = Shared.format_gopher_lines(["=== #{title} (#{lang}) ===", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     case Summarizer.translate_stream(content, lang, fn chunk ->
            if String.length(chunk) > 0 do
-             Shared.stream_chunk(socket, chunk, host, port)
+             streamer.(chunk)
            end
          end) do
       {:ok, _} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         footer = Shared.format_gopher_lines([
@@ -1077,6 +1088,7 @@ defmodule PureGopherAi.Handlers.Tools do
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError translating\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1087,18 +1099,22 @@ defmodule PureGopherAi.Handlers.Tools do
     header = Shared.format_gopher_lines(["=== Daily Digest ===", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     case Summarizer.daily_digest_stream(fn chunk ->
            if String.length(chunk) > 0 do
-             Shared.stream_chunk(socket, chunk, host, port)
+             streamer.(chunk)
            end
          end) do
       {:ok, _} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError generating digest\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1106,20 +1122,23 @@ defmodule PureGopherAi.Handlers.Tools do
   end
 
   defp stream_topics_response(socket, host, port, start_time) do
-    # discover_topics doesn't have a stream version, use non-streaming
+    # discover_topics doesn't have a stream version, use non-streaming with buffered output
     header = Shared.format_gopher_lines(["=== Content Topics ===", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     case Summarizer.discover_topics() do
       {:ok, topics} ->
-        # Send as one chunk
-        Shared.stream_chunk(socket, topics, host, port)
+        streamer.(topics)
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms"], host, port)
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError discovering topics\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1127,20 +1146,23 @@ defmodule PureGopherAi.Handlers.Tools do
   end
 
   defp stream_discover_response(socket, interest, host, port, start_time) do
-    # recommend doesn't have a stream version, use non-streaming
+    # recommend doesn't have a stream version, use non-streaming with buffered output
     header = Shared.format_gopher_lines(["=== Recommendations for \"#{interest}\" ===", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     case Summarizer.recommend(interest) do
       {:ok, recommendations} ->
-        # Send as one chunk
-        Shared.stream_chunk(socket, recommendations, host, port)
+        streamer.(recommendations)
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms"], host, port)
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError generating recommendations\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1151,18 +1173,22 @@ defmodule PureGopherAi.Handlers.Tools do
     header = Shared.format_gopher_lines(["=== #{term} ===", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     case Summarizer.explain_stream(term, fn chunk ->
            if String.length(chunk) > 0 do
-             Shared.stream_chunk(socket, chunk, host, port)
+             streamer.(chunk)
            end
          end) do
       {:ok, _} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
 
         footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError explaining\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -1180,26 +1206,30 @@ defmodule PureGopherAi.Handlers.Tools do
     header = Shared.format_gopher_lines([header_text, ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     result = case action do
       "generate" -> CodeAssistant.generate_stream(lang, input, fn chunk ->
-        if String.length(chunk) > 0, do: Shared.stream_chunk(socket, chunk, host, port)
+        if String.length(chunk) > 0, do: streamer.(chunk)
       end)
       "explain" -> CodeAssistant.explain_stream(input, fn chunk ->
-        if String.length(chunk) > 0, do: Shared.stream_chunk(socket, chunk, host, port)
+        if String.length(chunk) > 0, do: streamer.(chunk)
       end)
       "review" -> CodeAssistant.review_stream(input, fn chunk ->
-        if String.length(chunk) > 0, do: Shared.stream_chunk(socket, chunk, host, port)
+        if String.length(chunk) > 0, do: streamer.(chunk)
       end)
       _ -> {:error, :unknown_action}
     end
 
     case result do
       {:ok, _} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
         footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["iError generating code\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 

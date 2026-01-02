@@ -456,6 +456,63 @@ GOPHER_PORT=70 MIX_ENV=prod mix run --no-halt
 - `exla` - XLA backend (CPU/GPU)
 - `torchx` - PyTorch backend (Metal MPS)
 - `jason` - JSON handling
+- `burrow` - TCP/UDP tunneling (expose services without opening ports)
+
+## Burrow Tunneling
+
+Expose your PureGopherAI services to the internet without opening router ports using Burrow.
+
+### Architecture
+```
+┌─────────────┐         Internet          ┌─────────────┐
+│ PureGopher  │◄════════════════════════►│   Burrow    │◄──── Public Users
+│   (Home)    │    Encrypted Tunnel       │   Server    │      gopher://relay.com
+└─────────────┘                           │   (VPS)     │
+  localhost:70                            └─────────────┘
+                                            relay.com:70
+```
+
+### Setup
+
+1. **Deploy Burrow Server on VPS:**
+   ```bash
+   # On your VPS
+   ./burrow server --port 4000 --token YOUR_SECRET_TOKEN
+   ```
+
+2. **Configure PureGopherAI:**
+   ```bash
+   # Set environment variables
+   export BURROW_SERVER="your-vps.com:4000"
+   export BURROW_TOKEN="YOUR_SECRET_TOKEN"
+   ```
+
+3. **Enable in config:**
+   ```elixir
+   # config/config.exs or config/prod.exs
+   config :pure_gopher_ai, :tunnel,
+     enabled: true,
+     server: System.get_env("BURROW_SERVER"),
+     token: {:system, "BURROW_TOKEN"},
+     tunnels: [
+       [name: "gopher", local: 70, remote: 70],
+       [name: "gemini", local: 1965, remote: 1965]
+     ]
+   ```
+
+4. **Start PureGopherAI:**
+   ```bash
+   MIX_ENV=prod mix run --no-halt
+   # Tunnel connects automatically
+   ```
+
+### Tunnel Status
+
+Check tunnel status via admin interface or:
+```elixir
+PureGopherAi.Tunnel.status()
+# => %{enabled: true, status: :connected, tunnels: [...]}
+```
 
 ## Model
 Default: `openai-community/gpt2` (lightweight, ~500MB)

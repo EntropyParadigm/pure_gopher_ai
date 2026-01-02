@@ -573,14 +573,20 @@ defmodule PureGopherAi.Handlers.Ai do
   Stream AI response for /ask (no context).
   """
   def stream_ai_response(socket, query, _context, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "", "Response:"], host, port)
+    header = Shared.format_gopher_lines(["Query: #{query}", "", "Response:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
+
+    # Use buffered streaming for readable output
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
 
     _response = PureGopherAi.AiEngine.generate_stream(query, nil, fn chunk ->
       if String.length(chunk) > 0 do
-        Shared.stream_chunk(socket, chunk, host, port)
+        streamer.(chunk)
       end
     end)
+
+    # Flush remaining buffer
+    flush.()
 
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("AI Response streamed in #{elapsed}ms")
@@ -595,17 +601,23 @@ defmodule PureGopherAi.Handlers.Ai do
   Stream chat response for /chat (with context and session).
   """
   def stream_chat_response(socket, query, context, session_id, host, port, start_time) do
-    header = Shared.format_gopher_lines(["You: #{query}", "", "AI:"], host, port)
+    header = Shared.format_gopher_lines(["You: #{query}", "", "AI:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
     {:ok, response_agent} = Agent.start_link(fn -> [] end)
 
+    # Use buffered streaming for readable output
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+
     _response = PureGopherAi.AiEngine.generate_stream(query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        Shared.stream_chunk(socket, chunk, host, port)
+        streamer.(chunk)
       end
     end)
+
+    # Flush remaining buffer
+    flush.()
 
     full_response =
       response_agent
@@ -637,14 +649,18 @@ defmodule PureGopherAi.Handlers.Ai do
   Stream model-specific response.
   """
   def stream_model_response(socket, model_id, query, _context, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "Model: #{model_id}", "", "Response:"], host, port)
+    header = Shared.format_gopher_lines(["Query: #{query}", "Model: #{model_id}", "", "Response:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
+
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
 
     _response = ModelRegistry.generate_stream(model_id, query, nil, fn chunk ->
       if String.length(chunk) > 0 do
-        Shared.stream_chunk(socket, chunk, host, port)
+        streamer.(chunk)
       end
     end)
+
+    flush.()
 
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("AI Response (#{model_id}) streamed in #{elapsed}ms")
@@ -659,17 +675,20 @@ defmodule PureGopherAi.Handlers.Ai do
   Stream model-specific chat response.
   """
   def stream_model_chat_response(socket, model_id, query, context, session_id, host, port, start_time) do
-    header = Shared.format_gopher_lines(["You: #{query}", "Model: #{model_id}", "", "AI:"], host, port)
+    header = Shared.format_gopher_lines(["You: #{query}", "Model: #{model_id}", "", "AI:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
     {:ok, response_agent} = Agent.start_link(fn -> [] end)
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
 
     _response = ModelRegistry.generate_stream(model_id, query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        Shared.stream_chunk(socket, chunk, host, port)
+        streamer.(chunk)
       end
     end)
+
+    flush.()
 
     full_response =
       response_agent
@@ -701,15 +720,18 @@ defmodule PureGopherAi.Handlers.Ai do
   Stream persona response.
   """
   def stream_persona_response(socket, persona_id, query, _context, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "Persona: #{persona_id}", "", "Response:"], host, port)
+    header = Shared.format_gopher_lines(["Query: #{query}", "Persona: #{persona_id}", "", "Response:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
+
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
 
     case PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, nil, fn chunk ->
            if String.length(chunk) > 0 do
-             Shared.stream_chunk(socket, chunk, host, port)
+             streamer.(chunk)
            end
          end) do
       {:ok, _response} ->
+        flush.()
         elapsed = System.monotonic_time(:millisecond) - start_time
         Logger.info("AI Response (persona: #{persona_id}) streamed in #{elapsed}ms")
 
@@ -717,6 +739,7 @@ defmodule PureGopherAi.Handlers.Ai do
         ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
 
       {:error, _} ->
+        flush.()
         ThousandIsland.Socket.send(socket, ["i[Error: Unknown persona]\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
     end
 
@@ -727,17 +750,20 @@ defmodule PureGopherAi.Handlers.Ai do
   Stream persona chat response.
   """
   def stream_persona_chat_response(socket, persona_id, query, context, session_id, host, port, start_time) do
-    header = Shared.format_gopher_lines(["You: #{query}", "Persona: #{persona_id}", "", "AI:"], host, port)
+    header = Shared.format_gopher_lines(["You: #{query}", "Persona: #{persona_id}", "", "AI:", ""], host, port)
     ThousandIsland.Socket.send(socket, header)
 
     {:ok, response_agent} = Agent.start_link(fn -> [] end)
+    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
 
     result = PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
       if String.length(chunk) > 0 do
-        Shared.stream_chunk(socket, chunk, host, port)
+        streamer.(chunk)
       end
     end)
+
+    flush.()
 
     case result do
       {:ok, _} ->

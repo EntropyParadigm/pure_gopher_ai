@@ -253,6 +253,14 @@ defmodule PureGopherAi.Application do
         children
       end
 
+    # Optionally add Burrow tunnel client
+    children =
+      if PureGopherAi.Tunnel.enabled?() do
+        children ++ [PureGopherAi.Tunnel]
+      else
+        children
+      end
+
     opts = [strategy: :one_for_one, name: PureGopherAi.Supervisor]
 
     case Supervisor.start_link(children, opts) do

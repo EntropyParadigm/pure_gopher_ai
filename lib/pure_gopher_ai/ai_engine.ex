@@ -1,9 +1,18 @@
 defmodule PureGopherAi.AiEngine do
   @moduledoc """
-  The AI inference engine using Bumblebee for text generation.
-  Loads a text generation model and provides a simple API for generating responses.
-  Uses Nx.Serving for automatic request batching.
-  Supports conversation context for multi-turn interactions.
+  The AI inference engine with Ollama as primary backend and Bumblebee fallback.
+
+  ## Backends
+
+  1. **Ollama** (primary) - Fast, high-quality local models (Llama 3, Mistral, etc.)
+  2. **Bumblebee** (fallback) - Pure Elixir inference with TinyLlama
+
+  ## Configuration
+
+      config :pure_gopher_ai,
+        ollama_enabled: true,
+        ollama_url: "http://localhost:11434",
+        ollama_model: "llama3.2"
 
   ## Security
 
@@ -16,6 +25,7 @@ defmodule PureGopherAi.AiEngine do
   require Logger
 
   alias PureGopherAi.InputSanitizer
+  alias PureGopherAi.Ollama
 
   @doc """
   Sets up and returns Nx.Servings for text generation.
@@ -27,17 +37,22 @@ defmodule PureGopherAi.AiEngine do
   def setup_serving do
     Logger.info("Loading AI model... This may take a moment on first run.")
 
-    # Load TinyLlama as a high-quality lightweight model
-    # Much better than GPT-2 while still being fast
-    default_model = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    # Model selection - can be configured via environment
+    # Phi-2: better quality reasoning (2.7B params)
+    # TinyLlama: faster, lighter (1.1B params)
+    # Gemma: Google's efficient model (2B params)
+    default_model = Application.get_env(:pure_gopher_ai, :bumblebee_model, "microsoft/phi-2")
+
+    Logger.info("Loading model: #{default_model}")
     {:ok, model_info} = Bumblebee.load_model({:hf, default_model})
     {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, default_model})
     {:ok, generation_config} = Bumblebee.load_generation_config({:hf, default_model})
 
     # Configure generation parameters
+    # Higher max_new_tokens for longer responses
     generation_config =
       Bumblebee.configure(generation_config,
-        max_new_tokens: 100
+        max_new_tokens: 400
       )
 
     # Streaming mode enabled (yields tokens as they're generated)
@@ -152,8 +167,28 @@ defmodule PureGopherAi.AiEngine do
     end
   end
 
-  # Internal generation function
+  # Internal generation function - tries Ollama first, falls back to Bumblebee
   defp do_generate(prompt, context) do
+    if Ollama.enabled?() do
+      # Try Ollama first (better quality, faster)
+      system_prompt = if context, do: context, else: system_prompt()
+
+      case Ollama.generate(prompt, system: system_prompt) do
+        {:ok, response} ->
+          Logger.debug("Ollama generated response")
+          response
+
+        {:error, reason} ->
+          Logger.warning("Ollama failed: #{inspect(reason)}, falling back to Bumblebee")
+          do_generate_bumblebee(prompt, context)
+      end
+    else
+      do_generate_bumblebee(prompt, context)
+    end
+  end
+
+  # Bumblebee generation (fallback)
+  defp do_generate_bumblebee(prompt, context) do
     full_prompt = build_prompt(prompt, context)
 
     if streaming_enabled?() do
@@ -187,6 +222,25 @@ defmodule PureGopherAi.AiEngine do
       "Hello, world!..."
   """
   def generate_stream(prompt, context, chunk_callback) when is_binary(prompt) and is_function(chunk_callback, 1) do
+    if Ollama.enabled?() do
+      # Try Ollama streaming first
+      system_prompt = if context, do: context, else: system_prompt()
+
+      case Ollama.generate_stream(prompt, chunk_callback, system: system_prompt) do
+        {:ok, response} ->
+          response
+
+        {:error, reason} ->
+          Logger.warning("Ollama streaming failed: #{inspect(reason)}, falling back to Bumblebee")
+          generate_stream_bumblebee(prompt, context, chunk_callback)
+      end
+    else
+      generate_stream_bumblebee(prompt, context, chunk_callback)
+    end
+  end
+
+  # Bumblebee streaming (fallback)
+  defp generate_stream_bumblebee(prompt, context, chunk_callback) do
     full_prompt = build_prompt(prompt, context)
 
     if streaming_enabled?() do
