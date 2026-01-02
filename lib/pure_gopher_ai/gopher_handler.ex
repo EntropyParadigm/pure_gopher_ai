@@ -278,11 +278,11 @@ defmodule PureGopherAi.GopherHandler do
     do: ServerDirectory.generate_gophermap(host, port)
 
   # Crawler optimization
-  defp route_selector("/robots.txt", host, port, _network, _ip, _socket),
-    do: format_text_response(CrawlerHints.robots_txt(), host, port)
+  defp route_selector("/robots.txt", _host, _port, _network, _ip, _socket),
+    do: format_plain_text_response(CrawlerHints.robots_txt())
 
-  defp route_selector("/caps.txt", host, port, _network, _ip, _socket),
-    do: format_text_response(Caps.generate(), host, port)
+  defp route_selector("/caps.txt", _host, _port, _network, _ip, _socket),
+    do: format_plain_text_response(Caps.generate())
 
   # Pastebin routes
   defp route_selector("/paste", host, port, _network, _ip, _socket),
@@ -2022,7 +2022,6 @@ defmodule PureGopherAi.GopherHandler do
   defp about_page(host, port, network) do
     # Use configured host instead of system hostname for privacy
     hostname = host
-    _ = {port}  # Unused in plain text response
     memory = :erlang.memory()
     uptime_ms = :erlang.statistics(:wall_clock) |> elem(0)
     uptime_min = div(uptime_ms, 60_000)
@@ -2168,7 +2167,7 @@ defmodule PureGopherAi.GopherHandler do
         entry_lines =
           result.entries
           |> Enum.map(fn {date, title, path} ->
-            "0[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
+            "1[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
           end)
           |> Enum.join("")
 
@@ -2255,7 +2254,7 @@ defmodule PureGopherAi.GopherHandler do
         entries
         |> Enum.take(20)
         |> Enum.map(fn {date, title, path} ->
-          "0[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
+          "1[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
         end)
         |> Enum.join("")
 
@@ -2293,7 +2292,7 @@ defmodule PureGopherAi.GopherHandler do
       entry_lines =
         entries
         |> Enum.map(fn {date, title, path} ->
-          "0[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
+          "1[#{date}] #{title}\t/phlog/entry/#{path}\t#{host}\t#{port}\r\n"
         end)
         |> Enum.join("")
 
@@ -3113,13 +3112,10 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp feeds_opml(host, port) do
+  defp feeds_opml(_host, _port) do
     case FeedAggregator.export_opml() do
       {:ok, opml} ->
-        format_text_response(opml, host, port) <>
-          "i\t\t#{host}\t#{port}\r\n" <>
-          "1Back to Feeds\t/feeds\t#{host}\t#{port}\r\n" <>
-          ".\r\n"
+        format_plain_text_response(opml)
     end
   end
 
@@ -6224,7 +6220,7 @@ defmodule PureGopherAi.GopherHandler do
       [id, "md"] ->
         case Slides.export_markdown(id) do
           {:ok, markdown} ->
-            format_text_response(markdown, host, port)
+            format_plain_text_response(markdown)
 
           {:error, :not_found} ->
             """
@@ -6239,7 +6235,7 @@ defmodule PureGopherAi.GopherHandler do
       [id, "txt"] ->
         case Slides.export_text(id) do
           {:ok, text} ->
-            format_text_response(text, host, port)
+            format_plain_text_response(text)
 
           {:error, :not_found} ->
             """
@@ -9799,7 +9795,7 @@ defmodule PureGopherAi.GopherHandler do
         post_lines = posts
           |> Enum.map(fn p ->
             date = format_date(p.created_at)
-            "0[#{date}] #{p.title} (by ~#{p.username})\t/phlog/user/#{p.username_lower}/#{p.id}\t#{host}\t#{port}"
+            "1[#{date}] #{p.title} (by ~#{p.username})\t/phlog/user/#{p.username_lower}/#{p.id}\t#{host}\t#{port}"
           end)
           |> Enum.join("\r\n")
 
@@ -9833,7 +9829,7 @@ defmodule PureGopherAi.GopherHandler do
         post_lines = posts
           |> Enum.map(fn p ->
             date = format_date(p.created_at)
-            "0[#{date}] #{p.title}\t/phlog/user/#{username}/#{p.id}\t#{host}\t#{port}"
+            "1[#{date}] #{p.title}\t/phlog/user/#{username}/#{p.id}\t#{host}\t#{port}"
           end)
           |> Enum.join("\r\n")
 
