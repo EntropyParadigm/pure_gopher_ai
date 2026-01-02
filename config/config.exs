@@ -50,23 +50,26 @@ config :pure_gopher_ai,
   streaming_enabled: true,          # Stream AI output as it generates
 
   # Bumblebee model selection (loaded via HuggingFace)
-  # DeepSeek R1 Distilled models with Chain-of-Thought reasoning
   #
-  # Default: DeepSeek-R1-Distill-Qwen-1.5B
-  #   - Fast, efficient (1.5B params, ~3GB RAM)
-  #   - Great for coding, general questions, reasoning
-  #   - Outputs <think>...</think> tags showing reasoning process
+  # Default: Llama 3.2 1B Instruct (GATED - requires HF token)
+  #   - High quality, small footprint (~2GB RAM)
+  #   - Set HF_TOKEN env var with your HuggingFace token
+  #   - Accept license at: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct
   #
-  # Alternative: DeepSeek-R1-Distill-Llama-8B (needs 16GB+ RAM)
-  #   - Set AI_MODEL=deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+  # Fallback options (ungated):
+  #   - TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B, fast)
+  #   - microsoft/phi-2 (2.7B, good reasoning)
   #
-  # Environment override: AI_MODEL
-  bumblebee_model: System.get_env("AI_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"),
+  # Environment override: AI_MODEL, HF_TOKEN
+  bumblebee_model: System.get_env("AI_MODEL", "meta-llama/Llama-3.2-1B-Instruct"),
 
-  # DeepSeek R1 generation settings (higher limits for reasoning)
-  deepseek_max_new_tokens: 1024,      # Allow space for <think> reasoning
-  deepseek_sequence_length: 2048,     # Context window
-  deepseek_show_thinking: true,       # Show <think> tags in output (set false to hide)
+  # HuggingFace token for gated models (Llama 3.2)
+  # Get token at: https://huggingface.co/settings/tokens
+  hf_token: System.get_env("HF_TOKEN"),
+
+  # Generation settings
+  ai_max_new_tokens: 512,             # Response length limit
+  ai_sequence_length: 2048,           # Context window
 
   # Ollama backend (optional, for even larger models)
   # Set OLLAMA_ENABLED=true if you have Ollama running

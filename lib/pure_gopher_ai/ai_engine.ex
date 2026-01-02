@@ -5,21 +5,21 @@ defmodule PureGopherAi.AiEngine do
   ## Backends
 
   1. **Ollama** (primary) - Fast, high-quality local models (Llama 3, Mistral, etc.)
-  2. **Bumblebee** (fallback) - DeepSeek R1 distilled models with Chain-of-Thought reasoning
+  2. **Bumblebee** (fallback) - Local inference with Llama 3.2, TinyLlama, or Phi-2
 
   ## Models
 
-  - **DeepSeek-R1-Distill-Qwen-1.5B** - Default for coding, fast and efficient
-  - **DeepSeek-R1-Distill-Llama-8B** - For users with more RAM (16GB+)
-
-  These models output `<think>...</think>` tags showing their reasoning process.
+  - **Llama 3.2 1B Instruct** - High quality, small (GATED - needs HF_TOKEN)
+  - **TinyLlama 1.1B** - Fast fallback (ungated)
+  - **Phi-2 2.7B** - Good reasoning (ungated)
 
   ## Configuration
 
       config :pure_gopher_ai,
-        bumblebee_model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-        deepseek_max_new_tokens: 1024,
-        deepseek_sequence_length: 2048
+        bumblebee_model: "meta-llama/Llama-3.2-1B-Instruct",
+        hf_token: System.get_env("HF_TOKEN"),
+        ai_max_new_tokens: 512,
+        ai_sequence_length: 2048
 
   ## Security
 
@@ -35,30 +35,36 @@ defmodule PureGopherAi.AiEngine do
   alias PureGopherAi.Ollama
 
   @doc """
-  Sets up and returns Nx.Serving for text generation with DeepSeek R1 models.
+  Sets up and returns Nx.Serving for text generation.
 
-  DeepSeek R1 distilled models require higher token limits for reasoning:
-  - max_new_tokens: 1024 (space for <think> reasoning)
-  - sequence_length: 2048 (longer context window)
+  For gated models (Llama 3.2), set HF_TOKEN environment variable.
   """
   def setup_serving do
     Logger.info("Loading AI model... This may take a moment on first run.")
 
-    # DeepSeek R1 Distilled models
-    # Default: Qwen-1.5B (fast, good for coding)
-    # Alternative: Llama-8B (better quality, needs more RAM)
+    # Model selection
     default_model = Application.get_env(:pure_gopher_ai, :bumblebee_model,
-      "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")
+      "meta-llama/Llama-3.2-1B-Instruct")
+
+    # HuggingFace token for gated models (Llama 3.2, etc.)
+    # Token is passed in the repo tuple, not as options
+    hf_token = Application.get_env(:pure_gopher_ai, :hf_token)
+
+    repo = if hf_token do
+      {:hf, default_model, auth_token: hf_token}
+    else
+      {:hf, default_model}
+    end
 
     Logger.info("Loading model: #{default_model}")
-    {:ok, model_info} = Bumblebee.load_model({:hf, default_model})
-    {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, default_model})
-    {:ok, generation_config} = Bumblebee.load_generation_config({:hf, default_model})
 
-    # DeepSeek R1 needs higher token limits for Chain-of-Thought reasoning
-    # The model outputs <think>...</think> tags during reasoning
-    max_tokens = Application.get_env(:pure_gopher_ai, :deepseek_max_new_tokens, 1024)
-    seq_length = Application.get_env(:pure_gopher_ai, :deepseek_sequence_length, 2048)
+    {:ok, model_info} = Bumblebee.load_model(repo)
+    {:ok, tokenizer} = Bumblebee.load_tokenizer(repo)
+    {:ok, generation_config} = Bumblebee.load_generation_config(repo)
+
+    # Generation settings
+    max_tokens = Application.get_env(:pure_gopher_ai, :ai_max_new_tokens, 512)
+    seq_length = Application.get_env(:pure_gopher_ai, :ai_sequence_length, 2048)
 
     generation_config =
       Bumblebee.configure(generation_config,
@@ -78,7 +84,7 @@ defmodule PureGopherAi.AiEngine do
       )
 
     Logger.info("AI model loaded successfully! Streaming: #{streaming_enabled}")
-    Logger.info("DeepSeek R1 config: max_tokens=#{max_tokens}, seq_length=#{seq_length}")
+    Logger.info("Config: max_tokens=#{max_tokens}, seq_length=#{seq_length}")
     serving
   end
 
