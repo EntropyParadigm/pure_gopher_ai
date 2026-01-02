@@ -10,46 +10,61 @@ defmodule PureGopherAi.ModelRegistry do
 
   @table_name :model_registry
 
-  # Model configurations
+  # Model configurations - Bumblebee-compatible models only
+  # Supported architectures (2026): Llama, Mistral, Gemma, GPT-2, GPT-Neo, Phi, Flan-T5
   @models %{
-    # Default lightweight model - TinyLlama is much better than GPT-2
+    # Default lightweight model - TinyLlama (Llama-based)
     "tinyllama" => %{
       name: "TinyLlama",
       repo: "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
       description: "Fast, high-quality chat (1.1B params)",
       default: true
     },
-    # Qwen models - excellent for coding
-    "qwen-coder" => %{
-      name: "Qwen2.5 Coder",
-      repo: "Qwen/Qwen2.5-Coder-0.5B-Instruct",
-      description: "Specialized for code (0.5B params)",
-      default: false
-    },
-    "qwen" => %{
-      name: "Qwen2.5",
-      repo: "Qwen/Qwen2.5-0.5B-Instruct",
-      description: "Compact, capable (0.5B params)",
-      default: false
-    },
-    "qwen-1.5b" => %{
-      name: "Qwen2.5 1.5B",
-      repo: "Qwen/Qwen2.5-1.5B-Instruct",
-      description: "Higher quality (1.5B params)",
-      default: false
-    },
-    # Microsoft Phi - very capable small model
-    "phi" => %{
+    # Phi-2 - Microsoft, optimized for edge/low-latency
+    "phi2" => %{
       name: "Phi-2",
       repo: "microsoft/phi-2",
-      description: "Reasoning focused (2.7B params)",
+      description: "Excellent reasoning, code capable (2.7B params)",
       default: false
     },
-    # Keep GPT-2 as fallback
+    # Gemma - Google's lightweight model
+    "gemma" => %{
+      name: "Gemma 2B",
+      repo: "google/gemma-2b-it",
+      description: "Google's efficient instruction model (2B params)",
+      default: false
+    },
+    # Mistral - High quality open model
+    "mistral" => %{
+      name: "Mistral 7B Instruct",
+      repo: "mistralai/Mistral-7B-Instruct-v0.2",
+      description: "High quality instruction model (7B params)",
+      default: false
+    },
+    # GPT-2 variants - reliable, fast fallbacks
     "gpt2" => %{
       name: "GPT-2",
       repo: "openai-community/gpt2",
-      description: "Legacy fallback (124M params)",
+      description: "Fast, lightweight (124M params)",
+      default: false
+    },
+    "gpt2-medium" => %{
+      name: "GPT-2 Medium",
+      repo: "openai-community/gpt2-medium",
+      description: "Balanced speed/quality (355M params)",
+      default: false
+    },
+    "gpt2-large" => %{
+      name: "GPT-2 Large",
+      repo: "openai-community/gpt2-large",
+      description: "Higher quality (774M params)",
+      default: false
+    },
+    # Flan-T5 - instruction-following
+    "flan-t5" => %{
+      name: "Flan-T5 Base",
+      repo: "google/flan-t5-base",
+      description: "Instruction-following (250M params)",
       default: false
     }
   }

@@ -7030,15 +7030,6 @@ defmodule PureGopherAi.GopherHandler do
         1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
         .
         """
-
-      {:error, _reason} ->
-        """
-        i\t\t#{host}\t#{port}
-        3Error: Unable to perform semantic search\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1Back to Semantic Menu\t/semantic\t#{host}\t#{port}
-        .
-        """
     end
   end
 

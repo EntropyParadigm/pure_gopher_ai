@@ -765,11 +765,11 @@ defmodule PureGopherAi.Handlers.Tools do
     Logger.info("Fetching: #{url}")
 
     case GopherProxy.fetch(url) do
-      {:ok, content} ->
+      {:ok, result} ->
         Shared.format_text_response("""
         === Fetched from #{url} ===
 
-        #{content}
+        #{result.content}
 
         ---
         Proxied via PureGopherAI
@@ -787,7 +787,8 @@ defmodule PureGopherAi.Handlers.Tools do
     Logger.info("Fetching and summarizing: #{url}")
 
     case GopherProxy.fetch(url) do
-      {:ok, content} ->
+      {:ok, result} ->
+        content = result.content
         start_time = System.monotonic_time(:millisecond)
 
         if socket && PureGopherAi.AiEngine.streaming_enabled?() do

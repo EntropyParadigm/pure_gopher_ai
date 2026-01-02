@@ -295,7 +295,7 @@ defmodule PureGopherAi.Webhooks do
     ]
 
     # Using :httpc from Erlang's inets
-    request = {String.to_charlist(webhook.url), Enum.map(headers, fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end), 'application/json', body}
+    request = {String.to_charlist(webhook.url), Enum.map(headers, fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end), ~c"application/json", body}
 
     case :httpc.request(:post, request, [{:timeout, 10_000}], []) do
       {:ok, {{_, status_code, _}, _headers, _body}} when status_code >= 200 and status_code < 300 ->

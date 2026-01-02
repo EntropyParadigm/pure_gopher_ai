@@ -17,7 +17,8 @@ defmodule PureGopherAi.Federation do
   @table_name :federation
   @data_dir Application.compile_env(:pure_gopher_ai, :data_dir, "~/.gopher/data")
   @sync_interval_ms 3_600_000  # 1 hour
-  @fetch_timeout_ms 10_000
+  # Fetch timeout is configured per-request in GopherProxy
+  # @fetch_timeout_ms 10_000
 
   # Client API
 

@@ -304,7 +304,7 @@ defmodule PureGopherAi.RelatedContent do
     end
   end
 
-  defp find_by_keywords(content_type, exclude_id, keywords, limit) do
+  defp find_by_keywords(_content_type, exclude_id, keywords, limit) do
     {:ok, recent_posts} = UserPhlog.recent_posts(limit: 100)
 
     recent_posts
