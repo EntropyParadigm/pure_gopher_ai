@@ -47,16 +47,19 @@ defmodule PureGopherAi.AiEngine do
       "meta-llama/Llama-3.2-1B-Instruct")
 
     # HuggingFace token for gated models (Llama 3.2, etc.)
-    # Token is passed in the repo tuple, not as options
-    hf_token = Application.get_env(:pure_gopher_ai, :hf_token)
-
-    repo = if hf_token do
-      {:hf, default_model, auth_token: hf_token}
-    else
-      {:hf, default_model}
-    end
+    # Read from env var at runtime (config.exs reads at compile time)
+    hf_token = System.get_env("HF_TOKEN") || Application.get_env(:pure_gopher_ai, :hf_token)
 
     Logger.info("Loading model: #{default_model}")
+    Logger.info("HF Token present: #{hf_token != nil && hf_token != ""}")
+
+    repo = if hf_token && hf_token != "" do
+      Logger.info("Using authenticated HuggingFace access")
+      {:hf, default_model, auth_token: hf_token}
+    else
+      Logger.warning("No HF_TOKEN - gated models will fail")
+      {:hf, default_model}
+    end
 
     {:ok, model_info} = Bumblebee.load_model(repo)
     {:ok, tokenizer} = Bumblebee.load_tokenizer(repo)
