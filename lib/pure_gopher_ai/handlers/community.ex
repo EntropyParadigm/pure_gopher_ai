@@ -604,22 +604,29 @@ defmodule PureGopherAi.Handlers.Community do
       case UserProfiles.create(username, passphrase, ip, bio: bio) do
         {:ok, created_username, recovery_words} ->
           recovery_display = Enum.join(recovery_words, " ")
-          # Use plain text format for better client compatibility
-          Shared.format_plain_text_response("""
-          === Profile Created! ===
+          # Split recovery phrase for readability
+          words = String.split(recovery_display, " ")
+          line1 = Enum.take(words, 6) |> Enum.join(" ")
+          line2 = Enum.drop(words, 6) |> Enum.join(" ")
 
-          Username: ~#{created_username}
-
-          IMPORTANT: Save this recovery phrase!
-          You will need it to recover your account.
-
-          Recovery phrase:
-            #{recovery_display}
-
-          Remember your passphrase for editing.
-
-          View your profile at: /users/~#{created_username}
-          """)
+          [
+            Shared.info_line("", host, port),
+            Shared.info_line("=== PROFILE CREATED ===", host, port),
+            Shared.info_line("", host, port),
+            Shared.info_line("Username: ~#{created_username}", host, port),
+            Shared.info_line("", host, port),
+            Shared.info_line("*** SAVE YOUR RECOVERY PHRASE ***", host, port),
+            Shared.info_line("", host, port),
+            Shared.info_line(line1, host, port),
+            Shared.info_line(line2, host, port),
+            Shared.info_line("", host, port),
+            Shared.info_line("*** WRITE IT DOWN NOW ***", host, port),
+            Shared.info_line("", host, port),
+            Shared.link_line("View Your Profile", "/users/~#{created_username}", host, port),
+            Shared.link_line("Back to Users", "/users", host, port),
+            ".\r\n"
+          ]
+          |> IO.iodata_to_binary()
 
         {:error, reason} ->
           Shared.error_response("Failed to create profile: #{Shared.sanitize_error(reason)}")
