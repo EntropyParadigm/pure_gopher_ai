@@ -738,6 +738,7 @@ defmodule PureGopherAi.Handlers.Community do
           |> Enum.map(&Shared.info_line(&1, host, port)),
           Shared.info_line("", host, port),
           Shared.link_line("User's Phlog", "/phlog/user/#{username}", host, port),
+          Shared.search_line("Edit Profile", "/users/~#{username}/edit", host, port),
           Shared.info_line("", host, port),
           Shared.link_line("Back to Users", "/users", host, port),
           ".\r\n"
@@ -749,6 +750,54 @@ defmodule PureGopherAi.Handlers.Community do
 
       {:error, reason} ->
         Shared.error_response("Failed to get profile: #{Shared.sanitize_error(reason)}")
+    end
+  end
+
+  @doc """
+  Prompt for editing a user profile.
+  """
+  def users_edit_prompt(username, host, port) do
+    [
+      Shared.info_line("=== Edit Profile: ~#{username} ===", host, port),
+      Shared.info_line("", host, port),
+      Shared.info_line("Format: passphrase | new bio", host, port),
+      Shared.info_line("", host, port),
+      Shared.info_line("Example:", host, port),
+      Shared.info_line("my secret phrase | This is my updated bio!", host, port),
+      Shared.info_line("", host, port),
+      Shared.info_line("Bio max: 500 characters", host, port),
+      ".\r\n"
+    ]
+    |> IO.iodata_to_binary()
+  end
+
+  @doc """
+  Handle profile edit.
+  """
+  def handle_users_edit(username, input, host, port) do
+    parts = String.split(input, "|", parts: 2) |> Enum.map(&String.trim/1)
+
+    case parts do
+      [passphrase, new_bio] when byte_size(passphrase) > 0 and byte_size(new_bio) > 0 ->
+        case UserProfiles.update(username, passphrase, bio: new_bio) do
+          {:ok, _profile} ->
+            [
+              Shared.info_line("=== Profile Updated! ===", host, port),
+              Shared.info_line("", host, port),
+              Shared.info_line("Your bio has been updated.", host, port),
+              Shared.info_line("", host, port),
+              Shared.link_line("View Your Profile", "/users/~#{username}", host, port),
+              Shared.link_line("Back to Users", "/users", host, port),
+              ".\r\n"
+            ]
+            |> IO.iodata_to_binary()
+
+          {:error, reason} ->
+            Shared.error_response("Failed to update: #{Shared.sanitize_error(reason)}")
+        end
+
+      _ ->
+        Shared.error_response("Invalid format. Use: passphrase | new bio")
     end
   end
 

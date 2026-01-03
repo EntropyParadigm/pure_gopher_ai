@@ -362,8 +362,29 @@ defmodule PureGopherAi.GopherHandler do
     CommunityHandler.users_list(host, port, page)
   end
 
-  defp route_selector("/users/~" <> username, host, port, _network, _ip, _socket),
-    do: CommunityHandler.users_view(username, host, port)
+  # User profile edit (must come before generic /users/~ route)
+  defp route_selector("/users/~" <> rest, host, port, _network, _ip, _socket) when byte_size(rest) > 0 do
+    case String.split(rest, "/edit", parts: 2) do
+      [username, ""] ->
+        # /users/~username/edit - show prompt
+        CommunityHandler.users_edit_prompt(username, host, port)
+
+      [username, "\t" <> input] ->
+        # /users/~username/edit\tinput
+        CommunityHandler.handle_users_edit(username, input, host, port)
+
+      [username, " " <> input] ->
+        # /users/~username/edit input
+        CommunityHandler.handle_users_edit(username, input, host, port)
+
+      [username] ->
+        # /users/~username - view profile
+        CommunityHandler.users_view(username, host, port)
+
+      _ ->
+        CommunityHandler.users_view(rest, host, port)
+    end
+  end
 
   # Calendar / Events
   defp route_selector("/calendar", host, port, _network, _ip, _socket),
