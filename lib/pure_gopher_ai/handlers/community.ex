@@ -682,25 +682,30 @@ defmodule PureGopherAi.Handlers.Community do
   List users with pagination.
   """
   def users_list(host, port, page) do
-    case UserProfiles.list(page: page, per_page: 25) do
-      {:ok, result} ->
-        user_lines = if Enum.empty?(result.profiles) do
+    per_page = 25
+    offset = (page - 1) * per_page
+
+    case UserProfiles.list(limit: per_page, offset: offset) do
+      {:ok, profiles, total} ->
+        total_pages = max(1, ceil(total / per_page))
+
+        user_lines = if Enum.empty?(profiles) do
           [Shared.info_line("No users yet. Be the first to create a profile!", host, port)]
         else
-          result.profiles
+          profiles
           |> Enum.map(fn u ->
             Shared.link_line("~#{u.username}", "/users/~#{u.username}", host, port)
           end)
         end
 
         nav = []
-        nav = if result.page > 1, do: [Shared.link_line("Previous", "/users/list/page/#{result.page - 1}", host, port) | nav], else: nav
-        nav = if result.page < result.total_pages, do: [Shared.link_line("Next", "/users/list/page/#{result.page + 1}", host, port) | nav], else: nav
+        nav = if page > 1, do: [Shared.link_line("Previous", "/users/list/page/#{page - 1}", host, port) | nav], else: nav
+        nav = if page < total_pages, do: [Shared.link_line("Next", "/users/list/page/#{page + 1}", host, port) | nav], else: nav
 
         [
           Shared.info_line("=== User Directory ===", host, port),
           Shared.info_line("", host, port),
-          Shared.info_line("Page #{result.page} of #{result.total_pages}", host, port),
+          Shared.info_line("Page #{page} of #{total_pages} (#{total} users)", host, port),
           Shared.info_line("", host, port),
           user_lines,
           Shared.info_line("", host, port),
