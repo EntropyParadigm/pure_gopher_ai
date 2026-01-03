@@ -26,11 +26,8 @@ defmodule PureGopherAi.Summarizer do
     case Phlog.get_entry(entry_path) do
       {:ok, entry} ->
         prompt = build_summary_prompt(entry.content, max_words, "blog post")
-
-        case AiEngine.generate(prompt) do
-          {:ok, summary} -> {:ok, %{title: entry.title, date: entry.date, summary: summary}}
-          error -> error
-        end
+        summary = AiEngine.generate(prompt)
+        {:ok, %{title: entry.title, date: entry.date, summary: summary}}
 
       {:error, _} = error ->
         error
@@ -46,7 +43,7 @@ defmodule PureGopherAi.Summarizer do
     case Phlog.get_entry(entry_path) do
       {:ok, entry} ->
         prompt = build_summary_prompt(entry.content, max_words, "blog post")
-        AiEngine.generate_stream(prompt, nil, callback)
+        {:ok, AiEngine.generate_stream(prompt, nil, callback)}
 
       {:error, _} = error ->
         error
@@ -70,11 +67,8 @@ defmodule PureGopherAi.Summarizer do
           |> String.slice(0, 8000)  # Limit input size
 
         prompt = build_summary_prompt(content, max_words, "document")
-
-        case AiEngine.generate(prompt) do
-          {:ok, summary} -> {:ok, %{filename: doc.filename, summary: summary}}
-          error -> error
-        end
+        summary = AiEngine.generate(prompt)
+        {:ok, %{filename: doc.filename, summary: summary}}
 
       {:error, _} = error ->
         error
@@ -96,7 +90,7 @@ defmodule PureGopherAi.Summarizer do
           |> String.slice(0, 8000)
 
         prompt = build_summary_prompt(content, max_words, "document")
-        AiEngine.generate_stream(prompt, nil, callback)
+        {:ok, AiEngine.generate_stream(prompt, nil, callback)}
 
       {:error, _} = error ->
         error
@@ -111,7 +105,7 @@ defmodule PureGopherAi.Summarizer do
     content_type = Keyword.get(opts, :type, "content")
 
     prompt = build_summary_prompt(text, max_words, content_type)
-    AiEngine.generate(prompt)
+    {:ok, AiEngine.generate(prompt)}
   end
 
   @doc """
@@ -122,7 +116,7 @@ defmodule PureGopherAi.Summarizer do
     content_type = Keyword.get(opts, :type, "content")
 
     prompt = build_summary_prompt(text, max_words, content_type)
-    AiEngine.generate_stream(prompt, nil, callback)
+    {:ok, AiEngine.generate_stream(prompt, nil, callback)}
   end
 
   @doc """
@@ -158,7 +152,7 @@ defmodule PureGopherAi.Summarizer do
       Daily Digest:
       """
 
-      AiEngine.generate(prompt)
+      {:ok, AiEngine.generate(prompt)}
     end
   end
 
@@ -194,7 +188,7 @@ defmodule PureGopherAi.Summarizer do
       Daily Digest:
       """
 
-      AiEngine.generate_stream(prompt, nil, callback)
+      {:ok, AiEngine.generate_stream(prompt, nil, callback)}
     end
   end
 
@@ -226,7 +220,7 @@ defmodule PureGopherAi.Summarizer do
     Topics and Themes:
     """
 
-    AiEngine.generate(prompt)
+    {:ok, AiEngine.generate(prompt)}
   end
 
   @doc """
@@ -253,7 +247,7 @@ defmodule PureGopherAi.Summarizer do
       Recommendations:
       """
 
-      AiEngine.generate(prompt)
+      {:ok, AiEngine.generate(prompt)}
     end
   end
 
@@ -275,7 +269,7 @@ defmodule PureGopherAi.Summarizer do
       """
     end
 
-    AiEngine.generate(prompt)
+    {:ok, AiEngine.generate(prompt)}
   end
 
   @doc """
@@ -296,7 +290,7 @@ defmodule PureGopherAi.Summarizer do
       """
     end
 
-    AiEngine.generate_stream(prompt, nil, callback)
+    {:ok, AiEngine.generate_stream(prompt, nil, callback)}
   end
 
   @doc """
@@ -306,7 +300,7 @@ defmodule PureGopherAi.Summarizer do
     preserve_formatting = Keyword.get(opts, :preserve_formatting, true)
 
     prompt = build_translation_prompt(text, target_language, preserve_formatting)
-    AiEngine.generate(prompt)
+    {:ok, AiEngine.generate(prompt)}
   end
 
   @doc """
@@ -316,7 +310,7 @@ defmodule PureGopherAi.Summarizer do
     preserve_formatting = Keyword.get(opts, :preserve_formatting, true)
 
     prompt = build_translation_prompt(text, target_language, preserve_formatting)
-    AiEngine.generate_stream(prompt, nil, callback)
+    {:ok, AiEngine.generate_stream(prompt, nil, callback)}
   end
 
   @doc """

@@ -181,6 +181,14 @@ config :pure_gopher_ai, :tunnel,
   # ]
   tunnels: nil  # nil = auto-detect from enabled services
 
+# Debug mode - enables verbose logging and diagnostics
+# Set DEBUG_ENABLED=true to enable
+config :pure_gopher_ai,
+  debug_enabled: System.get_env("DEBUG_ENABLED", "false") == "true",
+  debug_log_requests: true,       # Log all incoming requests
+  debug_log_ai_prompts: true,     # Log AI prompts and responses
+  debug_log_timing: true          # Log timing information
+
 # Logging
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

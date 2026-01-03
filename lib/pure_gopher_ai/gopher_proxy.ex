@@ -62,15 +62,8 @@ defmodule PureGopherAi.GopherProxy do
     case fetch(url, opts) do
       {:ok, result} ->
         summary_opts = Keyword.get(opts, :summary_opts, [])
-
-        case Summarizer.summarize_text(result.content, summary_opts) do
-          {:ok, summary} ->
-            {:ok, Map.put(result, :summary, summary)}
-
-          {:error, reason} ->
-            # Return content without summary on AI error
-            {:ok, Map.put(result, :summary, "Summary unavailable: #{inspect(reason)}")}
-        end
+        {:ok, summary} = Summarizer.summarize_text(result.content, summary_opts)
+        {:ok, Map.put(result, :summary, summary)}
 
       error ->
         error

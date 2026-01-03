@@ -413,23 +413,18 @@ defmodule PureGopherAi.Handlers.Tools do
         if socket && PureGopherAi.AiEngine.streaming_enabled?() do
           stream_summary_response(socket, entry.content, "phlog", entry.title, host, port, start_time)
         else
-          case Summarizer.summarize_text(entry.content) do
-            {:ok, summary} ->
-              elapsed = System.monotonic_time(:millisecond) - start_time
+          {:ok, summary} = Summarizer.summarize_text(entry.content)
+          elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_plain_text_response("""
-              === TL;DR: #{entry.title} ===
+          Shared.format_plain_text_response("""
+          === TL;DR: #{entry.title} ===
 
-              #{summary}
+          #{summary}
 
-              ---
-              Original: /phlog/entry/#{path}
-              Generated in #{elapsed}ms
-              """)
-
-            {:error, reason} ->
-              Shared.error_response("Failed to summarize: #{Shared.sanitize_error(reason)}")
-          end
+          ---
+          Original: /phlog/entry/#{path}
+          Generated in #{elapsed}ms
+          """)
         end
 
       {:error, _} ->
@@ -449,23 +444,18 @@ defmodule PureGopherAi.Handlers.Tools do
         if socket && PureGopherAi.AiEngine.streaming_enabled?() do
           stream_summary_response(socket, doc.content, "document", doc.name, host, port, start_time)
         else
-          case Summarizer.summarize_text(doc.content) do
-            {:ok, summary} ->
-              elapsed = System.monotonic_time(:millisecond) - start_time
+          {:ok, summary} = Summarizer.summarize_text(doc.content)
+          elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_plain_text_response("""
-              === TL;DR: #{doc.name} ===
+          Shared.format_plain_text_response("""
+          === TL;DR: #{doc.name} ===
 
-              #{summary}
+          #{summary}
 
-              ---
-              Original: /docs/view/#{doc_id}
-              Generated in #{elapsed}ms
-              """)
-
-            {:error, reason} ->
-              Shared.error_response("Failed to summarize: #{Shared.sanitize_error(reason)}")
-          end
+          ---
+          Original: /docs/view/#{doc_id}
+          Generated in #{elapsed}ms
+          """)
         end
 
       {:error, _} ->
@@ -534,23 +524,18 @@ defmodule PureGopherAi.Handlers.Tools do
         if socket && PureGopherAi.AiEngine.streaming_enabled?() do
           stream_translate_response(socket, entry.content, lang, "phlog", entry.title, host, port, start_time)
         else
-          case Summarizer.translate(entry.content, lang) do
-            {:ok, translated} ->
-              elapsed = System.monotonic_time(:millisecond) - start_time
+          {:ok, translated} = Summarizer.translate(entry.content, lang)
+          elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_plain_text_response("""
-              === #{entry.title} (#{lang}) ===
+          Shared.format_plain_text_response("""
+          === #{entry.title} (#{lang}) ===
 
-              #{translated}
+          #{translated}
 
-              ---
-              Original: /phlog/entry/#{path}
-              Translated in #{elapsed}ms
-              """)
-
-            {:error, reason} ->
-              Shared.error_response("Failed to translate: #{Shared.sanitize_error(reason)}")
-          end
+          ---
+          Original: /phlog/entry/#{path}
+          Translated in #{elapsed}ms
+          """)
         end
 
       {:error, _} ->
@@ -570,23 +555,18 @@ defmodule PureGopherAi.Handlers.Tools do
         if socket && PureGopherAi.AiEngine.streaming_enabled?() do
           stream_translate_response(socket, doc.content, lang, "document", doc.name, host, port, start_time)
         else
-          case Summarizer.translate(doc.content, lang) do
-            {:ok, translated} ->
-              elapsed = System.monotonic_time(:millisecond) - start_time
+          {:ok, translated} = Summarizer.translate(doc.content, lang)
+          elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_plain_text_response("""
-              === #{doc.name} (#{lang}) ===
+          Shared.format_plain_text_response("""
+          === #{doc.name} (#{lang}) ===
 
-              #{translated}
+          #{translated}
 
-              ---
-              Original: /docs/view/#{doc_id}
-              Translated in #{elapsed}ms
-              """)
-
-            {:error, reason} ->
-              Shared.error_response("Failed to translate: #{Shared.sanitize_error(reason)}")
-          end
+          ---
+          Original: /docs/view/#{doc_id}
+          Translated in #{elapsed}ms
+          """)
         end
 
       {:error, _} ->
@@ -606,22 +586,17 @@ defmodule PureGopherAi.Handlers.Tools do
     if socket && PureGopherAi.AiEngine.streaming_enabled?() do
       stream_digest_response(socket, host, port, start_time)
     else
-      case Summarizer.daily_digest() do
-        {:ok, digest} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
+      {:ok, digest} = Summarizer.daily_digest()
+      elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_plain_text_response("""
-          === Daily Digest ===
+      Shared.format_plain_text_response("""
+      === Daily Digest ===
 
-          #{digest}
+      #{digest}
 
-          ---
-          Generated in #{elapsed}ms
-          """)
-
-        {:error, reason} ->
-          Shared.error_response("Failed to generate digest: #{Shared.sanitize_error(reason)}")
-      end
+      ---
+      Generated in #{elapsed}ms
+      """)
     end
   end
 
@@ -648,22 +623,17 @@ defmodule PureGopherAi.Handlers.Tools do
     if socket && PureGopherAi.AiEngine.streaming_enabled?() do
       stream_discover_response(socket, interest, host, port, start_time)
     else
-      case Summarizer.recommend(interest) do
-        {:ok, recommendations} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
+      {:ok, recommendations} = Summarizer.recommend(interest)
+      elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_plain_text_response("""
-          === Recommendations for "#{interest}" ===
+      Shared.format_plain_text_response("""
+      === Recommendations for "#{interest}" ===
 
-          #{recommendations}
+      #{recommendations}
 
-          ---
-          Generated in #{elapsed}ms
-          """)
-
-        {:error, reason} ->
-          Shared.error_response("Failed to get recommendations: #{Shared.sanitize_error(reason)}")
-      end
+      ---
+      Generated in #{elapsed}ms
+      """)
     end
   end
 
@@ -690,22 +660,17 @@ defmodule PureGopherAi.Handlers.Tools do
     if socket && PureGopherAi.AiEngine.streaming_enabled?() do
       stream_explain_response(socket, term, host, port, start_time)
     else
-      case Summarizer.explain(term) do
-        {:ok, explanation} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
+      {:ok, explanation} = Summarizer.explain(term)
+      elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_plain_text_response("""
-          === #{term} ===
+      Shared.format_plain_text_response("""
+      === #{term} ===
 
-          #{explanation}
+      #{explanation}
 
-          ---
-          Generated in #{elapsed}ms
-          """)
-
-        {:error, reason} ->
-          Shared.error_response("Failed to explain: #{Shared.sanitize_error(reason)}")
-      end
+      ---
+      Generated in #{elapsed}ms
+      """)
     end
   end
 
@@ -719,22 +684,17 @@ defmodule PureGopherAi.Handlers.Tools do
     if socket && PureGopherAi.AiEngine.streaming_enabled?() do
       stream_topics_response(socket, host, port, start_time)
     else
-      case Summarizer.discover_topics() do
-        {:ok, topics} ->
-          elapsed = System.monotonic_time(:millisecond) - start_time
+      {:ok, topics} = Summarizer.discover_topics()
+      elapsed = System.monotonic_time(:millisecond) - start_time
 
-          Shared.format_plain_text_response("""
-          === Content Topics ===
+      Shared.format_plain_text_response("""
+      === Content Topics ===
 
-          #{topics}
+      #{topics}
 
-          ---
-          Generated in #{elapsed}ms
-          """)
-
-        {:error, reason} ->
-          Shared.error_response("Failed to discover topics: #{Shared.sanitize_error(reason)}")
-      end
+      ---
+      Generated in #{elapsed}ms
+      """)
     end
   end
 
@@ -794,22 +754,17 @@ defmodule PureGopherAi.Handlers.Tools do
         if socket && PureGopherAi.AiEngine.streaming_enabled?() do
           stream_summary_response(socket, content, "fetched content", url, host, port, start_time)
         else
-          case Summarizer.summarize_text(content) do
-            {:ok, summary} ->
-              elapsed = System.monotonic_time(:millisecond) - start_time
+          {:ok, summary} = Summarizer.summarize_text(content)
+          elapsed = System.monotonic_time(:millisecond) - start_time
 
-              Shared.format_plain_text_response("""
-              === Summary of #{url} ===
+          Shared.format_plain_text_response("""
+          === Summary of #{url} ===
 
-              #{summary}
+          #{summary}
 
-              ---
-              Generated in #{elapsed}ms
-              """)
-
-            {:error, reason} ->
-              Shared.error_response("Failed to summarize: #{Shared.sanitize_error(reason)}")
-          end
+          ---
+          Generated in #{elapsed}ms
+          """)
         end
 
       {:error, reason} ->
@@ -1031,21 +986,16 @@ defmodule PureGopherAi.Handlers.Tools do
 
     {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
-    case Summarizer.summarize_text_stream(content, fn chunk ->
-           if String.length(chunk) > 0 do
-             streamer.(chunk)
-           end
-         end) do
-      {:ok, _} ->
-        flush.()
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = "\r\n\r\n---\r\nType: #{content_type}\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
-        ThousandIsland.Socket.send(socket, footer)
+    {:ok, _} = Summarizer.summarize_text_stream(content, fn chunk ->
+      if String.length(chunk) > 0 do
+        streamer.(chunk)
+      end
+    end)
 
-      {:error, _} ->
-        flush.()
-        ThousandIsland.Socket.send(socket, "\r\nError generating summary.\r\n.\r\n")
-    end
+    flush.()
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    footer = "\r\n\r\n---\r\nType: #{content_type}\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -1055,21 +1005,16 @@ defmodule PureGopherAi.Handlers.Tools do
 
     {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
-    case Summarizer.translate_stream(content, lang, fn chunk ->
-           if String.length(chunk) > 0 do
-             streamer.(chunk)
-           end
-         end) do
-      {:ok, _} ->
-        flush.()
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = "\r\n\r\n---\r\nType: #{content_type}\r\nTranslated in #{elapsed}ms (streamed)\r\n.\r\n"
-        ThousandIsland.Socket.send(socket, footer)
+    {:ok, _} = Summarizer.translate_stream(content, lang, fn chunk ->
+      if String.length(chunk) > 0 do
+        streamer.(chunk)
+      end
+    end)
 
-      {:error, _} ->
-        flush.()
-        ThousandIsland.Socket.send(socket, "\r\nError translating.\r\n.\r\n")
-    end
+    flush.()
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    footer = "\r\n\r\n---\r\nType: #{content_type}\r\nTranslated in #{elapsed}ms (streamed)\r\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -1079,21 +1024,16 @@ defmodule PureGopherAi.Handlers.Tools do
 
     {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
-    case Summarizer.daily_digest_stream(fn chunk ->
-           if String.length(chunk) > 0 do
-             streamer.(chunk)
-           end
-         end) do
-      {:ok, _} ->
-        flush.()
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
-        ThousandIsland.Socket.send(socket, footer)
+    {:ok, _} = Summarizer.daily_digest_stream(fn chunk ->
+      if String.length(chunk) > 0 do
+        streamer.(chunk)
+      end
+    end)
 
-      {:error, _} ->
-        flush.()
-        ThousandIsland.Socket.send(socket, "\r\nError generating digest.\r\n.\r\n")
-    end
+    flush.()
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -1103,18 +1043,12 @@ defmodule PureGopherAi.Handlers.Tools do
 
     {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
-    case Summarizer.discover_topics() do
-      {:ok, topics} ->
-        streamer.(topics)
-        flush.()
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n"
-        ThousandIsland.Socket.send(socket, footer)
-
-      {:error, _} ->
-        flush.()
-        ThousandIsland.Socket.send(socket, "\r\nError discovering topics.\r\n.\r\n")
-    end
+    {:ok, topics} = Summarizer.discover_topics()
+    streamer.(topics)
+    flush.()
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -1124,18 +1058,12 @@ defmodule PureGopherAi.Handlers.Tools do
 
     {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
-    case Summarizer.recommend(interest) do
-      {:ok, recommendations} ->
-        streamer.(recommendations)
-        flush.()
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n"
-        ThousandIsland.Socket.send(socket, footer)
-
-      {:error, _} ->
-        flush.()
-        ThousandIsland.Socket.send(socket, "\r\nError generating recommendations.\r\n.\r\n")
-    end
+    {:ok, recommendations} = Summarizer.recommend(interest)
+    streamer.(recommendations)
+    flush.()
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms\r\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -1145,21 +1073,16 @@ defmodule PureGopherAi.Handlers.Tools do
 
     {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
-    case Summarizer.explain_stream(term, fn chunk ->
-           if String.length(chunk) > 0 do
-             streamer.(chunk)
-           end
-         end) do
-      {:ok, _} ->
-        flush.()
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
-        ThousandIsland.Socket.send(socket, footer)
+    {:ok, _} = Summarizer.explain_stream(term, fn chunk ->
+      if String.length(chunk) > 0 do
+        streamer.(chunk)
+      end
+    end)
 
-      {:error, _} ->
-        flush.()
-        ThousandIsland.Socket.send(socket, "\r\nError explaining.\r\n.\r\n")
-    end
+    flush.()
+    elapsed = System.monotonic_time(:millisecond) - start_time
+    footer = "\r\n\r\n---\r\nGenerated in #{elapsed}ms (streamed)\r\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end

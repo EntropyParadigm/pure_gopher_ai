@@ -572,12 +572,13 @@ defmodule PureGopherAi.Handlers.Ai do
   @doc """
   Stream AI response for /ask (no context).
   """
-  def stream_ai_response(socket, query, _context, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "", "Response:", ""], host, port)
+  def stream_ai_response(socket, query, _context, _host, _port, start_time) do
+    # Send header as plain text (type 0 response)
+    header = "Query: #{query}\n\nResponse:\n"
     ThousandIsland.Socket.send(socket, header)
 
-    # Use buffered streaming for readable output
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    # Use plain text buffered streaming (no host/port spam)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     _response = PureGopherAi.AiEngine.generate_stream(query, nil, fn chunk ->
       if String.length(chunk) > 0 do
@@ -591,8 +592,8 @@ defmodule PureGopherAi.Handlers.Ai do
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("AI Response streamed in #{elapsed}ms")
 
-    footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms using GPU acceleration (streamed)"], host, port)
-    ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+    footer = "\n\n---\nGenerated in #{elapsed}ms using GPU acceleration (streamed)\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -600,14 +601,15 @@ defmodule PureGopherAi.Handlers.Ai do
   @doc """
   Stream chat response for /chat (with context and session).
   """
-  def stream_chat_response(socket, query, context, session_id, host, port, start_time) do
-    header = Shared.format_gopher_lines(["You: #{query}", "", "AI:", ""], host, port)
+  def stream_chat_response(socket, query, context, session_id, _host, _port, start_time) do
+    # Send header as plain text (type 0 response)
+    header = "You: #{query}\n\nAI:\n"
     ThousandIsland.Socket.send(socket, header)
 
     {:ok, response_agent} = Agent.start_link(fn -> [] end)
 
-    # Use buffered streaming for readable output
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    # Use plain text buffered streaming (no host/port spam)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     _response = PureGopherAi.AiEngine.generate_stream(query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
@@ -634,13 +636,8 @@ defmodule PureGopherAi.Handlers.Ai do
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("Chat response streamed in #{elapsed}ms, history: #{history_count} messages")
 
-    footer = Shared.format_gopher_lines([
-      "",
-      "---",
-      "Session: #{session_id} | Messages: #{history_count}",
-      "Generated in #{elapsed}ms (streamed)"
-    ], host, port)
-    ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+    footer = "\n\n---\nSession: #{session_id} | Messages: #{history_count}\nGenerated in #{elapsed}ms (streamed)\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -648,11 +645,12 @@ defmodule PureGopherAi.Handlers.Ai do
   @doc """
   Stream model-specific response.
   """
-  def stream_model_response(socket, model_id, query, _context, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "Model: #{model_id}", "", "Response:", ""], host, port)
+  def stream_model_response(socket, model_id, query, _context, _host, _port, start_time) do
+    # Send header as plain text (type 0 response)
+    header = "Query: #{query}\nModel: #{model_id}\n\nResponse:\n"
     ThousandIsland.Socket.send(socket, header)
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     _response = ModelRegistry.generate_stream(model_id, query, nil, fn chunk ->
       if String.length(chunk) > 0 do
@@ -665,8 +663,8 @@ defmodule PureGopherAi.Handlers.Ai do
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("AI Response (#{model_id}) streamed in #{elapsed}ms")
 
-    footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-    ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+    footer = "\n\n---\nGenerated in #{elapsed}ms (streamed)\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -674,12 +672,13 @@ defmodule PureGopherAi.Handlers.Ai do
   @doc """
   Stream model-specific chat response.
   """
-  def stream_model_chat_response(socket, model_id, query, context, session_id, host, port, start_time) do
-    header = Shared.format_gopher_lines(["You: #{query}", "Model: #{model_id}", "", "AI:", ""], host, port)
+  def stream_model_chat_response(socket, model_id, query, context, session_id, _host, _port, start_time) do
+    # Send header as plain text (type 0 response)
+    header = "You: #{query}\nModel: #{model_id}\n\nAI:\n"
     ThousandIsland.Socket.send(socket, header)
 
     {:ok, response_agent} = Agent.start_link(fn -> [] end)
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     _response = ModelRegistry.generate_stream(model_id, query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
@@ -705,13 +704,8 @@ defmodule PureGopherAi.Handlers.Ai do
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("Chat response (#{model_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
 
-    footer = Shared.format_gopher_lines([
-      "",
-      "---",
-      "Session: #{session_id} | Messages: #{history_count}",
-      "Generated in #{elapsed}ms (streamed)"
-    ], host, port)
-    ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+    footer = "\n\n---\nSession: #{session_id} | Messages: #{history_count}\nGenerated in #{elapsed}ms (streamed)\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end
@@ -719,11 +713,12 @@ defmodule PureGopherAi.Handlers.Ai do
   @doc """
   Stream persona response.
   """
-  def stream_persona_response(socket, persona_id, query, _context, host, port, start_time) do
-    header = Shared.format_gopher_lines(["Query: #{query}", "Persona: #{persona_id}", "", "Response:", ""], host, port)
+  def stream_persona_response(socket, persona_id, query, _context, _host, _port, start_time) do
+    # Send header as plain text (type 0 response)
+    header = "Query: #{query}\nPersona: #{persona_id}\n\nResponse:\n"
     ThousandIsland.Socket.send(socket, header)
 
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     case PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, nil, fn chunk ->
            if String.length(chunk) > 0 do
@@ -735,12 +730,12 @@ defmodule PureGopherAi.Handlers.Ai do
         elapsed = System.monotonic_time(:millisecond) - start_time
         Logger.info("AI Response (persona: #{persona_id}) streamed in #{elapsed}ms")
 
-        footer = Shared.format_gopher_lines(["", "---", "Generated in #{elapsed}ms (streamed)"], host, port)
-        ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+        footer = "\n\n---\nGenerated in #{elapsed}ms (streamed)\n.\r\n"
+        ThousandIsland.Socket.send(socket, footer)
 
       {:error, _} ->
         flush.()
-        ThousandIsland.Socket.send(socket, ["i[Error: Unknown persona]\t\t", host, "\t", Integer.to_string(port), "\r\n.\r\n"])
+        ThousandIsland.Socket.send(socket, "\n[Error: Unknown persona]\n.\r\n")
     end
 
     :streamed
@@ -749,12 +744,13 @@ defmodule PureGopherAi.Handlers.Ai do
   @doc """
   Stream persona chat response.
   """
-  def stream_persona_chat_response(socket, persona_id, query, context, session_id, host, port, start_time) do
-    header = Shared.format_gopher_lines(["You: #{query}", "Persona: #{persona_id}", "", "AI:", ""], host, port)
+  def stream_persona_chat_response(socket, persona_id, query, context, session_id, _host, _port, start_time) do
+    # Send header as plain text (type 0 response)
+    header = "You: #{query}\nPersona: #{persona_id}\n\nAI:\n"
     ThousandIsland.Socket.send(socket, header)
 
     {:ok, response_agent} = Agent.start_link(fn -> [] end)
-    {streamer, flush} = Shared.start_buffered_streamer(socket, host, port)
+    {streamer, flush} = Shared.start_plain_buffered_streamer(socket)
 
     result = PureGopherAi.AiEngine.generate_stream_with_persona(persona_id, query, context, fn chunk ->
       Agent.update(response_agent, fn chunks -> [chunk | chunks] end)
@@ -787,13 +783,8 @@ defmodule PureGopherAi.Handlers.Ai do
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("Chat response (persona: #{persona_id}) streamed in #{elapsed}ms, history: #{history_count} messages")
 
-    footer = Shared.format_gopher_lines([
-      "",
-      "---",
-      "Session: #{session_id} | Messages: #{history_count}",
-      "Generated in #{elapsed}ms (streamed)"
-    ], host, port)
-    ThousandIsland.Socket.send(socket, [footer, ".\r\n"])
+    footer = "\n\n---\nSession: #{session_id} | Messages: #{history_count}\nGenerated in #{elapsed}ms (streamed)\n.\r\n"
+    ThousandIsland.Socket.send(socket, footer)
 
     :streamed
   end

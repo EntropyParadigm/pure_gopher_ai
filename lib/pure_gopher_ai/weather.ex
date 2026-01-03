@@ -319,7 +319,7 @@ defmodule PureGopherAi.Weather do
     Keep it brief and helpful.
     """
 
-    AiEngine.generate(prompt, max_new_tokens: 150)
+    {:ok, AiEngine.generate(prompt)}
   end
 
   defp wind_direction_name(degrees) when is_number(degrees) do

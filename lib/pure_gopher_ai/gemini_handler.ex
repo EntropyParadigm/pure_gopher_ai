@@ -610,83 +610,63 @@ defmodule PureGopherAi.GeminiHandler do
   # === AI Tools: Dynamic Content ===
 
   defp handle_digest do
-    case Summarizer.daily_digest() do
-      {:ok, digest} ->
-        success_response("""
-        # Daily Digest
+    {:ok, digest} = Summarizer.daily_digest()
+    success_response("""
+    # Daily Digest
 
-        AI-generated summary of recent activity.
+    AI-generated summary of recent activity.
 
-        #{digest}
+    #{digest}
 
-        => /phlog Browse All Entries
-        => / Back to Home
-        """)
-
-      {:error, reason} ->
-        error_response(42, "Failed to generate digest: #{sanitize_error(reason)}")
-    end
+    => /phlog Browse All Entries
+    => / Back to Home
+    """)
   end
 
   defp handle_topics do
-    case Summarizer.discover_topics() do
-      {:ok, topics} ->
-        success_response("""
-        # Topic Discovery
+    {:ok, topics} = Summarizer.discover_topics()
+    success_response("""
+    # Topic Discovery
 
-        AI-identified themes from your content.
+    AI-identified themes from your content.
 
-        #{topics}
+    #{topics}
 
-        => /discover Get Recommendations
-        => / Back to Home
-        """)
-
-      {:error, reason} ->
-        error_response(42, "Failed to discover topics: #{sanitize_error(reason)}")
-    end
+    => /discover Get Recommendations
+    => / Back to Home
+    """)
   end
 
   defp handle_discover(interest) when byte_size(interest) > 0 do
     interest = String.trim(interest)
+    {:ok, recommendations} = Summarizer.recommend(interest)
 
-    case Summarizer.recommend(interest) do
-      {:ok, recommendations} ->
-        success_response("""
-        # Content Recommendations
+    success_response("""
+    # Content Recommendations
 
-        Based on your interest: "#{interest}"
+    Based on your interest: "#{interest}"
 
-        #{recommendations}
+    #{recommendations}
 
-        => /discover Try Another Interest
-        => / Back to Home
-        """)
-
-      {:error, reason} ->
-        error_response(42, "Failed to get recommendations: #{sanitize_error(reason)}")
-    end
+    => /discover Try Another Interest
+    => / Back to Home
+    """)
   end
 
   defp handle_discover(_), do: input_response("What topics interest you?")
 
   defp handle_explain(term) when byte_size(term) > 0 do
     term = String.trim(term)
+    {:ok, explanation} = Summarizer.explain(term)
 
-    case Summarizer.explain(term) do
-      {:ok, explanation} ->
-        success_response("""
-        # Explanation: #{term}
+    success_response("""
+    # Explanation: #{term}
 
-        #{explanation}
+    #{explanation}
 
-        => /explain Explain Another Term
-        => / Back to Home
-        """)
-
-      {:error, reason} ->
-        error_response(42, "Failed to explain: #{sanitize_error(reason)}")
-    end
+    => /explain Explain Another Term
+    => / Back to Home
+    """)
   end
 
   defp handle_explain(_), do: input_response("Enter a term to explain:")
