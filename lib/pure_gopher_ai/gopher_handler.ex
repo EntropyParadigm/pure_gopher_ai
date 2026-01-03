@@ -9942,31 +9942,28 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp user_phlog_view(username, post_id, host, port) do
+  defp user_phlog_view(username, post_id, _host, _port) do
     case UserPhlog.get_post(username, post_id) do
       {:ok, post} ->
         date = format_date(post.created_at)
 
-        body_lines = post.body
-          |> String.split("\n")
-          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
-          |> Enum.join("\r\n")
-
+        # Plain text format - no host/port on each line
         """
-        i=========================================\t\t#{host}\t#{port}
-        i   #{post.title}\t\t#{host}\t#{port}
-        i   by ~#{post.username}\t\t#{host}\t#{port}
-        i   #{date}\t\t#{host}\t#{port}
-        i=========================================\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        #{body_lines}
-        i\t\t#{host}\t#{port}
-        i---\t\t#{host}\t#{port}
-        iViews: #{post.views}\t\t#{host}\t#{port}
-        i\t\t#{host}\t#{port}
-        1More posts by ~#{post.username}\t/phlog/user/#{username}\t#{host}\t#{port}
-        1View Author Profile\t/users/~#{username}\t#{host}\t#{port}
-        1Back to Phlog\t/phlog\t#{host}\t#{port}
+        =========================================
+           #{post.title}
+           by ~#{post.username}
+           #{date}
+        =========================================
+
+        #{post.body}
+
+        ---
+        Views: #{post.views}
+
+        Navigation:
+          More posts: /phlog/user/#{username}
+          Author profile: /users/~#{username}
+          Back to phlog: /phlog
         .
         """
 
