@@ -1910,20 +1910,12 @@ defmodule PureGopherAi.GopherHandler do
     do: serve_static(rest, host, port)
 
   # Handle gopher:// URLs - proxy to external server
-  defp route_selector("gopher://" <> rest, _host, _port, _network, _ip, _socket) do
+  defp route_selector("gopher://" <> rest, host, port, _network, _ip, _socket) do
     url = "gopher://#{rest}"
     case PureGopherAi.GopherProxy.fetch(url) do
       {:ok, result} ->
-        # Return as plain text with navigation back
-        format_plain_text_response("""
-        === Fetched from #{result.host} ===
-
-        #{result.content}
-
-        ---
-        Proxied via PureGopherAI
-        Use /fetch to proxy more content
-        """)
+        # Transform the gopher menu to route through our proxy
+        transform_proxied_gopher_menu(result, host, port)
       {:error, reason} ->
         error_response("Failed to fetch #{url}: #{inspect(reason)}")
     end
@@ -9733,6 +9725,71 @@ defmodule PureGopherAi.GopherHandler do
       |> Enum.join("\r\n")
 
     lines <> "\r\n.\r\n"
+  end
+
+  # Transform a proxied gopher menu so links route through our proxy
+  defp transform_proxied_gopher_menu(result, host, port) do
+    lines =
+      result.content
+      |> String.replace("\r\n", "\n")
+      |> String.split("\n")
+      |> Enum.map(fn line -> transform_gopher_line(line, result.host, result.port, host, port) end)
+      |> Enum.join("\r\n")
+
+    """
+    i=== Proxied from #{result.host} ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    #{lines}
+    i\t\t#{host}\t#{port}
+    i--- Proxied via PureGopherAI ---\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  # Transform a single gopher menu line to route through our proxy
+  defp transform_gopher_line(line, remote_host, remote_port, local_host, local_port) do
+    line = String.trim_trailing(line)
+
+    # Skip empty lines and terminator
+    if line == "" or line == "." do
+      ""
+    else
+      # Parse gopher line: <type><text>\t<selector>\t<host>\t<port>
+      case String.split(line, "\t") do
+        [type_and_text, selector, item_host, item_port | _rest] ->
+          # Extract type (first character) and display text
+          {type, text} = String.split_at(type_and_text, 1)
+
+          # Determine target host - use the item's host if specified, otherwise remote host
+          target_host = if item_host != "" and item_host != "null.host", do: item_host, else: remote_host
+          target_port = if item_port != "" and item_port != "1", do: item_port, else: "#{remote_port}"
+
+          case type do
+            # Info lines - just update host/port to ours
+            "i" ->
+              "i#{text}\t\t#{local_host}\t#{local_port}"
+
+            # Navigable types - rewrite to go through our proxy
+            t when t in ["0", "1", "7", "9", "g", "I", "h", "s"] ->
+              # Build the gopher:// URL for the target
+              selector = String.trim_leading(selector, "/")
+              proxy_selector = "gopher://#{target_host}:#{target_port}/#{selector}"
+              "#{type}#{text}\t#{proxy_selector}\t#{local_host}\t#{local_port}"
+
+            # Unknown type - pass through as info
+            _ ->
+              "i#{type}#{text}\t\t#{local_host}\t#{local_port}"
+          end
+
+        # Lines without proper tab structure - treat as info
+        [text] ->
+          "i#{text}\t\t#{local_host}\t#{local_port}"
+
+        _ ->
+          "i#{line}\t\t#{local_host}\t#{local_port}"
+      end
+    end
   end
 
   # Format as plain text file (type 0)
