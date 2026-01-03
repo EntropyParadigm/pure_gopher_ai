@@ -205,11 +205,19 @@ defmodule PureGopherAi.Weather do
   defp http_get(url) do
     url_charlist = String.to_charlist(url)
 
+    # Extract hostname for SNI and verification
+    %URI{host: host} = URI.parse(url)
+    host_charlist = String.to_charlist(host)
+
     http_options = [
       ssl: [
         verify: :verify_peer,
         cacerts: :public_key.cacerts_get(),
-        depth: 3
+        depth: 3,
+        server_name_indication: host_charlist,
+        customize_hostname_check: [
+          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+        ]
       ],
       timeout: @timeout,
       connect_timeout: 5000
