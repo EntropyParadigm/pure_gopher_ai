@@ -602,16 +602,22 @@ defmodule PureGopherAi.Handlers.Community do
 
     if username && passphrase do
       case UserProfiles.create(username, passphrase, ip, bio: bio) do
-        {:ok, profile} ->
+        {:ok, created_username, recovery_words} ->
+          recovery_display = Enum.join(recovery_words, " ")
           [
             Shared.info_line("=== Profile Created! ===", host, port),
             Shared.info_line("", host, port),
-            Shared.info_line("Username: ~#{profile.username}", host, port),
+            Shared.info_line("Username: ~#{created_username}", host, port),
             Shared.info_line("", host, port),
-            Shared.info_line("IMPORTANT: Remember your passphrase!", host, port),
-            Shared.info_line("You'll need it to edit your profile and write posts.", host, port),
+            Shared.info_line("IMPORTANT: Save this recovery phrase!", host, port),
+            Shared.info_line("You will need it to recover your account.", host, port),
             Shared.info_line("", host, port),
-            Shared.link_line("View Your Profile", "/users/~#{profile.username}", host, port),
+            Shared.info_line("Recovery phrase:", host, port),
+            Shared.info_line("  #{recovery_display}", host, port),
+            Shared.info_line("", host, port),
+            Shared.info_line("Remember your passphrase for editing.", host, port),
+            Shared.info_line("", host, port),
+            Shared.link_line("View Your Profile", "/users/~#{created_username}", host, port),
             Shared.link_line("Back to Users", "/users", host, port),
             ".\r\n"
           ]

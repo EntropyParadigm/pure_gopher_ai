@@ -87,6 +87,7 @@ defmodule PureGopherAi.Handlers.Admin do
       Shared.text_link("Reset Metrics", "/admin/#{token}/reset-metrics", host, port),
       Shared.link_line("View Bans", "/admin/#{token}/bans", host, port),
       Shared.link_line("Manage Documents (RAG)", "/admin/#{token}/docs", host, port),
+      Shared.link_line("AI Models", "/admin/#{token}/models", host, port),
       Shared.link_line("Audit Log", "/admin/#{token}/audit", host, port),
       Shared.info_line("", host, port),
       Shared.link_line("Back to Main Menu", "/", host, port),
@@ -267,8 +268,48 @@ defmodule PureGopherAi.Handlers.Admin do
     PureGopherAi.Handlers.Security.audit_by_user(token, String.trim(username), host, port)
   end
 
+  # Models management
+  def handle_admin_command(token, "models", host, port) do
+    models_page(token, host, port)
+  end
+
   def handle_admin_command(_token, command, _host, _port) do
     Shared.error_response("Unknown admin command: #{command}")
+  end
+
+  # === Models Management ===
+
+  defp models_page(token, host, port) do
+    alias PureGopherAi.ModelRegistry
+
+    models = ModelRegistry.list_models()
+    default_model = ModelRegistry.default_model()
+
+    model_lines =
+      models
+      |> Enum.map(fn {id, info} ->
+        status = if info.loaded, do: "[Loaded]", else: "[Not loaded]"
+        default = if id == default_model, do: " (default)", else: ""
+
+        [
+          Shared.info_line("", host, port),
+          Shared.info_line("#{info.name}#{default}", host, port),
+          Shared.info_line("  #{info.description}", host, port),
+          Shared.info_line("  Status: #{status}", host, port),
+          Shared.info_line("  ID: #{id}", host, port)
+        ]
+      end)
+
+    [
+      Shared.info_line("=== AI Models (Admin) ===", host, port),
+      Shared.info_line("", host, port),
+      Shared.info_line("Models are loaded on first use (lazy loading)", host, port),
+      model_lines,
+      Shared.info_line("", host, port),
+      Shared.link_line("Back to Admin", "/admin/#{token}", host, port),
+      ".\r\n"
+    ]
+    |> IO.iodata_to_binary()
   end
 
   # === Helper Functions ===

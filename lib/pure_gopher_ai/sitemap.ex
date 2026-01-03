@@ -19,7 +19,6 @@ defmodule PureGopherAi.Sitemap do
           %{selector: "/ask", type: 7, description: "Ask AI a question (single query)"},
           %{selector: "/chat", type: 7, description: "Chat with AI (with memory)"},
           %{selector: "/clear", type: 0, description: "Clear conversation history"},
-          %{selector: "/models", type: 1, description: "Browse available AI models"},
           %{selector: "/personas", type: 1, description: "Browse AI personas"}
         ]
       },

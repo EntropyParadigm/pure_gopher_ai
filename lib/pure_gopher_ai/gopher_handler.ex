@@ -212,9 +212,7 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/clear", host, port, _network, client_ip, _socket),
     do: AiHandler.handle_clear(host, port, client_ip)
 
-  # List available models
-  defp route_selector("/models", host, port, _network, _ip, _socket),
-    do: AiHandler.models_page(host, port)
+  # Models page moved to admin-only (accessible via /admin/<token>/models)
 
   # List available personas
   defp route_selector("/personas", host, port, _network, _ip, _socket),
@@ -1962,7 +1960,6 @@ defmodule PureGopherAi.GopherHandler do
     7Ask AI (single query)\t/ask\t#{host}\t#{port}
     7Chat (with memory)\t/chat\t#{host}\t#{port}
     0Clear conversation\t/clear\t#{host}\t#{port}
-    1Browse AI Models\t/models\t#{host}\t#{port}
     1Browse AI Personas\t/personas\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== AI Tools ===\t\t#{host}\t#{port}
