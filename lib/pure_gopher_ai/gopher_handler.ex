@@ -1909,6 +1909,26 @@ defmodule PureGopherAi.GopherHandler do
   defp route_selector("/files" <> rest, host, port, _network, _ip, _socket),
     do: serve_static(rest, host, port)
 
+  # Handle gopher:// URLs - proxy to external server
+  defp route_selector("gopher://" <> rest, _host, _port, _network, _ip, _socket) do
+    url = "gopher://#{rest}"
+    case PureGopherAi.GopherProxy.fetch(url) do
+      {:ok, result} ->
+        # Return as plain text with navigation back
+        format_plain_text_response("""
+        === Fetched from #{result.host} ===
+
+        #{result.content}
+
+        ---
+        Proxied via PureGopherAI
+        Use /fetch to proxy more content
+        """)
+      {:error, reason} ->
+        error_response("Failed to fetch #{url}: #{inspect(reason)}")
+    end
+  end
+
   # Catch-all: check gophermap content, then error
   defp route_selector(selector, host, port, _network, _ip, _socket) do
     # Try to serve from gophermap content directory
