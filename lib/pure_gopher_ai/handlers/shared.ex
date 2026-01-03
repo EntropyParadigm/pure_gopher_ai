@@ -155,9 +155,20 @@ defmodule PureGopherAi.Handlers.Shared do
       :recipient_not_found -> "Recipient not found"
       :recipient_inbox_full -> "Recipient inbox full"
       :passphrase_too_short -> "Passphrase too short"
-      :invalid_username -> "Invalid username"
+      :invalid_username -> "Invalid username (use 3-20 alphanumeric chars)"
       :username_taken -> "Username already taken"
+      :username_too_short -> "Username too short (min 3 chars)"
+      :username_too_long -> "Username too long (max 20 chars)"
       :post_limit_reached -> "Post limit reached"
+
+      # Passphrase validation errors
+      :too_short -> "Passphrase too short (min 8 chars)"
+      :too_long -> "Passphrase too long"
+      :too_common -> "Passphrase too common, choose something unique"
+      :too_simple -> "Passphrase too simple"
+      :sequential -> "Passphrase contains sequential patterns (abc, 123)"
+      :repeated_pattern -> "Passphrase contains repeated patterns"
+      {:passphrase_weak, reason} -> sanitize_error(reason)
 
       # Tuple errors - extract message if available
       {:error, inner} -> sanitize_error(inner)
