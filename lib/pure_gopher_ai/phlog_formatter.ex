@@ -508,15 +508,15 @@ defmodule PureGopherAi.PhlogFormatter do
 
   defp convert_headers(text) do
     text
-    |> String.replace(~r/^### (.+)$/m, fn _, title ->
+    |> (fn t -> Regex.replace(~r/^### (.+)$/m, t, fn _, title ->
       "\n    ── #{title} ──\n"
-    end)
-    |> String.replace(~r/^## (.+)$/m, fn _, title ->
+    end) end).()
+    |> (fn t -> Regex.replace(~r/^## (.+)$/m, t, fn _, title ->
       "\n  ═══ #{title} ═══\n"
-    end)
-    |> String.replace(~r/^# (.+)$/m, fn _, title ->
+    end) end).()
+    |> (fn t -> Regex.replace(~r/^# (.+)$/m, t, fn _, title ->
       "\n╔═══ #{String.upcase(title)} ═══╗\n"
-    end)
+    end) end).()
   end
 
   defp convert_links(text, host, port) do
@@ -552,12 +552,11 @@ defmodule PureGopherAi.PhlogFormatter do
 
   defp convert_code_blocks(text) do
     # Fenced code blocks: ```code```
-    text
-    |> String.replace(~r/```(\w*)\n([\s\S]*?)```/, fn _, _lang, code ->
+    result = Regex.replace(~r/```(\w*)\n([\s\S]*?)```/, text, fn _, _lang, code ->
       code_lines = code
       |> String.trim()
       |> String.split("\n")
-      |> Enum.map(&("    │ " <> &1))
+      |> Enum.map(fn line -> "    │ " <> line end)
       |> Enum.join("\n")
 
       "\n    ┌────────────────────────────────────────\n" <>
@@ -565,7 +564,7 @@ defmodule PureGopherAi.PhlogFormatter do
       "\n    └────────────────────────────────────────\n"
     end)
     # Inline code: `code`
-    |> String.replace(~r/`([^`]+)`/, "「\\1」")
+    String.replace(result, ~r/`([^`]+)`/, "「\\1」")
   end
 
   defp convert_lists(text) do
@@ -592,13 +591,12 @@ defmodule PureGopherAi.PhlogFormatter do
 
   defp auto_detect_urls(text, host, port) do
     # Detect standalone URLs and convert them
-    text
     # HTTP/HTTPS URLs
-    |> Regex.replace(~r/(?<![(\[])(https?:\/\/[^\s\)]+)/, fn _, url ->
+    result = Regex.replace(~r/(?<![(\[])(https?:\/\/[^\s\)]+)/, text, fn _, url ->
       "hURL:#{url}\tURL:#{url}\t#{host}\t#{port}"
     end)
     # Gopher URLs
-    |> Regex.replace(~r/(?<![(\[])(gopher:\/\/[^\s\)]+)/, fn _, url ->
+    result = Regex.replace(~r/(?<![(\[])(gopher:\/\/[^\s\)]+)/, result, fn _, url ->
       case parse_gopher_url(url) do
         {:ok, g_host, g_port, selector} ->
           "1#{url}\t#{selector}\t#{g_host}\t#{g_port}"
@@ -607,7 +605,7 @@ defmodule PureGopherAi.PhlogFormatter do
       end
     end)
     # Email addresses
-    |> Regex.replace(~r/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/, fn _, email ->
+    Regex.replace(~r/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/, result, fn _, email ->
       "    ✉ #{email}"
     end)
   end
