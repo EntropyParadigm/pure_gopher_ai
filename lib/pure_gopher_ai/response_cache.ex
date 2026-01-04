@@ -170,12 +170,19 @@ defmodule PureGopherAi.ResponseCache do
     key_data =
       [query, model, persona, context]
       |> Enum.reject(&is_nil/1)
+      |> Enum.map(&stringify_value/1)
       |> Enum.join("|")
 
     :crypto.hash(:sha256, key_data)
     |> Base.encode16(case: :lower)
     |> String.slice(0, 32)
   end
+
+  # Convert any value to a string for cache key generation
+  defp stringify_value(value) when is_binary(value), do: value
+  defp stringify_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp stringify_value(value) when is_number(value), do: to_string(value)
+  defp stringify_value(value), do: inspect(value)
 
   defp expired?(inserted_at) do
     now = System.monotonic_time(:millisecond)

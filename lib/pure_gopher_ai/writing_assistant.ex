@@ -57,7 +57,7 @@ defmodule PureGopherAi.WritingAssistant do
     Focus on engaging, well-structured content.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -94,7 +94,7 @@ defmodule PureGopherAi.WritingAssistant do
     Maintain the original meaning and key points.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -121,7 +121,7 @@ defmodule PureGopherAi.WritingAssistant do
     Return the corrected text directly. If there are significant issues, briefly note them at the end.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -154,7 +154,7 @@ defmodule PureGopherAi.WritingAssistant do
     Provide only the rewritten content.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 800) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -192,7 +192,7 @@ defmodule PureGopherAi.WritingAssistant do
     List #{count} title options, one per line, numbered 1-#{count}.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} ->
         titles = result
         |> String.trim()
@@ -228,7 +228,7 @@ defmodule PureGopherAi.WritingAssistant do
     Focus on topics, themes, and key concepts.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 150) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} ->
         tags = result
         |> String.trim()
@@ -277,7 +277,7 @@ defmodule PureGopherAi.WritingAssistant do
     Provide the expanded content directly.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 1000) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -311,7 +311,7 @@ defmodule PureGopherAi.WritingAssistant do
     Provide the compressed content directly.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 500) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -336,7 +336,7 @@ defmodule PureGopherAi.WritingAssistant do
     Include key points to cover under each section.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 400) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -371,7 +371,7 @@ defmodule PureGopherAi.WritingAssistant do
     Write only the conclusion paragraph.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
@@ -406,7 +406,7 @@ defmodule PureGopherAi.WritingAssistant do
     Write only the introduction paragraph.
     """
 
-    case AiEngine.generate_safe(prompt, max_new_tokens: 200) do
+    case AiEngine.generate_safe(prompt) do
       {:ok, result} -> {:ok, String.trim(result)}
       {:error, :blocked, reason} -> {:error, {:blocked, reason}}
       error -> error
