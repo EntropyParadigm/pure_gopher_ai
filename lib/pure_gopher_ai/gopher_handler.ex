@@ -1445,6 +1445,10 @@ defmodule PureGopherAi.GopherHandler do
             passphrase = Enum.at(rest_parts, 0) || ""
             handle_user_phlog_delete(username, post_id, passphrase, host, port)
 
+          # AI Writing Tools
+          action == "ai" ->
+            handle_phlog_ai_tool(username, third, host, port)
+
           true ->
             error_response("Invalid user phlog path")
         end
@@ -2346,11 +2350,28 @@ defmodule PureGopherAi.GopherHandler do
         comment_count = PhlogComments.count_comments(entry_path)
         comment_text = if comment_count == 1, do: "1 comment", else: "#{comment_count} comments"
 
+        # Format content with PhlogFormatter for medieval manuscript styling
+        formatted_body = PhlogFormatter.format(
+          entry.title,
+          entry.content,
+          host: host,
+          port: port,
+          style: :medieval,
+          drop_cap: true,
+          illustrations: true
+        )
+
+        # Convert formatted content to info lines
+        body_lines = formatted_body
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
         """
-        i=== #{entry.title} ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
         iDate: #{entry.date}\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
-        #{entry.content |> String.split("\n") |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end) |> Enum.join("\r\n")}
+        #{body_lines}
         i\t\t#{host}\t#{port}
         i---\t\t#{host}\t#{port}
         i\t\t#{host}\t#{port}
@@ -9942,28 +9963,40 @@ defmodule PureGopherAi.GopherHandler do
     end
   end
 
-  defp user_phlog_view(username, post_id, _host, _port) do
+  defp user_phlog_view(username, post_id, host, port) do
     case UserPhlog.get_post(username, post_id) do
       {:ok, post} ->
         date = format_date(post.created_at)
 
-        # Plain text format - no host/port on each line
+        # Format body with PhlogFormatter for medieval manuscript styling
+        formatted_body = PhlogFormatter.format(
+          post.title,
+          post.body,
+          host: host,
+          port: port,
+          style: :medieval,
+          drop_cap: true,
+          illustrations: true
+        )
+
+        # Convert formatted content to info lines
+        body_lines = formatted_body
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
         """
-        =========================================
-           #{post.title}
-           by ~#{post.username}
-           #{date}
-        =========================================
-
-        #{post.body}
-
-        ---
-        Views: #{post.views}
-
-        Navigation:
-          More posts: /phlog/user/#{username}
-          Author profile: /users/~#{username}
-          Back to phlog: /phlog
+        i\t\t#{host}\t#{port}
+        iby ~#{post.username} | #{date}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{body_lines}
+        i\t\t#{host}\t#{port}
+        i---\t\t#{host}\t#{port}
+        iViews: #{post.views}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        1More posts by ~#{username}\t/phlog/user/#{username}\t#{host}\t#{port}
+        1Author profile\t/users/~#{username}\t#{host}\t#{port}
+        1Back to Phlog\t/phlog\t#{host}\t#{port}
         .
         """
 
@@ -9978,6 +10011,7 @@ defmodule PureGopherAi.GopherHandler do
     i\t\t#{host}\t#{port}
     iPosting as: ~#{username}\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
+    i--- Direct Posting ---\t\t#{host}\t#{port}
     iEnter: passphrase|title|body\t\t#{host}\t#{port}
     i(Use | to separate fields)\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
@@ -9987,6 +10021,17 @@ defmodule PureGopherAi.GopherHandler do
     iTitle: max 100 characters\t\t#{host}\t#{port}
     iBody: max 10,000 characters\t\t#{host}\t#{port}
     iRate limit: 1 post per hour\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    i=== AI Writing Tools ===\t\t#{host}\t#{port}
+    iPosts display with medieval manuscript styling!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    7Generate Draft from Topic\t/phlog/user/#{username}/ai/draft\t#{host}\t#{port}
+    7Improve Your Writing\t/phlog/user/#{username}/ai/improve\t#{host}\t#{port}
+    7Proofread Content\t/phlog/user/#{username}/ai/proofread\t#{host}\t#{port}
+    7Generate Title Ideas\t/phlog/user/#{username}/ai/titles\t#{host}\t#{port}
+    7Preview with Formatting\t/phlog/user/#{username}/ai/preview\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Your Phlog\t/phlog/user/#{username}\t#{host}\t#{port}
     .
     """
   end
@@ -10130,6 +10175,290 @@ defmodule PureGopherAi.GopherHandler do
 
       {:error, reason} ->
         error_response("Failed to delete: #{sanitize_error(reason)}")
+    end
+  end
+
+  # === AI Writing Tools for Phlog ===
+
+  defp handle_phlog_ai_tool(username, tool_spec, host, port) do
+    # Parse tool and input: "draft", "draft\tinput", or "draft input"
+    {tool, input} = case String.split(tool_spec, ~r/[\t ]/, parts: 2) do
+      [tool, input] -> {tool, input}
+      [tool] -> {tool, nil}
+    end
+
+    case tool do
+      "draft" when is_nil(input) ->
+        phlog_ai_draft_prompt(username, host, port)
+
+      "draft" ->
+        handle_phlog_ai_draft(username, input, host, port)
+
+      "improve" when is_nil(input) ->
+        phlog_ai_improve_prompt(username, host, port)
+
+      "improve" ->
+        handle_phlog_ai_improve(username, input, host, port)
+
+      "proofread" when is_nil(input) ->
+        phlog_ai_proofread_prompt(username, host, port)
+
+      "proofread" ->
+        handle_phlog_ai_proofread(username, input, host, port)
+
+      "titles" when is_nil(input) ->
+        phlog_ai_titles_prompt(username, host, port)
+
+      "titles" ->
+        handle_phlog_ai_titles(username, input, host, port)
+
+      "preview" when is_nil(input) ->
+        phlog_ai_preview_prompt(username, host, port)
+
+      "preview" ->
+        handle_phlog_ai_preview(input, host, port)
+
+      _ ->
+        error_response("Unknown AI tool: #{tool}")
+    end
+  end
+
+  defp phlog_ai_draft_prompt(username, host, port) do
+    """
+    i=== AI Draft Generator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter a topic or brief outline and I'll write a draft for you!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExamples:\t\t#{host}\t#{port}
+    i  - "My thoughts on retro computing"\t\t#{host}\t#{port}
+    i  - "Guide to setting up a Gopher server"\t\t#{host}\t#{port}
+    i  - "Why I love terminal-based applications"\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iThe AI will generate a draft you can edit and post.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Write Menu\t/phlog/user/#{username}/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_ai_draft(_username, topic, host, port) do
+    case WritingAssistant.draft(topic, style: :blog, tone: :casual) do
+      {:ok, draft} ->
+        formatted = PhlogFormatter.format("Draft", draft, host: host, port: port, style: :minimal)
+        lines = formatted
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== AI Generated Draft ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iTopic: #{String.slice(topic, 0, 60)}\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        i--- Generated Content ---\t\t#{host}\t#{port}
+        #{lines}
+        i\t\t#{host}\t#{port}
+        i--- End Draft ---\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        iCopy this content and use it when posting!\t\t#{host}\t#{port}
+        iYou can edit it before submitting.\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Generate Another Draft\t/phlog/user/_/ai/draft\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+
+      {:error, {:blocked, reason}} ->
+        error_response("Content blocked: #{reason}")
+
+      {:error, _} ->
+        error_response("Failed to generate draft. Please try again.")
+    end
+  end
+
+  defp phlog_ai_improve_prompt(username, host, port) do
+    """
+    i=== AI Writing Improver ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your draft and I'll suggest improvements!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iI can help with:\t\t#{host}\t#{port}
+    i  - Clarity and flow\t\t#{host}\t#{port}
+    i  - Engagement\t\t#{host}\t#{port}
+    i  - Conciseness\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Write Menu\t/phlog/user/#{username}/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_ai_improve(_username, content, host, port) do
+    case WritingAssistant.improve(content, focus: :all) do
+      {:ok, improved} ->
+        lines = improved
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Improved Content ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{lines}
+        i\t\t#{host}\t#{port}
+        i--- End Improved Version ---\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Improve More Content\t/phlog/user/_/ai/improve\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+
+      {:error, {:blocked, reason}} ->
+        error_response("Content blocked: #{reason}")
+
+      {:error, _} ->
+        error_response("Failed to improve content. Please try again.")
+    end
+  end
+
+  defp phlog_ai_proofread_prompt(username, host, port) do
+    """
+    i=== AI Proofreader ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your text and I'll check for:\t\t#{host}\t#{port}
+    i  - Grammar errors\t\t#{host}\t#{port}
+    i  - Spelling mistakes\t\t#{host}\t#{port}
+    i  - Punctuation issues\t\t#{host}\t#{port}
+    i  - Awkward phrasing\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Write Menu\t/phlog/user/#{username}/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_ai_proofread(_username, content, host, port) do
+    case WritingAssistant.proofread(content) do
+      {:ok, proofread} ->
+        lines = proofread
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Proofread Content ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{lines}
+        i\t\t#{host}\t#{port}
+        i--- End Proofread Version ---\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Proofread More Content\t/phlog/user/_/ai/proofread\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+
+      {:error, {:blocked, reason}} ->
+        error_response("Content blocked: #{reason}")
+
+      {:error, _} ->
+        error_response("Failed to proofread. Please try again.")
+    end
+  end
+
+  defp phlog_ai_titles_prompt(username, host, port) do
+    """
+    i=== AI Title Generator ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iPaste your content and I'll suggest catchy titles!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iI'll generate 5 title options for you to choose from.\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Write Menu\t/phlog/user/#{username}/write\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_ai_titles(_username, content, host, port) do
+    case WritingAssistant.generate_titles(content, count: 5, style: :engaging) do
+      {:ok, titles} ->
+        title_lines = titles
+          |> Enum.with_index(1)
+          |> Enum.map(fn {title, i} -> "i  #{i}. #{title}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Title Suggestions ===\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{title_lines}
+        i\t\t#{host}\t#{port}
+        iPick your favorite or use them as inspiration!\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Generate More Titles\t/phlog/user/_/ai/titles\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+
+      {:error, {:blocked, reason}} ->
+        error_response("Content blocked: #{reason}")
+
+      {:error, _} ->
+        error_response("Failed to generate titles. Please try again.")
+    end
+  end
+
+  defp phlog_ai_preview_prompt(_username, host, port) do
+    """
+    i=== Format Preview ===\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iSee how your post will look with medieval manuscript styling!\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iEnter: title|body\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iExample:\t\t#{host}\t#{port}
+    iMy Adventures|Today I explored the world of Gopher...\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    iYour content will be formatted with:\t\t#{host}\t#{port}
+    i  - Decorative borders\t\t#{host}\t#{port}
+    i  - Illuminated drop caps\t\t#{host}\t#{port}
+    i  - Thematic ASCII art\t\t#{host}\t#{port}
+    i  - Medieval ornaments\t\t#{host}\t#{port}
+    i\t\t#{host}\t#{port}
+    1Back to Main Menu\t/\t#{host}\t#{port}
+    .
+    """
+  end
+
+  defp handle_phlog_ai_preview(input, host, port) do
+    case String.split(input, "|", parts: 2) do
+      [title, body] ->
+        formatted = PhlogFormatter.format(
+          String.trim(title),
+          String.trim(body),
+          host: host,
+          port: port,
+          style: :medieval,
+          drop_cap: true,
+          illustrations: true
+        )
+
+        lines = formatted
+          |> String.split("\n")
+          |> Enum.map(fn line -> "i#{line}\t\t#{host}\t#{port}" end)
+          |> Enum.join("\r\n")
+
+        """
+        i=== Preview ===\t\t#{host}\t#{port}
+        iThis is how your post will appear:\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        #{lines}
+        i\t\t#{host}\t#{port}
+        i--- End Preview ---\t\t#{host}\t#{port}
+        i\t\t#{host}\t#{port}
+        7Preview Again\t/phlog/user/_/ai/preview\t#{host}\t#{port}
+        1Back to Main Menu\t/\t#{host}\t#{port}
+        .
+        """
+
+      _ ->
+        error_response("Invalid format. Use: title|body")
     end
   end
 
