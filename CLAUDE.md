@@ -155,6 +155,8 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `config/prod.exs` | Production (port 70) |
 | `config/test.exs` | Test (port 17070, Tor disabled) |
 | `scripts/setup-tor.sh` | Automated Tor hidden service setup |
+| `scripts/setup-gopher-user.sh` | Create dedicated gopher user for production |
+| `scripts/gopher-service.sh` | Service management helper (start/stop/status) |
 
 ## Hardware Detection
 
@@ -716,3 +718,115 @@ The blocklist automatically exempts localhost and private IP ranges to allow loc
 - `172.16.0.0/12` - Private network
 - `192.168.0.0/16` - Private network
 - `::1` - IPv6 loopback
+
+## Production Deployment (Dedicated User)
+
+For production deployments, run PureGopherAI as a dedicated unprivileged user for security isolation while preserving Metal GPU access.
+
+### Quick Setup
+```bash
+sudo ./scripts/setup-gopher-user.sh
+```
+
+This script:
+1. Creates a `gopher` user (UID 599)
+2. Sets up directory structure at `/Users/gopher/.gopher/`
+3. Migrates existing data from your home directory
+4. Copies project files and libtorch
+5. Compiles dependencies
+6. Creates launchd service (not loaded automatically)
+
+### Service Management
+```bash
+# Load service (enables auto-start on boot)
+sudo launchctl load /Library/LaunchDaemons/com.puregopherai.server.plist
+
+# Start the service
+sudo launchctl start com.puregopherai.server
+
+# Or use the helper script:
+sudo ./scripts/gopher-service.sh load
+sudo ./scripts/gopher-service.sh start
+```
+
+### Service Commands
+```bash
+sudo ./scripts/gopher-service.sh status   # Show status and test connection
+sudo ./scripts/gopher-service.sh start    # Start the service
+sudo ./scripts/gopher-service.sh stop     # Stop the service
+sudo ./scripts/gopher-service.sh restart  # Restart the service
+sudo ./scripts/gopher-service.sh logs     # Follow server logs
+sudo ./scripts/gopher-service.sh errors   # Follow error logs
+sudo ./scripts/gopher-service.sh test     # Test Gopher response
+sudo ./scripts/gopher-service.sh load     # Enable auto-start
+sudo ./scripts/gopher-service.sh unload   # Disable auto-start
+```
+
+### Directory Structure
+```
+/Users/gopher/
+├── .gopher/
+│   ├── data/           # Server data (700)
+│   ├── backups/        # Backups (700)
+│   ├── phlog/          # Blog posts
+│   ├── docs/           # RAG documents
+│   ├── gemini/         # TLS certs (700)
+│   ├── finger/         # Finger protocol data
+│   ├── plugins/        # Plugin storage
+│   ├── server.log      # Application logs
+│   └── server-error.log
+├── .cache/huggingface/ # Model cache
+├── libtorch/           # Metal GPU support
+├── pure_gopher_ai/     # Application
+├── run-gopher.sh       # Launch script
+└── .zshrc              # Environment variables
+```
+
+### Security Benefits
+- Process runs with minimal privileges
+- Cannot access files outside `/Users/gopher/`
+- If compromised, attacker is confined to the gopher user
+- Metal GPU acceleration preserved (no container overhead)
+
+### Verification
+```bash
+# Verify user isolation
+sudo -u gopher whoami                    # Should print: gopher
+sudo -u gopher ls /Users/anthonyramirez  # Should fail: permission denied
+
+# Verify service
+sudo launchctl list | grep puregopher
+echo "" | nc localhost 70
+tail -f /Users/gopher/.gopher/server.log
+```
+
+### Updating the Application
+```bash
+# Stop service
+sudo ./scripts/gopher-service.sh stop
+
+# Copy updated files
+sudo cp -R /path/to/updated/pure_gopher_ai /Users/gopher/pure_gopher_ai
+sudo chown -R gopher:staff /Users/gopher/pure_gopher_ai
+
+# Recompile as gopher user
+sudo -u gopher -i bash -c 'cd ~/pure_gopher_ai && mix deps.get && mix compile'
+
+# Restart service
+sudo ./scripts/gopher-service.sh start
+```
+
+### Tor Integration
+```bash
+# Add to launchd plist EnvironmentVariables:
+# <key>ONION_ADDRESS</key>
+# <string>your-address.onion</string>
+# <key>TOR_ENABLED</key>
+# <string>true</string>
+# <key>TOR_PORT</key>
+# <string>7071</string>
+
+# Or edit /Users/gopher/.zshrc:
+export ONION_ADDRESS="your-address.onion"
+export TOR_ENABLED=true
+```

@@ -11,6 +11,8 @@ defmodule PureGopherAi.Tunnel do
         enabled: true,
         server: "relay.example.com:4000",
         token: System.get_env("BURROW_TOKEN"),
+        encryption: :noise,
+        noise_server_pubkey: "base64_public_key",
         tunnels: [
           [name: "gopher", local: 70, remote: 70],
           [name: "gemini", local: 1965, remote: 1965],
@@ -22,6 +24,7 @@ defmodule PureGopherAi.Tunnel do
 
   - `BURROW_SERVER` - Relay server address (host:port)
   - `BURROW_TOKEN` - Authentication token
+  - `BURROW_NOISE_PUBKEY` - Server's Noise public key (for encrypted connections)
 
   ## Usage
 
@@ -136,10 +139,18 @@ defmodule PureGopherAi.Tunnel do
         {:noreply, %{state | status: :error}}
 
       true ->
-        Logger.info("[Tunnel] Connecting to #{server}...")
+        encryption = Keyword.get(state.config, :encryption)
+        noise_pubkey = get_noise_pubkey(state.config)
+
+        connect_opts = [token: token, tunnels: tunnels]
+        connect_opts = if encryption, do: Keyword.put(connect_opts, :encryption, encryption), else: connect_opts
+        connect_opts = if noise_pubkey, do: Keyword.put(connect_opts, :noise_server_pubkey, noise_pubkey), else: connect_opts
+
+        encryption_info = if encryption == :noise, do: " (Noise encrypted)", else: ""
+        Logger.info("[Tunnel] Connecting to #{server}#{encryption_info}...")
 
         try do
-          case Burrow.connect(server, token: token, tunnels: tunnels) do
+          case Burrow.connect(server, connect_opts) do
             {:ok, client} ->
               Logger.info("[Tunnel] Connected to #{server}")
 
@@ -231,6 +242,14 @@ defmodule PureGopherAi.Tunnel do
       {:system, var} -> System.get_env(var)
       nil -> System.get_env("BURROW_TOKEN")
       token -> token
+    end
+  end
+
+  defp get_noise_pubkey(config) do
+    case Keyword.get(config, :noise_server_pubkey) do
+      {:system, var} -> System.get_env(var)
+      nil -> System.get_env("BURROW_NOISE_PUBKEY")
+      pubkey -> pubkey
     end
   end
 

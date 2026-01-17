@@ -360,6 +360,236 @@ defmodule PureGopherAi.AnsiArt do
     #{@bright_yellow}║#{@reset}   #{@bright_blue}▀██▀#{@reset}   #{@bright_yellow}║#{@reset}
     #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
     #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "D" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}██▄#{@reset}  #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}██▀#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "E" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}████#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}███#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}████#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "F" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}████#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}███#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "G" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}▄██▄#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█▀#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█  ██#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█   █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}▀██▀#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "H" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█  █#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}████#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "I" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}████#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}██#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}██#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}██#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}████#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "J" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}  #{@bright_blue}███#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_blue}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_cyan}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█  █#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}██#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "K" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█  █#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█ █#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}██#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█ █#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "L" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█#{@reset}    #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}████#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "M" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}#{@bright_blue}█▄  ▄█#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█ ▀▀ █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█ ██ █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "N" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█▄  █#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█ █ █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█  ██#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "O" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}▄██▄#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}▀██▀#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "P" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}███▄#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}███▀#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "Q" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}▄██▄#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█  █ █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}▀██▀█#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "R" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}███▄#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}███▀#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█  █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "S" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}▄███#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}██▄#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}      #{@bright_blue}█#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}███▀#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "T" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}#{@bright_blue}█████#{@reset}#{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}█#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}█#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}█#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}█#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "U" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█   █#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}███#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "V" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█   █#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}█ █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}█ █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_cyan}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "W" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}#{@bright_blue}█    █#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█    █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█ ██ █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_blue}█ ▄▄ █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}  #{@bright_cyan}█▀  ▀█#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "X" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█   █#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}█ █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_cyan}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}█ █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}█   █#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "Y" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}█   █#{@reset}#{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_blue}█ █#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_cyan}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_blue}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_cyan}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
+    """,
+    "Z" => """
+    #{@bright_yellow}╔═══════════╗#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset} #{@bright_blue}████#{@reset} #{@bright_red}❦#{@reset} #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}     #{@bright_blue}█#{@reset}    #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}    #{@bright_cyan}█#{@reset}     #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_blue}█#{@reset}      #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset}   #{@bright_cyan}████#{@reset}   #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}║#{@reset} #{@bright_red}❦#{@reset}     #{@bright_red}❦#{@reset}  #{@bright_yellow}║#{@reset}
+    #{@bright_yellow}╚═══════════╝#{@reset}
     """
   }
 

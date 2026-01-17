@@ -169,8 +169,10 @@ config :pure_gopher_ai,
 # Expose local services via relay server without opening ports
 config :pure_gopher_ai, :tunnel,
   enabled: true,                            # Enable tunneling
-  server: System.get_env("BURROW_SERVER", "gopherlab.org:4000"),  # Relay server (host:port)
+  server: System.get_env("BURROW_SERVER", "relay.westus3.cloudapp.azure.com:4000"),  # Relay server
   token: {:system, "BURROW_TOKEN"},         # Auth token from env var
+  encryption: :noise,                       # Noise protocol encryption (like WireGuard)
+  noise_server_pubkey: System.get_env("BURROW_NOISE_PUBKEY", "jLP+tx3QcjtOyky0p/PfvH09dbqNuGCOrKf/z7QvXWQ="),
   reconnect: true,                          # Auto-reconnect on disconnect
   # Tunnels are auto-configured based on enabled services
   # Or specify explicitly:
