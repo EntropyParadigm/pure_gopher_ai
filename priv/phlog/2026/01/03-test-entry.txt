@@ -1,0 +1,1 @@
+This is a test phlog entry about Gopher protocol.

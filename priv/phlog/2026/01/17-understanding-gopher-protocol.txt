@@ -1,0 +1,67 @@
+Understanding the Gopher Protocol
+
+Gopher is an Internet protocol designed for distributing, searching,
+and retrieving documents. It predates the World Wide Web and was
+developed at the University of Minnesota in 1991.
+
+=== Key Concepts ===
+
+1. Selectors
+   A selector is like a URL path. When you connect to a Gopher server,
+   you send a selector string, and the server responds with content.
+
+2. Item Types
+   Each line in a Gopher menu has a type indicator:
+   - 0: Text file
+   - 1: Directory (menu)
+   - 7: Search/query input
+   - i: Info line (non-selectable)
+   - 3: Error
+
+3. Menu Format
+   Each menu line follows this format:
+   <type><display>\t<selector>\t<host>\t<port>
+
+4. Termination
+   All Gopher responses end with a period on its own line: "."
+
+=== Why Gopher in 2026? ===
+
+Simplicity:
+  No JavaScript, no tracking, no cookies, no ads
+
+Speed:
+  Pure text is incredibly fast, even on slow connections
+
+Privacy:
+  Works great over Tor - GopherLab has a .onion address!
+
+Accessibility:
+  Connect from vintage machines, screen readers, or modern clients
+
+Focus:
+  Content-first design with no distractions
+
+=== Gopher Clients ===
+
+Terminal:
+  - Bombadillo (recommended)
+  - Lynx
+  - sacc
+
+GUI:
+  - Lagrange (also supports Gemini)
+  - Gopher Client for macOS
+
+Command line:
+  echo "/about" | nc gopherlab.org 70
+
+=== Learn More ===
+
+- RFC 1436: The Gopher Protocol
+- gopher://gopher.floodgap.com - Floodgap Gopher server
+- gemini://geminiprotocol.net - Related Gemini protocol
+
+GopherLab brings modern AI to this classic protocol!
+
+-- The GopherLab Team

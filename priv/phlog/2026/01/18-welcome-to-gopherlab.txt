@@ -1,0 +1,56 @@
+Welcome to GopherLab!
+
+This is the official phlog (Gopher blog) for gopherlab.org.
+
+GopherLab is a pure Elixir Gopher server with native AI inference
+powered by Bumblebee and Llama 3.2. Everything runs locally with
+Apple Silicon Metal GPU acceleration.
+
+=== How to Connect ===
+
+Clearnet:
+  gopher://gopherlab.org
+
+Tor Hidden Service:
+  gopher://4la36s6x44qfs5bktepwmbvrg2spz5etdons5a3cg2k7gfmwjkb7wqad.onion
+
+  Port 70: Standard view
+  Port 7071: Tor-aware view (shows "Network: Tor")
+
+Gemini Protocol:
+  gemini://gopherlab.org
+
+=== Key Features ===
+
+AI Services:
+- /ask <query>     - Single AI query
+- /chat <message>  - Chat with memory
+- /code            - Code assistant
+- /personas        - AI personalities (pirate, haiku, coder)
+
+Content:
+- /phlog           - This blog
+- /docs            - Document knowledge base (RAG)
+- /search          - Full-text search
+
+Community:
+- /users           - User profiles & homepages
+- /guestbook       - Sign our guestbook
+- /polls           - Vote on polls
+- /games           - Hangman, trivia, and more
+
+Utilities:
+- /calc            - Calculator
+- /convert         - Unit converter
+- /utils           - Dice, UUID, password generator
+
+=== Infrastructure ===
+
+- Burrow tunneling with Noise encryption (like WireGuard)
+- Tor hidden service on relay server
+- Rate limiting and blocklist protection
+- Response caching for performance
+
+Stay tuned for more updates!
+
+-- The GopherLab Team
