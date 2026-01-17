@@ -20,9 +20,13 @@ defmodule PureGopherAi.Config do
       # Server endpoints
       clearnet_host: Application.get_env(:pure_gopher_ai, :clearnet_host, "localhost"),
       clearnet_port: Application.get_env(:pure_gopher_ai, :clearnet_port, 7070),
-      onion_address: Application.get_env(:pure_gopher_ai, :onion_address),
-      tor_enabled: Application.get_env(:pure_gopher_ai, :tor_enabled, false),
-      tor_port: Application.get_env(:pure_gopher_ai, :tor_port, 7071),
+      # Onion address: check app config first, then fall back to runtime env var
+      onion_address: Application.get_env(:pure_gopher_ai, :onion_address) || System.get_env("ONION_ADDRESS"),
+      # Tor settings: fall back to runtime env vars for launchd compatibility
+      tor_enabled: Application.get_env(:pure_gopher_ai, :tor_enabled) ||
+                   System.get_env("TOR_ENABLED") == "true",
+      tor_port: Application.get_env(:pure_gopher_ai, :tor_port) ||
+                String.to_integer(System.get_env("TOR_PORT") || "7071"),
       gemini_enabled: Application.get_env(:pure_gopher_ai, :gemini_enabled, false),
       gemini_port: Application.get_env(:pure_gopher_ai, :gemini_port, 1965),
       finger_enabled: Application.get_env(:pure_gopher_ai, :finger_enabled, false),

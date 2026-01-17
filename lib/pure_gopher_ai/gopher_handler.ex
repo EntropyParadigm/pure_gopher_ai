@@ -2072,39 +2072,76 @@ defmodule PureGopherAi.GopherHandler do
         :clearnet -> "Clearnet (port #{port})"
       end
 
-    content_dir_full = Gophermap.content_dir()
-    # Sanitize path - only show relative or generic path for privacy
-    content_dir = content_dir_full |> Path.basename() |> then(&"~/.gopher/#{&1}")
+    # Content directory
+    content_dir = "~/.gopher"
+    content_dir_full = Path.expand(content_dir)
     content_status = if File.exists?(content_dir_full), do: "Active", else: "Not configured"
 
     # Get cache stats
     cache_stats = PureGopherAi.ResponseCache.stats()
     cache_status = if cache_stats.enabled, do: "Enabled", else: "Disabled"
 
+    # Connection details
+    clearnet_host = Config.clearnet_host()
+    clearnet_port = Config.clearnet_port()
+    onion_address = Config.onion_address()
+    tor_enabled = Config.tor_enabled?()
+    gemini_enabled = Config.gemini_enabled?()
+    gemini_port = Config.gemini_port()
+
+    tor_section =
+      if tor_enabled && onion_address do
+        """
+
+        --- Tor Hidden Service ---
+        Onion Address: #{onion_address}
+        Connect via: gopher://#{onion_address}/
+        (Use torsocks or Tor Browser)
+        """
+      else
+        ""
+      end
+
+    gemini_section =
+      if gemini_enabled do
+        """
+
+        --- Gemini Protocol ---
+        Port: #{gemini_port}
+        Connect via: gemini://#{clearnet_host}/
+        """
+      else
+        ""
+      end
+
     format_plain_text_response(
       """
-      === PureGopherAI Server Stats ===
+      === PureGopherAI Server ===
 
-      Host: #{hostname}
-      Network: #{network_info}
+      --- Connection Info ---
+      Clearnet: gopher://#{clearnet_host}:#{clearnet_port}/
+      Current Network: #{network_info}
       Protocol: Gopher (RFC 1436)
-
+      #{tor_section}#{gemini_section}
+      --- System ---
       Runtime: Elixir #{System.version()} / OTP #{System.otp_release()}
       Uptime: #{uptime_min} minutes
       Memory (Total): #{div(memory[:total], 1_048_576)} MB
       Memory (Processes): #{div(memory[:processes], 1_048_576)} MB
 
-      AI Backend: Bumblebee
-      Compute Backend: #{backend_info}
-      Model: GPT-2 (openai-community/gpt2)
+      --- AI ---
+      Backend: Bumblebee
+      Compute: #{backend_info}
+      Model: Llama 3.2 1B Instruct
 
-      Response Cache: #{cache_status}
-      Cache Size: #{cache_stats.size}/#{cache_stats.max_size}
-      Cache Hit Rate: #{cache_stats.hit_rate}%
-      Cache Hits/Misses: #{cache_stats.hits}/#{cache_stats.misses}
+      --- Cache ---
+      Status: #{cache_status}
+      Size: #{cache_stats.size}/#{cache_stats.max_size}
+      Hit Rate: #{cache_stats.hit_rate}%
 
-      Content Directory: #{content_dir}
-      Content Status: #{content_status}
+      --- Content ---
+      Directory: #{content_dir}
+      Status: #{content_status}
 
       TCP Server: ThousandIsland
       Architecture: OTP Supervision Tree
