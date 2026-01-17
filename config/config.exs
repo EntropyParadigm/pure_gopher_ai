@@ -30,8 +30,8 @@ config :pure_gopher_ai,
   tor_enabled: true,
   tor_port: 7071,
   tor_host: "127.0.0.1",
-  # Set this after running: sudo cat /var/lib/tor/pure_gopher_ai/hostname
-  onion_address: nil,
+  # Tor hidden service address (hosted on relay server)
+  onion_address: "4la36s6x44qfs5bktepwmbvrg2spz5etdons5a3cg2k7gfmwjkb7wqad.onion",
 
   # Static content directory for gophermap
   # Supports standard gophermap format

@@ -14,6 +14,7 @@ defmodule PureGopherAi.HealthCheck do
   alias PureGopherAi.Telemetry
   alias PureGopherAi.ResponseCache
   alias PureGopherAi.Rag
+  alias PureGopherAi.Config
 
   @doc """
   Simple liveness check.
@@ -128,7 +129,7 @@ defmodule PureGopherAi.HealthCheck do
   end
 
   defp uptime_info do
-    start_time = Application.get_env(:pure_gopher_ai, :start_time)
+    start_time = Config.start_time()
 
     if start_time do
       now = System.system_time(:second)

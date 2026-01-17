@@ -261,6 +261,16 @@ defmodule PureGopherAi.Tunnel do
     clearnet_port = Application.get_env(:pure_gopher_ai, :clearnet_port, 70)
     tunnels = [[name: "gopher", local: clearnet_port, remote: 70] | tunnels]
 
+    # Tor-specific Gopher port (if enabled)
+    # Allows Tor users to connect on port 7071 to get Tor-aware responses
+    tunnels =
+      if Application.get_env(:pure_gopher_ai, :tor_enabled, false) do
+        tor_port = Application.get_env(:pure_gopher_ai, :tor_port, 7071)
+        [[name: "tor", local: tor_port, remote: 7071] | tunnels]
+      else
+        tunnels
+      end
+
     # Gemini (if enabled)
     tunnels =
       if Application.get_env(:pure_gopher_ai, :gemini_enabled, false) do
