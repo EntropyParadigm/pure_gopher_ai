@@ -9,40 +9,39 @@ Apple Silicon Metal GPU acceleration.
 === How to Connect ===
 
 Clearnet:
-  gopher://gopherlab.org
+  gopherlab.org (port 70)
 
 Tor Hidden Service:
-  gopher://4la36s6x44qfs5bktepwmbvrg2spz5etdons5a3cg2k7gfmwjkb7wqad.onion
-
-  Port 70: Standard view
-  Port 7071: Tor-aware view (shows "Network: Tor")
+  4la36s6x44qfs5bktepwmbvrg2spz5etdons5a3cg2k7gfmwjkb7wqad.onion
+  - Port 70: Standard view
+  - Port 7071: Tor-aware view (shows "Network: Tor")
 
 Gemini Protocol:
-  gemini://gopherlab.org
+  gopherlab.org (port 1965)
 
 === Key Features ===
 
 AI Services:
-- /ask <query>     - Single AI query
-- /chat <message>  - Chat with memory
-- /code            - Code assistant
-- /personas        - AI personalities (pirate, haiku, coder)
+  /ask <query>     - Single AI query
+  /chat <message>  - Chat with memory
+  /code            - Code assistant
+  /personas        - AI personalities (pirate, haiku, coder)
 
 Content:
-- /phlog           - This blog
-- /docs            - Document knowledge base (RAG)
-- /search          - Full-text search
+  /phlog           - This blog
+  /docs            - Document knowledge base (RAG)
+  /search          - Full-text search
 
 Community:
-- /users           - User profiles & homepages
-- /guestbook       - Sign our guestbook
-- /polls           - Vote on polls
-- /games           - Hangman, trivia, and more
+  /users           - User profiles and homepages
+  /guestbook       - Sign our guestbook
+  /polls           - Vote on polls
+  /games           - Hangman, trivia, and more
 
 Utilities:
-- /calc            - Calculator
-- /convert         - Unit converter
-- /utils           - Dice, UUID, password generator
+  /calc            - Calculator
+  /convert         - Unit converter
+  /utils           - Dice, UUID, password generator
 
 === Infrastructure ===
 

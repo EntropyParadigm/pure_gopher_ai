@@ -59,8 +59,8 @@ Command line:
 === Learn More ===
 
 - RFC 1436: The Gopher Protocol
-- gopher://gopher.floodgap.com - Floodgap Gopher server
-- gemini://geminiprotocol.net - Related Gemini protocol
+- Floodgap: gopher.floodgap.com
+- Gemini Protocol: geminiprotocol.net
 
 GopherLab brings modern AI to this classic protocol!
 
