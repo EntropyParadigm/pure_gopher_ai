@@ -2053,9 +2053,7 @@ defmodule PureGopherAi.GopherHandler do
   end
 
   # About page - server stats
-  defp about_page(host, port, network) do
-    # Use configured host instead of system hostname for privacy
-    hostname = host
+  defp about_page(_host, _port, network) do
     memory = :erlang.memory()
     uptime_ms = :erlang.statistics(:wall_clock) |> elem(0)
     uptime_min = div(uptime_ms, 60_000)
@@ -2066,10 +2064,18 @@ defmodule PureGopherAi.GopherHandler do
         _ -> "EXLA (CPU)"
       end
 
+    # Connection details (get early for network_info)
+    clearnet_host = PureGopherAi.Config.clearnet_host()
+    clearnet_port = PureGopherAi.Config.clearnet_port()
+    onion_address = PureGopherAi.Config.onion_address()
+    tor_enabled = PureGopherAi.Config.tor_enabled?()
+    gemini_enabled = PureGopherAi.Config.gemini_enabled?()
+    gemini_port = PureGopherAi.Config.gemini_port()
+
     network_info =
       case network do
         :tor -> "Tor Hidden Service (port 70)"
-        :clearnet -> "Clearnet (port #{port})"
+        :clearnet -> "Clearnet (port #{clearnet_port})"
       end
 
     # Content directory
@@ -2081,13 +2087,7 @@ defmodule PureGopherAi.GopherHandler do
     cache_stats = PureGopherAi.ResponseCache.stats()
     cache_status = if cache_stats.enabled, do: "Enabled", else: "Disabled"
 
-    # Connection details
-    clearnet_host = Config.clearnet_host()
-    clearnet_port = Config.clearnet_port()
-    onion_address = Config.onion_address()
-    tor_enabled = Config.tor_enabled?()
-    gemini_enabled = Config.gemini_enabled?()
-    gemini_port = Config.gemini_port()
+    tor_port = PureGopherAi.Config.tor_port()
 
     tor_section =
       if tor_enabled && onion_address do
@@ -2095,7 +2095,8 @@ defmodule PureGopherAi.GopherHandler do
 
         --- Tor Hidden Service ---
         Onion Address: #{onion_address}
-        Connect via: gopher://#{onion_address}/
+        Port 70: gopher://#{onion_address}/ (clearnet view)
+        Port #{tor_port}: gopher://#{onion_address}:#{tor_port}/ (Tor-aware)
         (Use torsocks or Tor Browser)
         """
       else
