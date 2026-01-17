@@ -15,6 +15,7 @@ defmodule PureGopherAi.Phlog do
   """
   def content_dir do
     Application.get_env(:pure_gopher_ai, :phlog_dir, "priv/phlog")
+    |> Path.expand()
   end
 
   @doc """
