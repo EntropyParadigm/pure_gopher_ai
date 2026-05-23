@@ -1,7 +1,7 @@
 # PureGopherAI - Project Context
 
 ## Overview
-A pure Elixir Gopher server (RFC 1436) with native AI inference via Bumblebee. Optimized for Apple Silicon with Metal GPU acceleration. Triple-stack: clearnet + Tor hidden service + Gemini protocol (TLS).
+A pure Elixir Gopher server (RFC 1436) with AI inference via Ollama (primary, Gemma 4) and Bumblebee (fallback). Optimized for Apple Silicon with Metal GPU acceleration. Triple-stack: clearnet + Tor hidden service + Gemini protocol (TLS).
 
 ## Architecture
 
@@ -92,6 +92,11 @@ TCP Connection (clearnet :70 or tor :7071)
 | `TOR_ENABLED` | true | true | Enable Tor listener |
 | `TOR_PORT` | 7071 | 7071 | Tor internal port |
 | `ONION_ADDRESS` | nil | nil | Your .onion address |
+| `OLLAMA_ENABLED` | true | true | Enable Ollama AI backend |
+| `OLLAMA_URL` | http://localhost:11434 | http://localhost:11434 | Ollama server URL |
+| `OLLAMA_MODEL` | gemma4:e2b | gemma4:e2b | Ollama model to use |
+| `AI_MODEL` | openai-community/gpt2 | openai-community/gpt2 | Bumblebee fallback model |
+| `HF_TOKEN` | nil | nil | HuggingFace token (for gated models) |
 
 **Examples:**
 ```bash
@@ -419,6 +424,12 @@ MIX_ENV=prod mix run --no-halt
 
 # With onion address
 ONION_ADDRESS="abc123.onion" MIX_ENV=prod mix run --no-halt
+
+# Sync and deploy to gopher user (production)
+sudo ./scripts/sync-gopher.sh
+
+# EXLA compile fix for Xcode 16.3+
+CFLAGS="-Wno-error=invalid-specialization" mix deps.compile exla --force
 ```
 
 ## Client Connections
@@ -453,12 +464,13 @@ GOPHER_PORT=70 MIX_ENV=prod mix run --no-halt
 
 ## Dependencies
 - `thousand_island` - TCP server
-- `bumblebee` - Hugging Face model loading
+- `bumblebee` - Hugging Face model loading (fallback AI)
 - `nx` - Numerical computing
 - `exla` - XLA backend (CPU/GPU)
 - `torchx` - PyTorch backend (Metal MPS)
 - `jason` - JSON handling
 - `burrow` - TCP/UDP tunneling (expose services without opening ports)
+- Ollama - Local LLM server (primary AI, external dependency)
 
 ## Burrow Tunneling
 
@@ -517,8 +529,18 @@ PureGopherAi.Tunnel.status()
 ```
 
 ## Model
-Default: `openai-community/gpt2` (lightweight, ~500MB)
-Production: Consider Llama 2/3 or Mistral for better quality
+
+### Primary: Ollama (default)
+- **Default model:** `gemma4:e2b` (Google Gemma 4, instruction-tuned, ~7.2GB)
+- Ollama enabled by default (`OLLAMA_ENABLED=true`)
+- Supports streaming, chat, and tool use
+- Override model: `OLLAMA_MODEL=gemma4:e4b` (larger) or any Ollama model
+
+### Fallback: Bumblebee
+- **Fallback model:** `openai-community/gpt2` (lightweight, ~500MB)
+- Used automatically if Ollama is unavailable
+- Bumblebee 0.6.3 supports: GPT-2, Gemma 1, Llama (not Gemma 2/3/4)
+- Note: Bumblebee always loads at startup (consumes memory for fallback)
 
 ## Gemini Protocol
 
@@ -645,13 +667,16 @@ AnsiArt.get_drop_cap("A")         # Colored
 ```
 
 ## Notes
-- First model load downloads from Hugging Face
-- Nx.Serving provides automatic request batching
+- Primary AI uses Ollama (must be running locally); Bumblebee is fallback
+- First Ollama request may be slow (model loading into GPU memory)
+- Bumblebee model downloads from Hugging Face on first run
+- Nx.Serving provides automatic request batching for Bumblebee
 - All inference runs locally - no external API calls
 - Tor listener only binds to localhost for security
 - macOS allows port 70 without root; Linux requires setcap
 - Gemini requires TLS certificates (self-signed OK)
 - RAG auto-ingests documents from watch directory every 30s
+- EXLA on macOS with Xcode 16.3+ requires `CFLAGS="-Wno-error=invalid-specialization"` to compile
 
 ## Security
 

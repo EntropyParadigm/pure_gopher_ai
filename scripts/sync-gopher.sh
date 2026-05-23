@@ -24,7 +24,7 @@ chown -R gopher:staff /Users/gopher/pure_gopher_ai/config
 
 # Recompile
 echo "Step 3: Recompiling..."
-sudo -u gopher -H bash -c 'source ~/.zshrc && cd ~/pure_gopher_ai && /opt/homebrew/bin/mix compile'
+sudo -u gopher -H bash -c 'source ~/.zshrc && cd ~/pure_gopher_ai && CFLAGS="-Wno-error=invalid-specialization" /opt/homebrew/bin/mix compile'
 
 # Restart service
 echo "Step 4: Restarting service..."

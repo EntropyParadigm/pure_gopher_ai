@@ -51,31 +51,31 @@ config :pure_gopher_ai,
 
   # Bumblebee model selection (loaded via HuggingFace)
   #
-  # Default: Llama 3.2 1B Instruct (GATED - requires HF token)
-  #   - High quality, small footprint (~2GB RAM)
-  #   - Set HF_TOKEN env var with your HuggingFace token
-  #   - Accept license at: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct
+  # Default: GPT-2 (lightweight, ~500MB, ungated)
+  #   - Works out of the box, no HF token needed
+  #   - Good for basic text generation
   #
-  # Fallback options (ungated):
+  # Alternatives (may require newer Bumblebee):
   #   - TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B, fast)
-  #   - microsoft/phi-2 (2.7B, good reasoning)
+  #   - deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B (needs Qwen2 support)
+  #   - meta-llama/Llama-3.2-1B-Instruct (gated, needs HF_TOKEN)
   #
-  # Environment override: AI_MODEL, HF_TOKEN
-  bumblebee_model: System.get_env("AI_MODEL", "meta-llama/Llama-3.2-1B-Instruct"),
+  # Environment override: AI_MODEL
+  bumblebee_model: System.get_env("AI_MODEL", "openai-community/gpt2"),
 
-  # HuggingFace token for gated models (Llama 3.2)
+  # HuggingFace token for gated models (optional)
   # Get token at: https://huggingface.co/settings/tokens
   hf_token: System.get_env("HF_TOKEN"),
 
-  # Generation settings
-  ai_max_new_tokens: 512,             # Response length limit
+  # DeepSeek R1 generation settings (higher limits for reasoning)
+  ai_max_new_tokens: 1024,            # Allow space for <think> reasoning
   ai_sequence_length: 2048,           # Context window
 
-  # Ollama backend (optional, for even larger models)
-  # Set OLLAMA_ENABLED=true if you have Ollama running
-  ollama_enabled: System.get_env("OLLAMA_ENABLED", "false") == "true",
+  # Ollama backend (primary AI engine)
+  # Uses local Ollama server for high-quality inference
+  ollama_enabled: System.get_env("OLLAMA_ENABLED", "true") == "true",
   ollama_url: System.get_env("OLLAMA_URL", "http://localhost:11434"),
-  ollama_model: System.get_env("OLLAMA_MODEL", "llama3.2"),
+  ollama_model: System.get_env("OLLAMA_MODEL", "gemma4:e2b"),
   ollama_timeout: 120_000,
 
   # System prompts (AI personality/behavior)
@@ -174,14 +174,12 @@ config :pure_gopher_ai, :tunnel,
   encryption: :noise,                       # Noise protocol encryption (like WireGuard)
   noise_server_pubkey: System.get_env("BURROW_NOISE_PUBKEY", "jLP+tx3QcjtOyky0p/PfvH09dbqNuGCOrKf/z7QvXWQ="),
   reconnect: true,                          # Auto-reconnect on disconnect
-  # Tunnels are auto-configured based on enabled services
-  # Or specify explicitly:
-  # tunnels: [
-  #   [name: "gopher", local: 70, remote: 70],
-  #   [name: "gemini", local: 1965, remote: 1965],
-  #   [name: "finger", local: 79, remote: 79]
-  # ]
-  tunnels: nil  # nil = auto-detect from enabled services
+  # Tunnels: auto-detect enabled services + SSH access
+  tunnels: [
+    [name: "gopher", local: 70, remote: 70],
+    [name: "gemini", local: 1965, remote: 1965],
+    [name: "ssh", local: 22, remote: 48372]
+  ]
 
 # Debug mode - enables verbose logging and diagnostics
 # Set DEBUG_ENABLED=true to enable
