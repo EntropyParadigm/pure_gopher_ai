@@ -68,8 +68,8 @@ GEMINI_API_KEY in your shell before running mix firmware.
 
 Nerves is an Elixir framework for embedded systems. It produces a
 complete firmware image -- Linux kernel, BEAM VM, your application,
-and nothing else. No package manager, no shell (SSH drops you into
-an IEx prompt), no mutable filesystem except a dedicated /data
+and nothing else. No package manager, no traditional shell, no
+mutable filesystem except a dedicated /data
 partition.
 
 The build process:
@@ -123,10 +123,9 @@ The Pi sits behind a home router with no port forwarding. We use
 Burrow, an Elixir TCP tunneling library, to expose services
 through a relay VPS at gopherlab.org.
 
-Three tunnels run through a single encrypted connection:
+Two tunnels run through a single encrypted connection:
   Gopher:  Pi port 70  -> gopherlab.org port 70
   Gemini:  Pi port 1965 -> gopherlab.org port 1965
-  SSH:     Pi port 22  -> gopherlab.org port 48372
 
 On Nerves, the Burrow token must be baked at compile time (no
 runtime env vars). The target.exs config handles this with
@@ -189,7 +188,6 @@ Everything is running on the Pi:
   Gopher:  gopherlab.org:70 (via Burrow relay)
   Gemini:  gopherlab.org:1965 (TLS)
   Tor:     3jeomad...aad.onion:70
-  SSH:     gopherlab.org:48372 (via Burrow relay)
   AI:      Gemini 2.5 Flash (streamed, ~1-3s responses)
   Health:  All components healthy
 
@@ -208,14 +206,8 @@ For anyone setting up their own Pi instance:
   mix burn           (first time, SD card)
   mix upload <ip>    (subsequent, OTA)
 
-After first boot, provision data:
-  sftp <pi-ip>
-  put phlog/* /data/gopher/phlog/
-  put cert.pem /data/gopher/gemini/cert.pem
-  put key.pem /data/gopher/gemini/key.pem
-
-Then validate the firmware:
-  ssh <pi-ip>
-  Nerves.Runtime.validate_firmware()
+After first boot, provision your phlog and TLS certificate data
+to the Pi's /data/gopher/ partition, then validate the firmware
+from a remote IEx session.
 
 -- The GopherLab Team
