@@ -109,10 +109,13 @@ config :pure_gopher_ai, :tunnel,
   ]
 
 # --- Memory-Sensitive Tuning ---
-# Pi 3B has only 1GB RAM - reduce memory usage
+# Pi 3B has only 1GB RAM - reduce memory usage and disable heavy features
 config :pure_gopher_ai,
   rag_embeddings_enabled: false,
-  cache_max_entries: 100,
+  blocklist_enabled: false,
+  cache_max_entries: 50,
   conversation_max_messages: 5,
-  cache_ttl_ms: 1_800_000,
+  conversation_ttl_ms: 600_000,
+  cache_ttl_ms: 600_000,
+  rate_limit_requests: 30,
   phlog_entries_per_page: 5

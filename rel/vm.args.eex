@@ -48,8 +48,8 @@
 ## 4 schedulers (match Pi 3B's 4 cores)
 +S 4:4
 
-## Smaller async thread pool (limited memory)
-+A 16
+## Smaller async thread pool (limited memory, 1GB RAM)
++A 8
 
 ## Enable kernel poll (epoll)
 +K true

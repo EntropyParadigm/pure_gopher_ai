@@ -31,7 +31,7 @@ defmodule PureGopherAi.HealthCheck do
   """
   def ready do
     checks = [
-      check_ai_serving(),
+      check_ai_backend(),
       check_rate_limiter(),
       check_conversation_store(),
       check_response_cache()
@@ -174,21 +174,27 @@ defmodule PureGopherAi.HealthCheck do
   end
 
   defp component_status do
-    %{
-      ai_serving: check_component(:ai_serving),
+    base = %{
+      ai_backend: check_component(:ai_backend),
       rate_limiter: check_component(:rate_limiter),
       conversation_store: check_component(:conversation_store),
       response_cache: check_component(:response_cache),
       rag: check_component(:rag),
       telemetry: check_component(:telemetry),
-      guestbook: check_component(:guestbook),
-      bulletin_board: check_component(:bulletin_board)
+      guestbook: check_component(:guestbook)
     }
+
+    # Only check bulletin_board on host (not started on Pi)
+    if Application.get_env(:pure_gopher_ai, :ai_backend, :ollama) != :gemini_api do
+      Map.put(base, :bulletin_board, check_component(:bulletin_board))
+    else
+      base
+    end
   end
 
   defp check_component(component) do
     {status, _reason} = case component do
-      :ai_serving -> check_ai_serving()
+      :ai_backend -> check_ai_backend()
       :rate_limiter -> check_rate_limiter()
       :conversation_store -> check_conversation_store()
       :response_cache -> check_response_cache()
@@ -203,11 +209,22 @@ defmodule PureGopherAi.HealthCheck do
     }
   end
 
-  defp check_ai_serving do
-    if Process.whereis(PureGopherAi.Serving) do
-      {:ok, "AI Serving is running"}
-    else
-      {:error, "AI Serving is not running"}
+  defp check_ai_backend do
+    case Application.get_env(:pure_gopher_ai, :ai_backend, :ollama) do
+      :gemini_api ->
+        key = Application.get_env(:pure_gopher_ai, :gemini_api_key)
+        if key && key != "" do
+          {:ok, "Gemini API configured"}
+        else
+          {:error, "Gemini API key not configured"}
+        end
+
+      _ ->
+        if Process.whereis(PureGopherAi.Serving) do
+          {:ok, "AI Serving is running"}
+        else
+          {:error, "AI Serving is not running"}
+        end
     end
   end
 

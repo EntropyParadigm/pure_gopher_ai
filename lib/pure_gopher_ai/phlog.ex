@@ -265,15 +265,28 @@ defmodule PureGopherAi.Phlog do
   end
 
   defp parse_entry_filename(filename) do
-    # Expected format: DD-title.txt or YYYY-MM-DD-title.txt
+    # Expected format: DD-title.txt within a YYYY/MM/ directory structure,
+    # or YYYY-MM-DD-title.txt as a standalone file.
     basename = Path.basename(filename, ".txt")
 
+    # Extract year/month from directory path if present (e.g., "2026/06/10-title.txt")
+    dir_parts = filename |> Path.dirname() |> String.split("/", trim: true)
+    {dir_year, dir_month} = case dir_parts do
+      [y, m] when byte_size(y) == 4 and byte_size(m) == 2 -> {y, m}
+      _ -> {nil, nil}
+    end
+
     cond do
-      # Format: DD-title
+      # Format: DD-title (within YYYY/MM/ directory)
       Regex.match?(~r/^\d{2}-/, basename) ->
         [day, rest] = String.split(basename, "-", parts: 2)
         title = rest |> String.replace("-", " ") |> String.trim()
-        {day, humanize_title(title)}
+        date = if dir_year && dir_month do
+          "#{dir_year}/#{dir_month}/#{day}"
+        else
+          day
+        end
+        {date, humanize_title(title)}
 
       # Format: YYYY-MM-DD-title
       Regex.match?(~r/^\d{4}-\d{2}-\d{2}-/, basename) ->

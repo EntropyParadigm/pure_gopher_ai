@@ -1,0 +1,221 @@
+Migrating GopherLab to a Raspberry Pi
+
+GopherLab has moved off the Mac Studio and onto a Raspberry Pi 3B+.
+The entire server -- Gopher, Gemini, Tor, and AI -- now runs as
+embedded firmware on a $35 single-board computer with 1GB of RAM.
+
+This post walks through why we did it, how it works, and what broke
+along the way.
+
+=== Why Move to the Pi? ===
+
+The Mac Studio was overkill. GopherLab is a text protocol server
+that handles a few concurrent connections at most. Running it on a
+machine with 64GB of RAM and an M2 Max chip was like using a freight
+train to deliver a letter.
+
+The Pi gives us:
+  - Dedicated hardware (no shared workstation concerns)
+  - Low power draw (~2.5W idle vs ~50W for the Mac)
+  - Nerves firmware (immutable, boots in seconds, OTA updates)
+  - A fun challenge
+
+=== The Dual-Target Architecture ===
+
+We did not fork the repo. Instead, a single codebase supports both
+targets using Elixir's Mix target system:
+
+  MIX_TARGET=host    Mac build (Ollama + Bumblebee, Metal GPU)
+  MIX_TARGET=rpi3    Pi build (Gemini Flash API, no local ML)
+
+The key trick is target-conditional dependencies in mix.exs. ML
+libraries like Bumblebee, Nx, EXLA, and Torchx are tagged with
+targets: [:host] so they only compile for the Mac. Nerves system
+packages are tagged with targets: [:rpi3] so they only compile for
+the Pi.
+
+At runtime, a single config key decides everything:
+
+  config :pure_gopher_ai, ai_backend: :gemini_api
+
+The AI engine checks this and routes to the Gemini HTTP client
+instead of the local Ollama/Bumblebee inference chain. All the
+existing AI code stays in the codebase untouched -- it just is
+not called on the Pi.
+
+=== The AI Backend: Gemini Flash 2.5 ===
+
+The Pi has 1GB of RAM. That rules out any local model inference.
+Even the smallest quantized models would not fit alongside the
+application and OS.
+
+We switched to Google Gemini Flash 2.5 via their REST API. The
+module uses Finch for HTTP and supports streaming via Server-Sent
+Events (SSE). Responses come back in 1-3 seconds, which is
+comparable to what Ollama achieved with Gemma 4 on the Mac.
+
+The SSE parser was the trickiest part. Gemini sends event
+boundaries as \r\n\r\n (CRLF pairs), but our original parser was
+splitting on \n\n (bare LF pairs). This meant the parser never
+found event boundaries and responses came back empty. The fix was
+normalizing \r\n to \n before buffering, then splitting on \n\n.
+
+The API key gets baked into the firmware at compile time since
+Nerves has no shell environment at runtime. You must set
+GEMINI_API_KEY in your shell before running mix firmware.
+
+=== Nerves: Elixir as Firmware ===
+
+Nerves is an Elixir framework for embedded systems. It produces a
+complete firmware image -- Linux kernel, BEAM VM, your application,
+and nothing else. No package manager, no shell (SSH drops you into
+an IEx prompt), no mutable filesystem except a dedicated /data
+partition.
+
+The build process:
+  1. Cross-compile on the Mac (MIX_TARGET=rpi3 mix firmware)
+  2. First deploy: burn to SD card (mix burn)
+  3. Updates: OTA over the network (mix upload 192.168.1.2)
+
+OTA uses A/B partitions. New firmware writes to the inactive
+partition and reboots into it. If it fails, the bootloader reverts
+to the previous partition. You must call
+Nerves.Runtime.validate_firmware() after a successful boot or the
+next upload will fail with "neither A nor B partition active."
+
+=== Memory Optimization ===
+
+With only 1GB of RAM, we had to be intentional about what runs.
+The Mac build starts ~47 GenServers for every community feature
+(bulletin board, federation, webhooks, user analytics, etc). Most
+of these are empty on a fresh Pi with no users.
+
+In Pi mode, the application now starts only essential services:
+  - Finch (HTTP client)
+  - Rate limiter
+  - Conversation store
+  - Response cache
+  - Telemetry
+  - Session management
+  - RAG (keyword search only, no embeddings)
+  - Guestbook, Pastebin, Fortune, PhlogComments
+
+Everything else is skipped. This cut loaded code by 25% and
+reduced BEAM memory from 48MB to 42MB. The Pi boots with 736MB
+free out of 831MB total.
+
+Other tuning in config/target.exs:
+  - Blocklist disabled (no need to fetch 10,000+ IPs)
+  - Cache limited to 50 entries (from 1000)
+  - Conversation TTL cut to 10 minutes (from 1 hour)
+  - Rate limit halved to 30 req/min
+  - VM async threads reduced from 16 to 8
+
+The BEAM VM args are tuned for 4 ARM cores and tight memory:
+  +S 4:4   (4 schedulers)
+  +A 8     (8 async threads)
+  +hms 4096 (4KB initial heap)
+  -env ERL_FULLSWEEP_AFTER 10 (aggressive GC)
+
+=== Networking: Burrow Tunnel ===
+
+The Pi sits behind a home router with no port forwarding. We use
+Burrow, an Elixir TCP tunneling library, to expose services
+through a relay VPS at gopherlab.org.
+
+Three tunnels run through a single encrypted connection:
+  Gopher:  Pi port 70  -> gopherlab.org port 70
+  Gemini:  Pi port 1965 -> gopherlab.org port 1965
+  SSH:     Pi port 22  -> gopherlab.org port 48372
+
+On Nerves, the Burrow token must be baked at compile time (no
+runtime env vars). The target.exs config handles this with
+System.get_env("BURROW_TOKEN") which runs at compile time during
+mix firmware.
+
+=== Tor on Nerves ===
+
+On the Mac, Tor runs as a system daemon managed by Homebrew. On
+Nerves there is no package manager, so we built a TorManager
+GenServer that:
+  1. Writes /data/tor/torrc with hidden service config
+  2. Starts a statically compiled Tor binary via Port.open
+  3. Monitors the process and auto-restarts on crash
+  4. Polls for the .onion hostname file and updates app config
+
+The static Tor binary for armv7l was cross-compiled on the Mac
+using a build script that produces a ~6MB standalone binary with
+no shared library dependencies.
+
+=== What Broke ===
+
+In rough chronological order:
+
+Empty AI responses
+  The SSE parser issue described above. Took three debug scripts
+  to figure out it was \r\n vs \n.
+
+API key nil in firmware
+  Forgot to export GEMINI_API_KEY before running mix firmware.
+  Nerves bakes env vars at compile time -- if it is not set in
+  your shell, it gets baked as nil (or empty string).
+
+Burrow tunnel not connecting
+  The base config used {:system, "BURROW_TOKEN"} for runtime env
+  var resolution. That works on the Mac but resolves to nil on
+  Nerves. Fixed by overriding with a compile-time value in
+  target.exs.
+
+OTA upload failed
+  After the first OTA, we did not call validate_firmware(). The
+  bootloader saw neither partition as validated and refused the
+  next upload.
+
+Health check reporting degraded
+  The health check looked for PureGopherAi.Serving (the Nx.Serving
+  process) which does not exist on the Pi. Also checked for
+  BulletinBoard which we stopped starting in Pi mode. Fixed by
+  making the health check backend-aware.
+
+Stale beam files
+  Even after mix compile --force, old code persisted in the
+  firmware. Had to run mix clean before compile to get fresh
+  beam files.
+
+=== Current State ===
+
+Everything is running on the Pi:
+
+  Gopher:  gopherlab.org:70 (via Burrow relay)
+  Gemini:  gopherlab.org:1965 (TLS)
+  Tor:     3jeomad...aad.onion:70
+  SSH:     192.168.1.2:22 (local) / gopherlab.org:48372 (relay)
+  AI:      Gemini Flash 2.5 (streamed, ~1-3s responses)
+  Health:  All components healthy
+
+The Mac Studio is no longer running any Gopher services. The
+launchd daemon has been stopped and unloaded.
+
+=== Build and Deploy Reference ===
+
+For anyone setting up their own Pi instance:
+
+  export MIX_TARGET=rpi3
+  export GEMINI_API_KEY="your-key"
+  export BURROW_TOKEN="your-token"
+  mix deps.get
+  mix firmware
+  mix burn           (first time, SD card)
+  mix upload <ip>    (subsequent, OTA)
+
+After first boot, provision data:
+  sftp <pi-ip>
+  put phlog/* /data/gopher/phlog/
+  put cert.pem /data/gopher/gemini/cert.pem
+  put key.pem /data/gopher/gemini/key.pem
+
+Then validate the firmware:
+  ssh <pi-ip>
+  Nerves.Runtime.validate_firmware()
+
+-- The GopherLab Team

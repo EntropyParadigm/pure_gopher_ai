@@ -32,148 +32,89 @@ defmodule PureGopherAi.Application do
       Logger.info("Nx Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
     end
 
-    # Base children: HTTP client, rate limiter, conversation store, clearnet listener
+    # Determine if running on memory-constrained Pi target
+    pi_mode = ai_backend == :gemini_api
+
+    # Core children: always started on every target
     children = [
-      # HTTP client (used by Gemini API, blocklist fetching, etc.)
       {Finch, name: PureGopherAi.Finch},
-
-      # External Blocklist (optional, for Tor abuse prevention)
-      PureGopherAi.Blocklist,
-
-      # Rate Limiter
       PureGopherAi.RateLimiter,
-
-      # Conversation Store
       PureGopherAi.ConversationStore,
-
-      # Response Cache
       PureGopherAi.ResponseCache,
-
-      # Telemetry / Metrics
       PureGopherAi.Telemetry,
-
-      # Session Token Management
-      PureGopherAi.Session,
-
-      # Audit Logging
-      PureGopherAi.AuditLog,
-
-      # CAPTCHA for Tor high-risk actions
-      PureGopherAi.Captcha,
-
-      # IP Reputation Scoring
-      PureGopherAi.IpReputation,
-
-      # User Notifications
-      PureGopherAi.Notifications,
-
-      # Content Reporting
-      PureGopherAi.ContentReports,
-
-      # User Blocking
-      PureGopherAi.UserBlocks,
-
-      # Scheduled Posts
-      PureGopherAi.ScheduledPosts,
-
-      # API Tokens
-      PureGopherAi.ApiTokens,
-
-      # Reactions/Voting
-      PureGopherAi.Reactions,
-
-      # Tags
-      PureGopherAi.Tags,
-
-      # Follows/Subscribe
-      PureGopherAi.Follows,
-
-      # Threaded Comments
-      PureGopherAi.Comments,
-
-      # Content Versioning
-      PureGopherAi.Versioning,
-
-      # Related Content/Recommendations
-      PureGopherAi.RelatedContent,
-
-      # Trending/Popular
-      PureGopherAi.Trending,
-
-      # User Analytics
-      PureGopherAi.UserAnalytics,
-
-      # Federation
-      PureGopherAi.Federation,
-
-      # Webhooks
-      PureGopherAi.Webhooks,
-
-      # Backup/Restore
-      PureGopherAi.Backup,
-
-      # Plugin System
-      PureGopherAi.Plugins,
-
-      # RAG (Retrieval Augmented Generation)
-      PureGopherAi.Rag.DocumentStore,
-      PureGopherAi.Rag.Embeddings,
-      PureGopherAi.Rag.FileWatcher,
-
-      # Guestbook
-      PureGopherAi.Guestbook,
-
-      # Text Adventure
-      PureGopherAi.Adventure,
-
-      # Feed Aggregator
-      PureGopherAi.FeedAggregator,
-
-      # Fortune/Quote Service
-      PureGopherAi.Fortune,
-
-      # Link Directory
-      PureGopherAi.LinkDirectory,
-
-      # Bulletin Board
-      PureGopherAi.BulletinBoard,
-
-      # Pastebin
-      PureGopherAi.Pastebin,
-
-      # Polls / Voting
-      PureGopherAi.Polls,
-
-      # Phlog Comments
-      PureGopherAi.PhlogComments,
-
-      # User Profiles
-      PureGopherAi.UserProfiles,
-
-      # User Phlog (user-submitted blog posts)
-      PureGopherAi.UserPhlog,
-
-      # Calendar / Events
-      PureGopherAi.Calendar,
-
-      # URL Shortener
-      PureGopherAi.UrlShortener,
-
-      # Mailbox / Messaging
-      PureGopherAi.Mailbox,
-
-      # Trivia / Quiz Game
-      PureGopherAi.Trivia,
-
-      # Bookmarks / Favorites
-      PureGopherAi.Bookmarks,
-
-      # Simple Games (Hangman, Number Guess, Word Scramble)
-      PureGopherAi.Games,
-
-      # Terminal Slides (Presentation System)
-      PureGopherAi.Slides
+      PureGopherAi.Session
     ]
+
+    # Community and extended features: skip on Pi to save memory (~30 GenServers + DETS files)
+    children =
+      if pi_mode do
+        Logger.info("Pi mode: starting essential services only (saving memory)")
+
+        children ++
+          [
+            # Only start blocklist if enabled (disabled on Pi via config)
+            if(PureGopherAi.Config.blocklist_enabled?(),
+              do: PureGopherAi.Blocklist,
+              else: nil
+            ),
+            # RAG document store + file watcher (keyword search only, no embeddings)
+            PureGopherAi.Rag.DocumentStore,
+            PureGopherAi.Rag.Embeddings,
+            PureGopherAi.Rag.FileWatcher,
+            # Lightweight community features that don't open DETS
+            PureGopherAi.Fortune,
+            PureGopherAi.Guestbook,
+            PureGopherAi.Pastebin,
+            PureGopherAi.PhlogComments
+          ]
+          |> Enum.reject(&is_nil/1)
+      else
+        children ++
+          [
+            PureGopherAi.Blocklist,
+            PureGopherAi.AuditLog,
+            PureGopherAi.Captcha,
+            PureGopherAi.IpReputation,
+            PureGopherAi.Notifications,
+            PureGopherAi.ContentReports,
+            PureGopherAi.UserBlocks,
+            PureGopherAi.ScheduledPosts,
+            PureGopherAi.ApiTokens,
+            PureGopherAi.Reactions,
+            PureGopherAi.Tags,
+            PureGopherAi.Follows,
+            PureGopherAi.Comments,
+            PureGopherAi.Versioning,
+            PureGopherAi.RelatedContent,
+            PureGopherAi.Trending,
+            PureGopherAi.UserAnalytics,
+            PureGopherAi.Federation,
+            PureGopherAi.Webhooks,
+            PureGopherAi.Backup,
+            PureGopherAi.Plugins,
+            PureGopherAi.Rag.DocumentStore,
+            PureGopherAi.Rag.Embeddings,
+            PureGopherAi.Rag.FileWatcher,
+            PureGopherAi.Guestbook,
+            PureGopherAi.Adventure,
+            PureGopherAi.FeedAggregator,
+            PureGopherAi.Fortune,
+            PureGopherAi.LinkDirectory,
+            PureGopherAi.BulletinBoard,
+            PureGopherAi.Pastebin,
+            PureGopherAi.Polls,
+            PureGopherAi.PhlogComments,
+            PureGopherAi.UserProfiles,
+            PureGopherAi.UserPhlog,
+            PureGopherAi.Calendar,
+            PureGopherAi.UrlShortener,
+            PureGopherAi.Mailbox,
+            PureGopherAi.Trivia,
+            PureGopherAi.Bookmarks,
+            PureGopherAi.Games,
+            PureGopherAi.Slides
+          ]
+      end
 
     # Only start ML infrastructure when using local backend (host/macOS)
     children =
