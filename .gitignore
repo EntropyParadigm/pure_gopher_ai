@@ -22,3 +22,6 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 pure_gopher_ai-*.tar
 
+# Tor cross-compilation build artifacts
+/_build_tor_arm/
+
