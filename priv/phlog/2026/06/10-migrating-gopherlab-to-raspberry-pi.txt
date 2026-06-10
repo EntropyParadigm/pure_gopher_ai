@@ -26,7 +26,7 @@ We did not fork the repo. Instead, a single codebase supports both
 targets using Elixir's Mix target system:
 
   MIX_TARGET=host    Mac build (Ollama + Bumblebee, Metal GPU)
-  MIX_TARGET=rpi3    Pi build (Gemini Flash API, no local ML)
+  MIX_TARGET=rpi3    Pi build (Gemini 2.5 Flash API, no local ML)
 
 The key trick is target-conditional dependencies in mix.exs. ML
 libraries like Bumblebee, Nx, EXLA, and Torchx are tagged with
@@ -43,13 +43,13 @@ instead of the local Ollama/Bumblebee inference chain. All the
 existing AI code stays in the codebase untouched -- it just is
 not called on the Pi.
 
-=== The AI Backend: Gemini Flash 2.5 ===
+=== The AI Backend: Gemini 2.5 Flash ===
 
 The Pi has 1GB of RAM. That rules out any local model inference.
 Even the smallest quantized models would not fit alongside the
 application and OS.
 
-We switched to Google Gemini Flash 2.5 via their REST API. The
+We switched to Google Gemini 2.5 Flash via their REST API. The
 module uses Finch for HTTP and supports streaming via Server-Sent
 Events (SSE). Responses come back in 1-3 seconds, which is
 comparable to what Ollama achieved with Gemma 4 on the Mac.
@@ -75,7 +75,7 @@ partition.
 The build process:
   1. Cross-compile on the Mac (MIX_TARGET=rpi3 mix firmware)
   2. First deploy: burn to SD card (mix burn)
-  3. Updates: OTA over the network (mix upload 192.168.1.2)
+  3. Updates: OTA over the network (mix upload <pi-ip>)
 
 OTA uses A/B partitions. New firmware writes to the inactive
 partition and reboots into it. If it fails, the bootloader reverts
@@ -189,8 +189,8 @@ Everything is running on the Pi:
   Gopher:  gopherlab.org:70 (via Burrow relay)
   Gemini:  gopherlab.org:1965 (TLS)
   Tor:     3jeomad...aad.onion:70
-  SSH:     192.168.1.2:22 (local) / gopherlab.org:48372 (relay)
-  AI:      Gemini Flash 2.5 (streamed, ~1-3s responses)
+  SSH:     gopherlab.org:48372 (via Burrow relay)
+  AI:      Gemini 2.5 Flash (streamed, ~1-3s responses)
   Health:  All components healthy
 
 The Mac Studio is no longer running any Gopher services. The
