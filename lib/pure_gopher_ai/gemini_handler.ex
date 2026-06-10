@@ -299,7 +299,7 @@ defmodule PureGopherAi.GeminiHandler do
     => /health Health check
 
     ---
-    Powered by Elixir + Bumblebee
+    Powered by #{PureGopherAi.Config.platform_info()}
     """)
   end
 
@@ -312,7 +312,7 @@ defmodule PureGopherAi.GeminiHandler do
     A pure Elixir Gemini/Gopher server with native AI inference.
 
     ## Features
-    * AI text generation via Bumblebee
+    * AI text generation (#{PureGopherAi.Config.platform_info()})
     * RAG (Retrieval Augmented Generation)
     * Document knowledge base
     * Dual Gopher + Gemini protocol support

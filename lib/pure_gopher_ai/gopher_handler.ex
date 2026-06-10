@@ -1978,7 +1978,7 @@ defmodule PureGopherAi.GopherHandler do
     """
     iWelcome to PureGopherAI Server\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
-    iPowered by Elixir + Bumblebee + Metal GPU\t\t#{host}\t#{port}
+    iPowered by #{PureGopherAi.Config.platform_info()}\t\t#{host}\t#{port}
     iNetwork: #{network_banner}\t\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== AI Services ===\t\t#{host}\t#{port}
@@ -2131,9 +2131,8 @@ defmodule PureGopherAi.GopherHandler do
       Memory (Processes): #{div(memory[:processes], 1_048_576)} MB
 
       --- AI ---
-      Backend: Bumblebee
+      Platform: #{PureGopherAi.Config.platform_info()}
       Compute: #{backend_info}
-      Model: Llama 3.2 1B Instruct
 
       --- Cache ---
       Status: #{cache_status}

@@ -1,11 +1,18 @@
-## BEAM VM Arguments for Production
-## Copy to rel/vm.args.eex for release builds
+## BEAM VM Arguments
+## Target-aware: detects host (macOS) vs Nerves (Pi) at release build time
 
 ## Name of the node
+<%= if Mix.target() == :host do %>
 -name <%= @release.name %>@127.0.0.1
+<% else %>
+-name <%= @release.name %>@nerves.local
+<% end %>
 
 ## Cookie for distributed erlang
 -setcookie <%= @release.cookie %>
+
+<%= if Mix.target() == :host do %>
+## --- Host/macOS Settings ---
 
 ## Enable SMP automatically based on available processors
 +S <%= System.schedulers_online() %>:<%= System.schedulers_online() %>
@@ -35,10 +42,38 @@
 ## Garbage collection: fullsweep after 20 generations
 -env ERL_FULLSWEEP_AFTER 20
 
-## Enable busy waiting for schedulers (lower latency, higher CPU)
-## Uncomment for latency-critical deployments:
-## +sbwt very_long
-## +swt very_low
+<% else %>
+## --- Raspberry Pi 3B/3B+ Settings (1GB RAM, 4x ARM Cortex-A53) ---
+
+## 4 schedulers (match Pi 3B's 4 cores)
++S 4:4
+
+## Smaller async thread pool (limited memory)
++A 16
+
+## Enable kernel poll (epoll)
++K true
+
+## Lower port limit (embedded, fewer connections)
++Q 4096
+
+## Memory allocator settings (conservative for 1GB RAM)
++MBas aoffcbf
++MHas aoffcbf
++MBlmbcs 256
++MHlmbcs 256
++MMmcs 15
+
+## Smaller initial heap (save memory)
++hms 4096
+
+## Process heap settings
++hmbs 512
+
+## Aggressive garbage collection (free memory sooner)
+-env ERL_FULLSWEEP_AFTER 10
+
+<% end %>
 
 ## Heartbeat for crash recovery
 -heart

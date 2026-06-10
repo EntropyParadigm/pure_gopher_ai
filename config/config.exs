@@ -71,7 +71,15 @@ config :pure_gopher_ai,
   ai_max_new_tokens: 1024,            # Allow space for <think> reasoning
   ai_sequence_length: 2048,           # Context window
 
-  # Ollama backend (primary AI engine)
+  # AI Backend selection (:ollama for host/macOS, :gemini_api for Pi)
+  ai_backend: :ollama,
+
+  # Google Gemini API (used when ai_backend: :gemini_api)
+  gemini_api_key: System.get_env("GEMINI_API_KEY"),
+  gemini_model: System.get_env("GEMINI_MODEL", "gemini-2.5-flash"),
+  gemini_timeout: 120_000,
+
+  # Ollama backend (primary AI engine for host/macOS)
   # Uses local Ollama server for high-quality inference
   ollama_enabled: System.get_env("OLLAMA_ENABLED", "true") == "true",
   ollama_url: System.get_env("OLLAMA_URL", "http://localhost:11434"),
@@ -194,5 +202,10 @@ config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
-# Import environment-specific config (if exists)
+# Import environment-specific config
 import_config "#{config_env()}.exs"
+
+# Import Nerves target-specific config (only when cross-compiling for a device)
+if Mix.target() != :host do
+  import_config "target.exs"
+end

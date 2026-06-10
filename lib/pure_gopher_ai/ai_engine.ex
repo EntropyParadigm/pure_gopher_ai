@@ -33,6 +33,7 @@ defmodule PureGopherAi.AiEngine do
 
   alias PureGopherAi.InputSanitizer
   alias PureGopherAi.Ollama
+  alias PureGopherAi.GeminiApi
 
   @doc """
   Sets up and returns Nx.Serving for text generation.
@@ -188,8 +189,42 @@ defmodule PureGopherAi.AiEngine do
     end
   end
 
-  # Internal generation function - tries Ollama first, falls back to Bumblebee
+  @doc """
+  Returns the configured AI backend.
+  """
+  def ai_backend do
+    Application.get_env(:pure_gopher_ai, :ai_backend, :ollama)
+  end
+
+  # Internal generation function - routes to configured backend
   defp do_generate(prompt, context) do
+    case ai_backend() do
+      :gemini_api ->
+        do_generate_gemini(prompt, context)
+
+      _ ->
+        # Default: Ollama -> Bumblebee fallback chain
+        do_generate_ollama(prompt, context)
+    end
+  end
+
+  # Gemini API generation (Pi target)
+  defp do_generate_gemini(prompt, context) do
+    system_prompt = if context, do: context, else: system_prompt()
+
+    case GeminiApi.generate(prompt, system: system_prompt) do
+      {:ok, response} ->
+        Logger.debug("Gemini API generated response")
+        response
+
+      {:error, reason} ->
+        Logger.error("Gemini API failed: #{inspect(reason)}")
+        "Error: AI service unavailable. Please try again later."
+    end
+  end
+
+  # Ollama -> Bumblebee fallback chain (host/macOS target)
+  defp do_generate_ollama(prompt, context) do
     if Ollama.enabled?() do
       # Try Ollama first (better quality, faster)
       system_prompt = if context, do: context, else: system_prompt()
@@ -243,6 +278,33 @@ defmodule PureGopherAi.AiEngine do
       "Hello, world!..."
   """
   def generate_stream(prompt, context, chunk_callback) when is_binary(prompt) and is_function(chunk_callback, 1) do
+    case ai_backend() do
+      :gemini_api ->
+        generate_stream_gemini(prompt, context, chunk_callback)
+
+      _ ->
+        generate_stream_ollama(prompt, context, chunk_callback)
+    end
+  end
+
+  # Gemini API streaming (Pi target)
+  defp generate_stream_gemini(prompt, context, chunk_callback) do
+    system_prompt = if context, do: context, else: system_prompt()
+
+    case GeminiApi.generate_stream(prompt, chunk_callback, system: system_prompt) do
+      {:ok, response} ->
+        response
+
+      {:error, reason} ->
+        Logger.error("Gemini API streaming failed: #{inspect(reason)}")
+        error_msg = "Error: AI service unavailable. Please try again later."
+        chunk_callback.(error_msg)
+        error_msg
+    end
+  end
+
+  # Ollama -> Bumblebee streaming fallback chain (host/macOS target)
+  defp generate_stream_ollama(prompt, context, chunk_callback) do
     if Ollama.enabled?() do
       # Try Ollama streaming first
       system_prompt = if context, do: context, else: system_prompt()

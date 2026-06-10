@@ -9,6 +9,9 @@ defmodule PureGopherAi.Application do
 
   @impl true
   def start(_type, _args) do
+    # Ensure data directories exist (critical for Nerves where /data is writable partition)
+    ensure_data_directories()
+
     # Initialize persistent terms for fast config access
     PureGopherAi.Config.init()
 
@@ -20,15 +23,20 @@ defmodule PureGopherAi.Application do
     gemini_port = PureGopherAi.Config.gemini_port()
     finger_enabled = PureGopherAi.Config.finger_enabled?()
     finger_port = PureGopherAi.Config.finger_port()
+    ai_backend = Application.get_env(:pure_gopher_ai, :ai_backend, :ollama)
 
     Logger.info("Starting PureGopherAI server...")
-    Logger.info("Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
+    Logger.info("AI Backend: #{ai_backend}")
 
-    # Setup the AI serving
-    serving = PureGopherAi.AiEngine.setup_serving()
+    if ai_backend == :ollama do
+      Logger.info("Nx Backend: #{inspect(Application.get_env(:nx, :default_backend))}")
+    end
 
-    # Base children: rate limiter, conversation store, AI engine, clearnet listener
+    # Base children: HTTP client, rate limiter, conversation store, clearnet listener
     children = [
+      # HTTP client (used by Gemini API, blocklist fetching, etc.)
+      {Finch, name: PureGopherAi.Finch},
+
       # External Blocklist (optional, for Tor abuse prevention)
       PureGopherAi.Blocklist,
 
@@ -164,21 +172,35 @@ defmodule PureGopherAi.Application do
       PureGopherAi.Games,
 
       # Terminal Slides (Presentation System)
-      PureGopherAi.Slides,
+      PureGopherAi.Slides
+    ]
 
-      # Dynamic supervisor for multiple model servings
-      {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
+    # Only start ML infrastructure when using local backend (host/macOS)
+    children =
+      if ai_backend == :ollama do
+        serving = PureGopherAi.AiEngine.setup_serving()
 
-      # Model Registry (manages lazy loading of models)
-      PureGopherAi.ModelRegistry,
+        children ++
+          [
+            # Dynamic supervisor for multiple model servings
+            {DynamicSupervisor, strategy: :one_for_one, name: PureGopherAi.ModelSupervisor},
 
-      # Default AI Inference Engine - Nx.Serving with batching
-      {Nx.Serving,
-       serving: serving,
-       name: PureGopherAi.Serving,
-       batch_size: 1,
-       batch_timeout: 100},
+            # Model Registry (manages lazy loading of models)
+            PureGopherAi.ModelRegistry,
 
+            # Default AI Inference Engine - Nx.Serving with batching
+            {Nx.Serving,
+             serving: serving,
+             name: PureGopherAi.Serving,
+             batch_size: 1,
+             batch_timeout: 100}
+          ]
+      else
+        Logger.info("Skipping ML infrastructure (using #{ai_backend} backend)")
+        children
+      end
+
+    children = children ++ [
       # Clearnet Gopher TCP Server
       Supervisor.child_spec(
         {ThousandIsland,
@@ -202,7 +224,15 @@ defmodule PureGopherAi.Application do
             id: :tor_listener
           )
 
-        children ++ [tor_child]
+        children = children ++ [tor_child]
+
+        # On Nerves (non-host targets), start TorManager to manage the Tor process
+        # On host/macOS, the system Tor daemon is managed externally
+        if ai_backend != :ollama do
+          children ++ [PureGopherAi.TorManager]
+        else
+          children
+        end
       else
         children
       end
@@ -213,15 +243,18 @@ defmodule PureGopherAi.Application do
         cert_file = Application.get_env(:pure_gopher_ai, :gemini_cert_file)
         key_file = Application.get_env(:pure_gopher_ai, :gemini_key_file)
 
-        if cert_file && key_file && File.exists?(Path.expand(cert_file)) && File.exists?(Path.expand(key_file)) do
+        expanded_cert = expand_path(cert_file)
+        expanded_key = expand_path(key_file)
+
+        if cert_file && key_file && File.exists?(expanded_cert) && File.exists?(expanded_key) do
           gemini_child =
             Supervisor.child_spec(
               {ThousandIsland,
                port: gemini_port,
                transport_module: ThousandIsland.Transports.SSL,
                transport_options: [
-                 certfile: Path.expand(cert_file),
-                 keyfile: Path.expand(key_file)
+                 certfile: expanded_cert,
+                 keyfile: expanded_key
                ],
                handler_module: PureGopherAi.GeminiHandler},
               id: :gemini_listener
@@ -276,7 +309,7 @@ defmodule PureGopherAi.Application do
           cert_file = Application.get_env(:pure_gopher_ai, :gemini_cert_file)
           key_file = Application.get_env(:pure_gopher_ai, :gemini_key_file)
 
-          if cert_file && key_file && File.exists?(Path.expand(cert_file)) do
+          if cert_file && key_file && File.exists?(expand_path(cert_file)) do
             Logger.info("Gemini: Server listening on port #{gemini_port} (TLS)")
           end
         end
@@ -291,4 +324,36 @@ defmodule PureGopherAi.Application do
         error
     end
   end
+
+  # Ensure data directories exist.
+  # On Nerves, /data is the writable partition that persists across firmware updates.
+  # On host/macOS, ~/.gopher directories are created as needed.
+  defp ensure_data_directories do
+    dirs =
+      [
+        Application.get_env(:pure_gopher_ai, :data_dir),
+        Application.get_env(:pure_gopher_ai, :phlog_dir),
+        Application.get_env(:pure_gopher_ai, :rag_docs_dir),
+        Application.get_env(:pure_gopher_ai, :content_dir),
+        Application.get_env(:pure_gopher_ai, :backup_dir, nil),
+        Application.get_env(:pure_gopher_ai, :finger_plan_dir, nil),
+        Application.get_env(:pure_gopher_ai, :plugins_dir, nil)
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(&expand_path/1)
+
+    Enum.each(dirs, fn dir ->
+      case File.mkdir_p(dir) do
+        :ok -> :ok
+        {:error, reason} -> Logger.warning("Failed to create directory #{dir}: #{reason}")
+      end
+    end)
+  end
+
+  # Expand ~ paths but leave absolute paths as-is (for Nerves /data/... paths)
+  defp expand_path(path) when is_binary(path) do
+    if String.starts_with?(path, "/"), do: path, else: Path.expand(path)
+  end
+
+  defp expand_path(nil), do: nil
 end

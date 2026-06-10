@@ -135,6 +135,14 @@ defmodule PureGopherAi.Config do
   @doc "Get application start time (for uptime calculation)"
   def start_time, do: get(:start_time)
 
+  @doc "Get platform description based on configured AI backend"
+  def platform_info do
+    case Application.get_env(:pure_gopher_ai, :ai_backend, :ollama) do
+      :gemini_api -> "Elixir + Gemini Flash on Raspberry Pi"
+      _ -> "Elixir + Bumblebee + Metal GPU"
+    end
+  end
+
   @doc "Get host/port tuple for a network type"
   def host_port(:tor) do
     case onion_address() do
@@ -150,7 +158,8 @@ defmodule PureGopherAi.Config do
   # Private helpers
 
   defp expand_path(path) when is_binary(path) do
-    Path.expand(path)
+    # Absolute paths (e.g., /data/gopher on Nerves) don't need expansion
+    if String.starts_with?(path, "/"), do: path, else: Path.expand(path)
   end
 
   defp expand_path(nil), do: nil

@@ -1,7 +1,18 @@
 # PureGopherAI - Project Context
 
 ## Overview
-A pure Elixir Gopher server (RFC 1436) with AI inference via Ollama (primary, Gemma 4) and Bumblebee (fallback). Optimized for Apple Silicon with Metal GPU acceleration. Triple-stack: clearnet + Tor hidden service + Gemini protocol (TLS).
+A pure Elixir Gopher server (RFC 1436) with AI inference. Dual-target: macOS Apple Silicon (Ollama + Bumblebee) and Raspberry Pi 3B/3B+ via Nerves (Google Gemini Flash API). Triple-stack: clearnet + Tor hidden service + Gemini protocol (TLS).
+
+### Dual-Target Architecture
+
+| | macOS (host) | Raspberry Pi (rpi3) |
+|---|---|---|
+| **MIX_TARGET** | unset or `host` | `rpi3` |
+| **AI Backend** | Ollama + Bumblebee fallback | Google Gemini Flash 2.5 API |
+| **ML Libraries** | Nx, EXLA, Torchx, Bumblebee | None (too heavy for 1GB RAM) |
+| **Tor** | System daemon (external) | TorManager GenServer (managed) |
+| **Data Path** | `~/.gopher/` | `/data/gopher/` (Nerves writable partition) |
+| **Config** | `config.exs` + `{env}.exs` | `config.exs` + `{env}.exs` + `target.exs` |
 
 ## Architecture
 
@@ -97,9 +108,16 @@ TCP Connection (clearnet :70 or tor :7071)
 | `OLLAMA_MODEL` | gemma4:e2b | gemma4:e2b | Ollama model to use |
 | `AI_MODEL` | openai-community/gpt2 | openai-community/gpt2 | Bumblebee fallback model |
 | `HF_TOKEN` | nil | nil | HuggingFace token (for gated models) |
+| `GEMINI_API_KEY` | nil | nil | Google Gemini API key (Pi target) |
+| `GEMINI_MODEL` | gemini-2.5-flash | gemini-2.5-flash | Gemini model name |
+| `WIFI_SSID` | nil | nil | WiFi network name (Pi target, compile-time) |
+| `WIFI_PSK` | nil | nil | WiFi password (Pi target, compile-time) |
 
 **Examples:**
 ```bash
+# macOS development (unchanged)
+iex -S mix
+
 # Disable Tor
 TOR_ENABLED=false iex -S mix
 
@@ -108,6 +126,11 @@ ONION_ADDRESS="abc123.onion" MIX_ENV=prod mix run --no-halt
 
 # Custom ports
 GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
+
+# Pi firmware build
+export MIX_TARGET=rpi3
+export GEMINI_API_KEY="your-key"
+mix firmware
 ```
 
 ## Key Files
@@ -155,11 +178,16 @@ GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 | `lib/pure_gopher_ai/input_sanitizer.ex` | Prompt injection defense, input sanitization |
 | `lib/pure_gopher_ai/output_sanitizer.ex` | AI output sanitization, sensitive data redaction |
 | `lib/pure_gopher_ai/request_validator.ex` | Request validation, size limits, pattern blocking |
+| `lib/pure_gopher_ai/gemini_api.ex` | Google Gemini Flash API client (Pi AI backend) |
+| `lib/pure_gopher_ai/tor_manager.ex` | Tor process manager for Nerves (writes torrc, starts/monitors Tor) |
 | `config/config.exs` | Base config (port 70, Tor enabled) |
 | `config/dev.exs` | Dev overrides (port 7070) |
 | `config/prod.exs` | Production (port 70) |
 | `config/test.exs` | Test (port 17070, Tor disabled) |
+| `config/target.exs` | Nerves target config (paths, networking, Gemini API backend) |
 | `scripts/setup-tor.sh` | Automated Tor hidden service setup |
+| `scripts/build-tor-arm.sh` | Cross-compile static Tor binary for Pi |
+| `rootfs_overlay/usr/bin/` | Nerves firmware overlay (place static Tor binary here) |
 | `scripts/setup-gopher-user.sh` | Create dedicated gopher user for production |
 | `scripts/gopher-service.sh` | Service management helper (start/stop/status) |
 
@@ -416,20 +444,34 @@ sudo ./scripts/setup-tor.sh
 ## Commands
 
 ```bash
-# Development (Linux, port 7070)
+# macOS development (port 7070)
 iex -S mix
 
-# Production (macOS, port 70)
+# macOS production (port 70)
 MIX_ENV=prod mix run --no-halt
 
 # With onion address
 ONION_ADDRESS="abc123.onion" MIX_ENV=prod mix run --no-halt
 
-# Sync and deploy to gopher user (production)
+# Sync and deploy to gopher user (macOS production)
 sudo ./scripts/sync-gopher.sh
 
 # EXLA compile fix for Xcode 16.3+
 CFLAGS="-Wno-error=invalid-specialization" mix deps.compile exla --force
+
+# Pi firmware build
+export MIX_TARGET=rpi3
+export GEMINI_API_KEY="your-key"
+mix deps.get && mix firmware
+
+# Pi first deploy (burn SD card)
+mix burn
+
+# Pi OTA update (over network)
+mix upload nerves.local
+
+# Cross-compile static Tor for Pi
+./scripts/build-tor-arm.sh
 ```
 
 ## Client Connections
@@ -463,14 +505,29 @@ GOPHER_PORT=70 MIX_ENV=prod mix run --no-halt
 ```
 
 ## Dependencies
+
+### Shared (both targets)
 - `thousand_island` - TCP server
+- `finch` - HTTP client (Gemini API, general HTTP)
+- `jason` - JSON handling
+- `burrow` - TCP/UDP tunneling (expose services without opening ports)
+- `nerves` - Embedded framework (runtime: false on host)
+- `shoehorn` - Boot management
+- `ring_logger` - In-memory logging
+- `toolshed` - IEx helpers
+- Ollama - Local LLM server (primary AI, external dependency, host only)
+
+### Host-only (macOS, `targets: [:host]`)
 - `bumblebee` - Hugging Face model loading (fallback AI)
 - `nx` - Numerical computing
 - `exla` - XLA backend (CPU/GPU)
 - `torchx` - PyTorch backend (Metal MPS)
-- `jason` - JSON handling
-- `burrow` - TCP/UDP tunneling (expose services without opening ports)
-- Ollama - Local LLM server (primary AI, external dependency)
+
+### Device-only (Pi, `targets: @all_targets`)
+- `nerves_runtime` - Nerves system runtime
+- `nerves_pack` - Network, SSH, NTP bundle
+- `nerves_system_rpi3` - Pi 3B/3B+ system image
+- `vintage_net_ethernet` / `vintage_net_wifi` - Network config
 
 ## Burrow Tunneling
 
@@ -530,17 +587,36 @@ PureGopherAi.Tunnel.status()
 
 ## Model
 
-### Primary: Ollama (default)
+### AI Backend Selection
+
+Set via `config :pure_gopher_ai, ai_backend:` (`:ollama` default, `:gemini_api` for Pi):
+
+```elixir
+# ai_engine.ex routes based on backend:
+case ai_backend() do
+  :gemini_api -> GeminiApi.generate(prompt, system: system_prompt)
+  _           -> Ollama -> Bumblebee fallback chain
+end
+```
+
+### Host: Ollama (default)
 - **Default model:** `gemma4:e2b` (Google Gemma 4, instruction-tuned, ~7.2GB)
 - Ollama enabled by default (`OLLAMA_ENABLED=true`)
 - Supports streaming, chat, and tool use
 - Override model: `OLLAMA_MODEL=gemma4:e4b` (larger) or any Ollama model
 
-### Fallback: Bumblebee
+### Host Fallback: Bumblebee
 - **Fallback model:** `openai-community/gpt2` (lightweight, ~500MB)
 - Used automatically if Ollama is unavailable
 - Bumblebee 0.6.3 supports: GPT-2, Gemma 1, Llama (not Gemma 2/3/4)
 - Note: Bumblebee always loads at startup (consumes memory for fallback)
+
+### Pi: Google Gemini Flash 2.5 API
+- **Default model:** `gemini-2.5-flash` (cloud, via `GEMINI_API_KEY`)
+- Requires internet access (API calls to Google)
+- Supports streaming, chat, multi-turn conversations
+- Override model: `GEMINI_MODEL=gemini-2.5-pro`
+- Module: `lib/pure_gopher_ai/gemini_api.ex` (Finch HTTP client)
 
 ## Gemini Protocol
 
@@ -667,16 +743,30 @@ AnsiArt.get_drop_cap("A")         # Colored
 ```
 
 ## Notes
+
+### General
+- Tor listener only binds to localhost for security
+- Gemini protocol requires TLS certificates (self-signed OK)
+- RAG auto-ingests documents from watch directory every 30s
+
+### macOS (host)
 - Primary AI uses Ollama (must be running locally); Bumblebee is fallback
 - First Ollama request may be slow (model loading into GPU memory)
 - Bumblebee model downloads from Hugging Face on first run
 - Nx.Serving provides automatic request batching for Bumblebee
 - All inference runs locally - no external API calls
-- Tor listener only binds to localhost for security
 - macOS allows port 70 without root; Linux requires setcap
-- Gemini requires TLS certificates (self-signed OK)
-- RAG auto-ingests documents from watch directory every 30s
 - EXLA on macOS with Xcode 16.3+ requires `CFLAGS="-Wno-error=invalid-specialization"` to compile
+
+### Raspberry Pi (rpi3)
+- AI uses Google Gemini Flash API (requires internet + `GEMINI_API_KEY`)
+- ML libraries (Nx, EXLA, Torchx, Bumblebee) are excluded from firmware
+- RAG embeddings are disabled (keyword search fallback only)
+- Data persists on `/data/gopher/` (Nerves writable partition, survives firmware updates)
+- TorManager manages Tor process lifecycle (no system daemon)
+- Static Tor binary must be cross-compiled and placed in `rootfs_overlay/usr/bin/tor`
+- Memory-constrained: cache limited to 100 entries, conversations to 5 messages
+- VM args tuned for 1GB RAM: 4 schedulers, 16 async threads, aggressive GC
 
 ## Security
 
@@ -855,3 +945,117 @@ sudo ./scripts/gopher-service.sh start
 export ONION_ADDRESS="your-address.onion"
 export TOR_ENABLED=true
 ```
+
+## Raspberry Pi 3B/3B+ Deployment (Nerves)
+
+Run PureGopherAI as embedded firmware on a Raspberry Pi via Nerves. AI uses Google Gemini Flash API (cloud) since the Pi's 1GB RAM cannot run local models.
+
+### Prerequisites
+
+1. **Nerves bootstrap:** `mix archive.install hex nerves_bootstrap`
+2. **Google Gemini API key:** Get from [Google AI Studio](https://aistudio.google.com/apikey)
+3. **Static Tor binary** (for hidden service): `./scripts/build-tor-arm.sh`
+
+### Build Firmware
+
+```bash
+# Set target and credentials
+export MIX_TARGET=rpi3
+export GEMINI_API_KEY="your-gemini-api-key"
+
+# Optional: WiFi (baked into firmware at compile time)
+export WIFI_SSID="your-network"
+export WIFI_PSK="your-password"
+
+# Fetch deps and build
+mix deps.get
+mix firmware
+```
+
+### Deploy
+
+```bash
+# First deploy: burn to SD card (insert micro SD into Mac)
+mix burn
+
+# Subsequent deploys: OTA over network (no SD swap needed)
+mix upload nerves.local
+
+# Provision data to Pi after first boot
+scp -r priv/phlog/* nerves.local:/data/gopher/phlog/
+scp ~/.gopher/gemini/cert.pem nerves.local:/data/gopher/gemini/
+scp ~/.gopher/gemini/key.pem nerves.local:/data/gopher/gemini/
+```
+
+### Pi Directory Structure (Nerves)
+
+```
+/data/                     # Writable partition (persists across firmware updates)
+├── gopher/
+│   ├── data/              # DETS persistent data
+│   ├── phlog/             # Blog posts
+│   ├── docs/              # RAG documents (keyword search only)
+│   ├── backups/           # Backups
+│   ├── gemini/            # TLS certificates
+│   │   ├── cert.pem
+│   │   └── key.pem
+│   ├── finger/            # Finger protocol data
+│   ├── plugins/           # Plugin storage
+│   └── blocklist.txt      # Custom blocklist
+└── tor/
+    ├── torrc              # Auto-generated by TorManager
+    ├── hidden_service/    # Created by Tor
+    │   ├── hostname       # .onion address (auto-discovered)
+    │   └── private_key
+    └── logs/
+        └── tor.log
+```
+
+### Verification
+
+```bash
+# SSH into Pi
+ssh nerves.local
+
+# Check AI backend
+iex> PureGopherAi.AiEngine.ai_backend()
+:gemini_api
+
+# Check Tor status
+iex> PureGopherAi.TorManager.status()
+%{status: :running, onion_address: "abc123.onion", ...}
+
+# Test from another machine
+echo "" | nc <pi-ip> 70                              # Gopher root menu
+echo "ask What is Elixir?" | nc <pi-ip> 70           # AI query via Gemini
+openssl s_client -connect <pi-ip>:1965               # Gemini protocol
+torsocks sh -c 'echo "" | nc <onion-address> 70'     # Tor access
+```
+
+### Tor on Nerves
+
+On Nerves, there is no system Tor daemon. `TorManager` (a GenServer) manages the entire lifecycle:
+
+1. Writes `/data/tor/torrc` with hidden service config
+2. Starts static Tor binary via `Port.open/2`
+3. Monitors process, auto-restarts on crash
+4. Polls for `.onion` hostname and updates app config
+
+**Requires:** A statically compiled Tor binary for armv7l at `rootfs_overlay/usr/bin/tor`. Build it with:
+
+```bash
+./scripts/build-tor-arm.sh
+# Produces: rootfs_overlay/usr/bin/tor (~5-8 MB static binary)
+# Then rebuild firmware: MIX_TARGET=rpi3 mix firmware
+```
+
+### Pi-Specific Config (config/target.exs)
+
+Automatically loaded when `MIX_TARGET=rpi3`. Key overrides:
+- `ai_backend: :gemini_api` (cloud AI instead of local ML)
+- `rag_embeddings_enabled: false` (keyword search only)
+- `cache_max_entries: 100` (reduced from 1000)
+- `conversation_max_messages: 5` (reduced from 10)
+- All paths point to `/data/gopher/` (Nerves writable partition)
+- Logger uses `RingLogger` (in-memory, no console on embedded)
+- VintageNet for Ethernet DHCP + optional WiFi
