@@ -115,8 +115,15 @@ defmodule PureGopherAi.GopherHandler do
         # Record telemetry
         Telemetry.record_request(selector, network: network)
 
-        # Route selector - pass socket for streaming support
-        case route_selector(selector, host, port, network, client_ip, socket) do
+        # Guard for services not started on Pi (return clean error instead of crash)
+        response =
+          if pi_unavailable?(selector) do
+            error_response("This feature is not available on the embedded server")
+          else
+            route_selector(selector, host, port, network, client_ip, socket)
+          end
+
+        case response do
           :streamed ->
             # Response already sent via streaming
             :ok
@@ -183,6 +190,20 @@ defmodule PureGopherAi.GopherHandler do
 
   # Get appropriate host/port based on network type (uses persistent terms for speed)
   defp get_host_port(network), do: PureGopherAi.Config.host_port(network)
+
+  # Services unavailable on Pi (GenServers not started to save memory)
+  @pi_unavailable_prefixes ~w(
+    /board /polls /users /calendar /short /mail /trivia /bookmarks
+    /games /adventure /links /slides /phlog/user
+  )
+
+  defp pi_mode? do
+    Application.get_env(:pure_gopher_ai, :ai_backend) == :gemini_api
+  end
+
+  defp pi_unavailable?(selector) do
+    pi_mode?() and Enum.any?(@pi_unavailable_prefixes, &String.starts_with?(selector, &1))
+  end
 
   # Route selector to appropriate handler (with socket for streaming)
   defp route_selector("", host, port, network, _ip, _socket), do: root_menu(host, port, network)
@@ -2005,23 +2026,7 @@ defmodule PureGopherAi.GopherHandler do
     1ASCII Art Generator\t/art\t#{host}\t#{port}
     i\t\t#{host}\t#{port}
     i=== Community ===\t\t#{host}\t#{port}
-    1Guestbook\t/guestbook\t#{host}\t#{port}
-    1Text Adventure\t/adventure\t#{host}\t#{port}
-    1Fortune & Quotes\t/fortune\t#{host}\t#{port}
-    1Link Directory\t/links\t#{host}\t#{port}
-    1Bulletin Board\t/board\t#{host}\t#{port}
-    1Pastebin\t/paste\t#{host}\t#{port}
-    1Polls & Voting\t/polls\t#{host}\t#{port}
-    1User Profiles\t/users\t#{host}\t#{port}
-    1Calendar & Events\t/calendar\t#{host}\t#{port}
-    1URL Shortener\t/short\t#{host}\t#{port}
-    1Quick Utilities\t/utils\t#{host}\t#{port}
-    1Mailbox\t/mail\t#{host}\t#{port}
-    1Trivia Quiz\t/trivia\t#{host}\t#{port}
-    1Bookmarks\t/bookmarks\t#{host}\t#{port}
-    7Unit Converter\t/convert\t#{host}\t#{port}
-    7Calculator\t/calc\t#{host}\t#{port}
-    1Games\t/games\t#{host}\t#{port}
+    #{community_menu(host, port)}
     #{files_section}i\t\t#{host}\t#{port}
     i=== Server ===\t\t#{host}\t#{port}
     0About this server\t/about\t#{host}\t#{port}
@@ -2033,6 +2038,40 @@ defmodule PureGopherAi.GopherHandler do
     iTip: /summary/phlog/<path> for TL;DR summaries\t\t#{host}\t#{port}
     .
     """
+  end
+
+  defp community_menu(host, port) do
+    # Items always available on all targets
+    always = [
+      "1Guestbook\t/guestbook\t#{host}\t#{port}",
+      "1Fortune & Quotes\t/fortune\t#{host}\t#{port}",
+      "1Pastebin\t/paste\t#{host}\t#{port}",
+      "1Quick Utilities\t/utils\t#{host}\t#{port}",
+      "7Unit Converter\t/convert\t#{host}\t#{port}",
+      "7Calculator\t/calc\t#{host}\t#{port}"
+    ]
+
+    # Items only available on host (pruned on Pi for memory)
+    host_only =
+      if pi_mode?() do
+        []
+      else
+        [
+          "1Text Adventure\t/adventure\t#{host}\t#{port}",
+          "1Link Directory\t/links\t#{host}\t#{port}",
+          "1Bulletin Board\t/board\t#{host}\t#{port}",
+          "1Polls & Voting\t/polls\t#{host}\t#{port}",
+          "1User Profiles\t/users\t#{host}\t#{port}",
+          "1Calendar & Events\t/calendar\t#{host}\t#{port}",
+          "1URL Shortener\t/short\t#{host}\t#{port}",
+          "1Mailbox\t/mail\t#{host}\t#{port}",
+          "1Trivia Quiz\t/trivia\t#{host}\t#{port}",
+          "1Bookmarks\t/bookmarks\t#{host}\t#{port}",
+          "1Games\t/games\t#{host}\t#{port}"
+        ]
+      end
+
+    (always ++ host_only) |> Enum.join("\r\n")
   end
 
   # Serve static files via gophermap
