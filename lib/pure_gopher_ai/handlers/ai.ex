@@ -57,7 +57,7 @@ defmodule PureGopherAi.Handlers.Ai do
                 #{safe_response}
 
                 ---
-                Generated in #{elapsed}ms using GPU acceleration
+                Generated in #{elapsed}ms via #{PureGopherAi.AiEngine.backend_label()}
                 """,
                 host,
                 port
@@ -591,7 +591,7 @@ defmodule PureGopherAi.Handlers.Ai do
     elapsed = System.monotonic_time(:millisecond) - start_time
     Logger.info("AI Response streamed in #{elapsed}ms")
 
-    Shared.stream_chunk(socket, "\n---\nGenerated in #{elapsed}ms using GPU acceleration (streamed)", host, port)
+    Shared.stream_chunk(socket, "\n---\nGenerated in #{elapsed}ms via #{PureGopherAi.AiEngine.backend_label()} (streamed)", host, port)
     ThousandIsland.Socket.send(socket, ai_nav_footer(host, port))
 
     :streamed

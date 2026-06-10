@@ -345,6 +345,20 @@ defmodule PureGopherAi.AiEngine do
   end
 
   @doc """
+  Returns a human-readable label for the current AI backend.
+  """
+  def backend_label do
+    case ai_backend() do
+      :gemini_api ->
+        model = Application.get_env(:pure_gopher_ai, :gemini_model, "gemini-2.5-flash")
+        "Gemini #{model}"
+
+      _ ->
+        "GPU acceleration"
+    end
+  end
+
+  @doc """
   Gets the default system prompt if configured.
   """
   def system_prompt do

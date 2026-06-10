@@ -261,7 +261,8 @@ defmodule PureGopherAi.GeminiApi do
     request =
       Finch.build(:post, url, [{"content-type", "application/json"}], json_body)
 
-    # Collect SSE chunks
+    # Collect SSE chunks. Gemini sends events separated by blank lines.
+    # Normalize \r\n to \n so splitting works regardless of line ending style.
     acc = %{buffer: "", full_response: ""}
 
     result =
@@ -273,36 +274,54 @@ defmodule PureGopherAi.GeminiApi do
           acc
 
         {:data, data}, acc ->
-          # SSE format: "data: {json}\n\n"
-          buffer = acc.buffer <> data
+          # Normalize line endings and append to buffer
+          normalized = String.replace(data, "\r\n", "\n")
+          buffer = acc.buffer <> normalized
 
-          {new_buffer, new_full} =
-            buffer
-            |> String.split("\n\n", trim: true)
-            |> Enum.reduce({buffer, acc.full_response}, fn line, {buf, full} ->
-              case parse_sse_line(line) do
-                {:ok, text} ->
-                  callback.(text)
-                  # Remove the parsed line from buffer
-                  remaining = String.replace(buf, line <> "\n\n", "", global: false)
-                  {remaining, full <> text}
+          # Split on double-newline (SSE event boundary)
+          # The last element may be incomplete — keep it in the buffer
+          parts = String.split(buffer, "\n\n")
+          {events, [remainder]} = Enum.split(parts, -1)
 
-                :skip ->
-                  {buf, full}
+          new_full =
+            Enum.reduce(events, acc.full_response, fn event, full ->
+              event
+              |> String.split("\n", trim: true)
+              |> Enum.reduce(full, fn line, inner_full ->
+                case parse_sse_line(line) do
+                  {:ok, text} ->
+                    callback.(text)
+                    inner_full <> text
 
-                :incomplete ->
-                  {buf, full}
-              end
+                  _ ->
+                    inner_full
+                end
+              end)
             end)
 
-          %{acc | buffer: new_buffer, full_response: new_full}
+          %{acc | buffer: remainder, full_response: new_full}
       end,
       receive_timeout: timeout
       )
 
     case result do
       {:ok, final_acc} ->
-        {:ok, String.trim(final_acc.full_response)}
+        # Parse any remaining buffer content (last event may not end with \n\n)
+        remaining_text =
+          final_acc.buffer
+          |> String.split("\n", trim: true)
+          |> Enum.reduce("", fn line, text_acc ->
+            case parse_sse_line(line) do
+              {:ok, text} ->
+                callback.(text)
+                text_acc <> text
+
+              _ ->
+                text_acc
+            end
+          end)
+
+        {:ok, String.trim(final_acc.full_response <> remaining_text)}
 
       {:error, reason} ->
         Logger.warning("Gemini streaming failed: #{inspect(reason)}")

@@ -92,6 +92,22 @@ config :pure_gopher_ai,
   plugins_dir: "/data/gopher/plugins",
   tor_data_dir: "/data/tor"
 
+# --- Burrow Tunnel ---
+# On Nerves, runtime env vars don't exist. Bake the token at compile time.
+# Set BURROW_TOKEN env var before running: MIX_TARGET=rpi3 mix firmware
+config :pure_gopher_ai, :tunnel,
+  enabled: true,
+  server: System.get_env("BURROW_SERVER", "gopherlab.org:4000"),
+  token: System.get_env("BURROW_TOKEN"),
+  encryption: :noise,
+  noise_server_pubkey: System.get_env("BURROW_NOISE_PUBKEY", "jLP+tx3QcjtOyky0p/PfvH09dbqNuGCOrKf/z7QvXWQ="),
+  reconnect: true,
+  tunnels: [
+    [name: "gopher", local: 70, remote: 70],
+    [name: "gemini", local: 1965, remote: 1965],
+    [name: "ssh", local: 22, remote: 48372]
+  ]
+
 # --- Memory-Sensitive Tuning ---
 # Pi 3B has only 1GB RAM - reduce memory usage
 config :pure_gopher_ai,
