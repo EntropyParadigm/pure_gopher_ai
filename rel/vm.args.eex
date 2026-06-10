@@ -9,7 +9,7 @@
 <% end %>
 
 ## Cookie for distributed erlang
--setcookie <%= @release.cookie %>
+-setcookie <%= @release.options[:cookie] || "pure_gopher_ai_cookie" %>
 
 <%= if Mix.target() == :host do %>
 ## --- Host/macOS Settings ---

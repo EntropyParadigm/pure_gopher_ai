@@ -1,5 +1,11 @@
 import Config
 
+# Enable the Nerves integration with Mix
+Application.start(:nerves_bootstrap)
+
+# Customize non-Elixir parts of the firmware
+config :nerves, :firmware, rootfs_overlay: "rootfs_overlay"
+
 # Dynamic backend selection based on OS
 # macOS (Darwin) -> Torchx with Metal Performance Shaders (MPS)
 # Other -> EXLA (CPU fallback)

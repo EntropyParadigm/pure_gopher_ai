@@ -10,7 +10,7 @@ defmodule PureGopherAi.MixProject do
       app: @app,
       version: @version,
       elixir: "~> 1.17",
-      archives: [nerves_bootstrap: "~> 1.13"],
+      archives: [nerves_bootstrap: "~> 1.15"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [{@app, release()}],
@@ -73,8 +73,8 @@ defmodule PureGopherAi.MixProject do
 
   defp target_deps do
     [
-      # Nerves runtime (device targets only)
-      {:nerves_runtime, "~> 0.13", targets: @all_targets},
+      # Nerves runtime (available on host for dev/test/CI)
+      {:nerves_runtime, "~> 0.13"},
       {:nerves_pack, "~> 0.7", targets: @all_targets},
       {:nerves_time, "~> 0.4", targets: @all_targets},
       {:nerves_ssh, "~> 1.0", targets: @all_targets},
@@ -82,16 +82,17 @@ defmodule PureGopherAi.MixProject do
       {:vintage_net_wifi, "~> 0.12", targets: @all_targets},
 
       # System image for Raspberry Pi 3B/3B+
-      {:nerves_system_rpi3, "~> 1.27", runtime: false, targets: :rpi3}
+      {:nerves_system_rpi3, "~> 2.0", runtime: false, targets: :rpi3}
     ]
   end
 
   def release do
     [
       overwrite: true,
+      cookie: "#{@app}_cookie",
       include_erts: &Nerves.Release.erts/0,
       steps: [&Nerves.Release.init/1, :assemble],
-      strip_beams: Mix.env() == :prod
+      strip_beams: Mix.env() == :prod or [keep: ["Docs"]]
     ]
   end
 end
