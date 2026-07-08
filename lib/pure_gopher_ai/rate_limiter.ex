@@ -27,6 +27,12 @@ defmodule PureGopherAi.RateLimiter do
   @burst_window_ms 5_000     # 5 second window for burst detection
   @burst_threshold 20        # More than 20 requests in 5 seconds = burst
 
+  # Loopback is exempt from rate limiting and banning. Public traffic reaches
+  # this server through the burrow tunnel, which connects to 127.0.0.1, so every
+  # visitor shares the loopback address. Per-IP limits there would auto-ban the
+  # single source and take the whole public site down.
+  @loopback_ips ["127.0.0.1", "0:0:0:0:0:0:0:1", "::1"]
+
   # Client API
 
   @doc """
@@ -46,6 +52,9 @@ defmodule PureGopherAi.RateLimiter do
 
   def check(ip) when is_binary(ip) do
     cond do
+      loopback?(ip) ->
+        {:ok, :unlimited}
+
       banned?(ip) ->
         {:error, :banned}
 
@@ -157,9 +166,15 @@ defmodule PureGopherAi.RateLimiter do
   end
 
   def banned?(ip) when is_binary(ip) do
-    case :ets.lookup(@bans_table, ip) do
-      [{^ip, _}] -> true
-      [] -> false
+    cond do
+      loopback?(ip) ->
+        false
+
+      true ->
+        case :ets.lookup(@bans_table, ip) do
+          [{^ip, _}] -> true
+          [] -> false
+        end
     end
   end
 
@@ -178,7 +193,11 @@ defmodule PureGopherAi.RateLimiter do
   def record_violation(ip) when is_tuple(ip), do: record_violation(format_ip(ip))
 
   def record_violation(ip) when is_binary(ip) do
-    GenServer.cast(__MODULE__, {:record_violation, ip})
+    if loopback?(ip) do
+      :ok
+    else
+      GenServer.cast(__MODULE__, {:record_violation, ip})
+    end
   end
 
   @doc """
@@ -405,6 +424,11 @@ defmodule PureGopherAi.RateLimiter do
   defp format_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp format_ip({a, b, c, d, e, f, g, h}), do: "#{a}:#{b}:#{c}:#{d}:#{e}:#{f}:#{g}:#{h}"
   defp format_ip(ip) when is_binary(ip), do: ip
+
+  # Loopback (see @loopback_ips) is the shared source for all tunneled public
+  # traffic and must never be rate limited or banned.
+  defp loopback?(ip) when is_tuple(ip), do: loopback?(format_ip(ip))
+  defp loopback?(ip) when is_binary(ip), do: ip in @loopback_ips
 
   # Hash IP for privacy-friendly logging (first 8 chars of SHA256)
   defp hash_ip_for_log(ip) do

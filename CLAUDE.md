@@ -127,10 +127,8 @@ ONION_ADDRESS="abc123.onion" MIX_ENV=prod mix run --no-halt
 # Custom ports
 GOPHER_PORT=70 TOR_PORT=7071 iex -S mix
 
-# Pi firmware build
-export MIX_TARGET=rpi3
-export GEMINI_API_KEY="your-key"
-mix firmware
+# Pi firmware build + OTA deploy (handles the dev/port/token/validate gotchas)
+./scripts/deploy-pi.sh                 # or: ./scripts/deploy-pi.sh 192.168.1.2
 ```
 
 ## Key Files
@@ -459,16 +457,11 @@ sudo ./scripts/sync-gopher.sh
 # EXLA compile fix for Xcode 16.3+
 CFLAGS="-Wno-error=invalid-specialization" mix deps.compile exla --force
 
-# Pi firmware build
-export MIX_TARGET=rpi3
-export GEMINI_API_KEY="your-key"
-mix deps.get && mix firmware
+# Pi firmware build + OTA deploy (recommended: does everything correctly)
+./scripts/deploy-pi.sh                 # build, stream via fwup, reboot, validate
 
-# Pi first deploy (burn SD card)
+# Pi first deploy (burn SD card) — build first, see "Build Firmware" below
 mix burn
-
-# Pi OTA update (over network)
-mix upload nerves.local
 
 # Cross-compile static Tor for Pi
 ./scripts/build-tor-arm.sh
@@ -956,30 +949,40 @@ Run PureGopherAI as embedded firmware on a Raspberry Pi via Nerves. AI uses Goog
 2. **Google Gemini API key:** Get from [Google AI Studio](https://aistudio.google.com/apikey)
 3. **Static Tor binary** (for hidden service): `./scripts/build-tor-arm.sh`
 
-### Build Firmware
+### Build + Deploy Firmware
+
+**Use `./scripts/deploy-pi.sh` for OTA updates** — it builds and deploys correctly.
+Doing it by hand is error-prone because of four non-obvious traps (all handled by
+the script):
+
+1. **Build in dev, NOT prod.** `MIX_ENV=prod` fails `--warnings-as-errors` in the
+   Bumblebee code (`model_registry.ex`). The default dev env is required.
+2. **Force `GOPHER_PORT=70`.** dev defaults the gopher port to 7070, so the server
+   refuses `:70` and the public tunnel serves nothing.
+3. **`BURROW_TOKEN` must be set at build time.** `config/target.exs` bakes it with
+   no default; without it `PureGopherAi.Tunnel` logs "No token configured" and
+   never connects to the relay. Keep it in `.env`.
+4. **Don't use `mix upload`** — it needs a TTY and hangs when scripted. Stream the
+   `.fw` to the device's fwup subsystem, then `Nerves.Runtime.validate_firmware()`
+   on the new boot or Nerves auto-reverts on the next reboot.
+
+Credentials live in `.env` (`GEMINI_API_KEY`, `GEMINI_MODEL`, `BURROW_TOKEN`);
+`.env` is NOT committed. WiFi is optional and baked at compile time
+(`WIFI_SSID` / `WIFI_PSK`).
 
 ```bash
-# Set target and credentials
-export MIX_TARGET=rpi3
-export GEMINI_API_KEY="your-gemini-api-key"
+# OTA update (recommended) — builds, streams via fwup, reboots, validates
+./scripts/deploy-pi.sh                 # or: ./scripts/deploy-pi.sh 192.168.1.2
 
-# Optional: WiFi (baked into firmware at compile time)
-export WIFI_SSID="your-network"
-export WIFI_PSK="your-password"
-
-# Fetch deps and build
-mix deps.get
-mix firmware
-```
-
-### Deploy
-
-```bash
-# First deploy: burn to SD card (insert micro SD into Mac)
+# First deploy only: build then burn to an SD card inserted in the Mac
+source .env && MIX_TARGET=rpi3 GOPHER_PORT=70 mix deps.get && mix firmware
 mix burn
 
-# Subsequent deploys: OTA over network (no SD swap needed)
-mix upload nerves.local
+# Manual OTA equivalent of the script (if you can't use it)
+source .env && MIX_TARGET=rpi3 GOPHER_PORT=70 mix firmware
+cat _build/rpi3_dev/nerves/images/pure_gopher_ai.fw \
+  | ssh -i ~/.ssh/id_ed25519 nerves@nerves.local -s fwup
+# then, on the new boot: ssh nerves@nerves.local ->  Nerves.Runtime.validate_firmware()
 
 # Provision data to Pi after first boot
 scp -r priv/phlog/* nerves.local:/data/gopher/phlog/
@@ -1046,7 +1049,7 @@ On Nerves, there is no system Tor daemon. `TorManager` (a GenServer) manages the
 ```bash
 ./scripts/build-tor-arm.sh
 # Produces: rootfs_overlay/usr/bin/tor (~5-8 MB static binary)
-# Then rebuild firmware: MIX_TARGET=rpi3 mix firmware
+# Then rebuild + deploy firmware: ./scripts/deploy-pi.sh
 ```
 
 ### Pi-Specific Config (config/target.exs)
